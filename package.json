@@ -1,0 +1,33 @@
+{
+  "name": "crm",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:backend": "mvn -f backend/pom.xml spring-boot:run",
+    "db:init": "powershell -ExecutionPolicy Bypass -File scripts/init-db.ps1",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test:api": "mvn -f backend/pom.xml -DskipTests package && node scripts/api-smoke-test.mjs",
+    "test:backend": "mvn -f backend/pom.xml test",
+    "test:full": "node scripts/local-e2e.mjs"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "vite": "^7.3.1"
+  }
+}
