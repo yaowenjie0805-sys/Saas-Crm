@@ -1530,6 +1530,7 @@ class AuthFlowIntegrationTest {
     @Test
     void v1QuoteSubmitShouldNotTriggerApprovalWhenThresholdNotMatched() throws Exception {
         String token = login("admin", "admin123");
+        setTenantApprovalMode(token, "STRICT");
         createQuoteApprovalTemplate(token);
         String productId = createProduct(token, "P-LOW-" + System.currentTimeMillis(), "Low Product", 1000);
         String quoteId = createQuote(token, "admin");
@@ -1541,6 +1542,49 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.approvalTriggered").value(false))
                 .andExpect(jsonPath("$.approvalInstanceId").value(""));
+    }
+
+    @Test
+    void v1QuoteSubmitShouldTriggerApprovalInStageGateMode() throws Exception {
+        String token = login("admin", "admin123");
+        setTenantApprovalMode(token, "STAGE_GATE");
+        createQuoteApprovalTemplate(token);
+        String productId = createProduct(token, "P-SG-" + System.currentTimeMillis(), "SG Product", 1000);
+        String quoteId = createQuote(token, "admin");
+        upsertQuoteItems(token, quoteId, "[{\"productId\":\"" + productId + "\",\"quantity\":1,\"unitPrice\":1000,\"discountRate\":0.0}]");
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalTriggered").value(true))
+                .andExpect(jsonPath("$.approvalReason").value("STAGE_GATE"))
+                .andExpect(jsonPath("$.approvalMode").value("STAGE_GATE"))
+                .andExpect(jsonPath("$.approvalInstanceId").isString());
+    }
+
+    @Test
+    void v1QuoteToOrderShouldRespectStageGateAndStrictModes() throws Exception {
+        String token = login("admin", "admin123");
+
+        setTenantApprovalMode(token, "STAGE_GATE");
+        String stageGateQuoteId = createQuote(token, "admin", "ACCEPTED", "c_1001", "");
+        mockMvc.perform(post("/api/v1/quotes/" + stageGateQuoteId + "/to-order")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("quote_stage_gate_requires_approval"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details.requiredStatus").value("APPROVED"));
+
+        setTenantApprovalMode(token, "STRICT");
+        String strictQuoteId = createQuote(token, "admin", "ACCEPTED", "c_1001", "");
+        mockMvc.perform(post("/api/v1/quotes/" + strictQuoteId + "/to-order")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sourceQuoteId").value(strictQuoteId))
+                .andExpect(jsonPath("$.approvalMode").value("STRICT"));
     }
 
     @Test
@@ -1902,6 +1946,16 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"bizType\":\"QUOTE\",\"name\":\"Quote Approval\",\"amountMin\":0,\"amountMax\":999999999,\"approverRoles\":\"MANAGER\"}"))
                 .andExpect(status().isCreated());
+    }
+
+    private void setTenantApprovalMode(String token, String approvalMode) throws Exception {
+        mockMvc.perform(patch("/api/v2/tenant-config")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"approvalMode\":\"" + approvalMode + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalMode").value(approvalMode));
     }
 
     private String createProduct(String token, String code, String name, long standardPrice) throws Exception {
