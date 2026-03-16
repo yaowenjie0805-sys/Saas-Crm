@@ -1633,6 +1633,53 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1ApprovalSubmitShouldRejectDuplicateActiveInstanceAndAllowResubmitAfterClose() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String quoteId = createQuote(token, "admin");
+
+        String firstSubmitBody = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":1200,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String firstInstanceId = objectMapper.readTree(firstSubmitBody).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":1200,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_instance_active_exists"))
+                .andExpect(jsonPath("$.details.instanceId").value(firstInstanceId))
+                .andExpect(jsonPath("$.details.bizId").value(quoteId));
+
+        String detailBody = mockMvc.perform(get("/api/v1/approval/instances/" + firstInstanceId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(detailBody).path("tasks").get(0).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/reject")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"close-then-resubmit\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":1200,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void v1ApprovalTaskActionShouldExposeInstanceAndWritebackFields() throws Exception {
         String token = login("admin", "admin123");
         createQuoteApprovalTemplate(token);

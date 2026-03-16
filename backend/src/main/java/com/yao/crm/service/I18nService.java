@@ -106,6 +106,7 @@ public class I18nService {
         en.put("approval_approver_required", "approval approver roles are required");
         en.put("approval_biz_id_required", "approval bizId is required");
         en.put("approval_template_not_found", "approval template not found");
+        en.put("approval_instance_active_exists", "an active approval instance already exists");
         en.put("approval_task_not_found", "approval task not found");
         en.put("approval_task_closed", "approval task is already closed");
         en.put("approval_transfer_required", "transfer target is required");
@@ -346,6 +347,7 @@ public class I18nService {
         zh.put("approval_approver_required", "\u5ba1\u6279\u4eba\u89d2\u8272\u4e0d\u80fd\u4e3a\u7a7a");
         zh.put("approval_biz_id_required", "\u5ba1\u6279\u4e1a\u52a1ID\u4e0d\u80fd\u4e3a\u7a7a");
         zh.put("approval_template_not_found", "\u672a\u627e\u5230\u5339\u914d\u7684\u5ba1\u6279\u6a21\u677f");
+        zh.put("approval_instance_active_exists", "\u8be5\u4e1a\u52a1\u5bf9\u8c61\u5df2\u5b58\u5728\u8fdb\u884c\u4e2d\u5ba1\u6279\u5b9e\u4f8b");
         zh.put("approval_task_not_found", "\u5ba1\u6279\u4efb\u52a1\u4e0d\u5b58\u5728");
         zh.put("approval_task_closed", "\u5ba1\u6279\u4efb\u52a1\u5df2\u5173\u95ed");
         zh.put("approval_transfer_required", "\u8f6c\u5ba1\u76ee\u6807\u4e0d\u80fd\u4e3a\u7a7a");

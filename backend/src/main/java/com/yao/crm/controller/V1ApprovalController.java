@@ -211,6 +211,18 @@ public class V1ApprovalController extends BaseApiController {
         String role = isBlank(payload.getRole()) ? currentRole(request) : payload.getRole().trim().toUpperCase(Locale.ROOT);
         String department = isBlank(payload.getDepartment()) ? "DEFAULT" : payload.getDepartment().trim();
 
+        Optional<ApprovalInstance> activeInstanceOpt = instanceRepository.findTopByTenantIdAndBizTypeAndBizIdAndStatusInOrderByCreatedAtDesc(
+                tenantId, bizTypeUpper, bizId, Arrays.asList("PENDING", "WAITING"));
+        if (activeInstanceOpt.isPresent()) {
+            ApprovalInstance active = activeInstanceOpt.get();
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("instanceId", active.getId());
+            details.put("status", active.getStatus());
+            details.put("bizType", active.getBizType());
+            details.put("bizId", active.getBizId());
+            return ResponseEntity.status(409).body(errorBody(request, "approval_instance_active_exists", msg(request, "approval_instance_active_exists"), details));
+        }
+
         ApprovalTemplate selected = selectTemplate(tenantId, bizTypeUpper, amount, role, department);
         if (selected == null) {
             return ResponseEntity.badRequest().body(errorBody(request, "approval_template_not_found", msg(request, "approval_template_not_found"), null));
