@@ -1,6 +1,7 @@
 package com.yao.crm.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.I18nService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -16,11 +17,13 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final TokenService tokenService;
     private final I18nService i18nService;
     private final ObjectMapper objectMapper;
+    private final TenantRepository tenantRepository;
 
-    public AuthInterceptor(TokenService tokenService, I18nService i18nService, ObjectMapper objectMapper) {
+    public AuthInterceptor(TokenService tokenService, I18nService i18nService, ObjectMapper objectMapper, TenantRepository tenantRepository) {
         this.tokenService = tokenService;
         this.i18nService = i18nService;
         this.objectMapper = objectMapper;
+        this.tenantRepository = tenantRepository;
     }
 
     @Override
@@ -60,9 +63,16 @@ public class AuthInterceptor implements HandlerInterceptor {
         request.setAttribute("authOwnerScope", principal.getOwnerScope());
         request.setAttribute("authTenantId", principal.getTenantId());
         request.setAttribute("authMfaVerified", principal.isMfaVerified());
+        String tenantDateFormat = tenantRepository.findById(principal.getTenantId())
+                .map(t -> t.getDateFormat())
+                .orElse("yyyy-MM-dd");
+        if ("YYYY-MM-DD".equalsIgnoreCase(tenantDateFormat)) {
+            tenantDateFormat = "yyyy-MM-dd";
+        }
+        request.setAttribute("authTenantDateFormat", tenantDateFormat);
 
         String headerTenant = request.getHeader("X-Tenant-Id");
-        if (path.startsWith("/api/v1/")) {
+        if (path.startsWith("/api/v1/") || path.startsWith("/api/v2/")) {
             if (headerTenant == null || headerTenant.trim().isEmpty()) {
                 writeForbidden(request, response, i18nService.msg(request, "tenant_header_required"));
                 return false;

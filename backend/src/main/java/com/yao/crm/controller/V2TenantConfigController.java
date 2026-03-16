@@ -1,0 +1,130 @@
+package com.yao.crm.controller;
+
+import com.yao.crm.entity.Tenant;
+import com.yao.crm.repository.TenantRepository;
+import com.yao.crm.service.I18nService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+@RestController
+@RequestMapping("/api/v2")
+public class V2TenantConfigController extends BaseApiController {
+
+    private static final Set<String> MARKET_PROFILES = new HashSet<String>(Arrays.asList("CN", "GLOBAL"));
+    private static final Set<String> APPROVAL_MODES = new HashSet<String>(Arrays.asList("STRICT", "STAGE_GATE"));
+    private final TenantRepository tenantRepository;
+
+    public V2TenantConfigController(TenantRepository tenantRepository, I18nService i18nService) {
+        super(i18nService);
+        this.tenantRepository = tenantRepository;
+    }
+
+    @GetMapping("/tenant-config")
+    public ResponseEntity<?> getTenantConfig(HttpServletRequest request) {
+        String tenantId = currentTenant(request);
+        Optional<Tenant> optional = tenantRepository.findById(tenantId);
+        if (!optional.isPresent()) {
+            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+        }
+        return ResponseEntity.ok(successWithFields(request, "tenant_config_loaded", toView(optional.get())));
+    }
+
+    @PatchMapping("/tenant-config")
+    public ResponseEntity<?> patchTenantConfig(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
+            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+        }
+        String tenantId = currentTenant(request);
+        Optional<Tenant> optional = tenantRepository.findById(tenantId);
+        if (!optional.isPresent()) {
+            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+        }
+        Tenant tenant = optional.get();
+
+        String marketProfile = upper(str(payload.get("marketProfile")));
+        if (!isBlank(marketProfile)) {
+            if (!MARKET_PROFILES.contains(marketProfile)) {
+                return ResponseEntity.badRequest().body(errorBody(request, "tenant_market_profile_invalid", msg(request, "tenant_market_profile_invalid"), null));
+            }
+            tenant.setMarketProfile(marketProfile);
+        }
+
+        String taxRule = upper(str(payload.get("taxRule")));
+        if (!isBlank(taxRule)) tenant.setTaxRule(taxRule);
+
+        String approvalMode = upper(str(payload.get("approvalMode")));
+        if (!isBlank(approvalMode)) {
+            if (!APPROVAL_MODES.contains(approvalMode)) {
+                return ResponseEntity.badRequest().body(errorBody(request, "tenant_approval_mode_invalid", msg(request, "tenant_approval_mode_invalid"), null));
+            }
+            tenant.setApprovalMode(approvalMode);
+        }
+
+        if (payload.containsKey("channels")) {
+            Object channels = payload.get("channels");
+            if (channels instanceof Iterable) {
+                StringBuilder merged = new StringBuilder("[");
+                boolean first = true;
+                for (Object item : (Iterable<?>) channels) {
+                    String text = upper(str(item));
+                    if (isBlank(text)) continue;
+                    if (!first) merged.append(',');
+                    merged.append('"').append(text).append('"');
+                    first = false;
+                }
+                merged.append(']');
+                tenant.setChannelsJson(merged.toString());
+            } else {
+                String raw = str(channels);
+                if (!isBlank(raw)) tenant.setChannelsJson(raw.trim());
+            }
+        }
+
+        String dataResidency = upper(str(payload.get("dataResidency")));
+        if (!isBlank(dataResidency)) tenant.setDataResidency(dataResidency);
+
+        String maskLevel = upper(str(payload.get("maskLevel")));
+        if (!isBlank(maskLevel)) tenant.setMaskLevel(maskLevel);
+
+        tenant = tenantRepository.save(tenant);
+        return ResponseEntity.ok(successWithFields(request, "tenant_config_updated", toView(tenant)));
+    }
+
+    private Map<String, Object> toView(Tenant tenant) {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("tenantId", tenant.getId());
+        out.put("marketProfile", tenant.getMarketProfile());
+        out.put("timezone", tenant.getTimezone());
+        out.put("currency", tenant.getCurrency());
+        out.put("dateFormat", tenant.getDateFormat());
+        out.put("taxRule", tenant.getTaxRule());
+        out.put("approvalMode", tenant.getApprovalMode());
+        out.put("channels", tenant.getChannelsJson());
+        out.put("dataResidency", tenant.getDataResidency());
+        out.put("maskLevel", tenant.getMaskLevel());
+        out.put("updatedAt", tenant.getUpdatedAt());
+        return out;
+    }
+
+    private String str(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private String upper(String value) {
+        if (isBlank(value)) return "";
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+}

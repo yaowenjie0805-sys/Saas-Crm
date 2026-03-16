@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,18 +55,11 @@ public class V1TenantController extends BaseApiController {
         });
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (Tenant row : rows) {
-            Map<String, Object> item = new LinkedHashMap<String, Object>();
-            item.put("id", row.getId());
-            item.put("name", row.getName());
-            item.put("status", row.getStatus());
-            item.put("quotaUsers", row.getQuotaUsers());
-            item.put("timezone", row.getTimezone());
-            item.put("currency", row.getCurrency());
-            item.put("dateFormat", row.getDateFormat());
-            item.put("createdAt", row.getCreatedAt());
-            items.add(item);
+            items.add(toTenantView(row));
         }
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("items", items);
+        return ResponseEntity.ok(successWithFields(request, "tenants_listed", body));
     }
 
     @PostMapping("/tenants")
@@ -83,7 +75,17 @@ public class V1TenantController extends BaseApiController {
         tenant.setQuotaUsers(payload.getQuotaUsers());
         tenant.setTimezone(isBlank(payload.getTimezone()) ? "Asia/Shanghai" : payload.getTimezone().trim());
         tenant.setCurrency(isBlank(payload.getCurrency()) ? "CNY" : payload.getCurrency().trim().toUpperCase());
-        tenant.setDateFormat(isBlank(payload.getDateFormat()) ? "YYYY-MM-DD" : payload.getDateFormat().trim());
+        tenant.setMarketProfile(isBlank(payload.getMarketProfile()) ? "CN" : payload.getMarketProfile().trim().toUpperCase());
+        tenant.setTaxRule(isBlank(payload.getTaxRule()) ? "VAT_CN" : payload.getTaxRule().trim().toUpperCase());
+        tenant.setApprovalMode(isBlank(payload.getApprovalMode()) ? "STRICT" : payload.getApprovalMode().trim().toUpperCase());
+        tenant.setChannelsJson(isBlank(payload.getChannels()) ? "[\"WECOM\",\"DINGTALK\"]" : payload.getChannels().trim());
+        tenant.setDataResidency(isBlank(payload.getDataResidency()) ? "CN" : payload.getDataResidency().trim().toUpperCase());
+        tenant.setMaskLevel(isBlank(payload.getMaskLevel()) ? "STANDARD" : payload.getMaskLevel().trim().toUpperCase());
+        String dateFormat = normalizeTenantDateFormat(payload.getDateFormat());
+        if (isBlank(dateFormat)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "tenant_date_format_invalid", msg(request, "tenant_date_format_invalid"), null));
+        }
+        tenant.setDateFormat(dateFormat);
         tenant = tenantRepository.save(tenant);
 
         UserAccount admin = new UserAccount();
@@ -100,7 +102,7 @@ public class V1TenantController extends BaseApiController {
         userAccountRepository.save(admin);
 
         auditLogService.record(currentUser(request), currentRole(request), "CREATE", "TENANT", tenant.getId(), "Created tenant " + tenant.getName(), tenant.getId());
-        return ResponseEntity.status(201).body(tenant);
+        return ResponseEntity.status(201).body(successWithFields(request, "tenant_created", toTenantView(tenant)));
     }
 
     @PatchMapping("/tenants/{id}")
@@ -120,11 +122,43 @@ public class V1TenantController extends BaseApiController {
         tenant.setQuotaUsers(payload.getQuotaUsers());
         if (!isBlank(payload.getTimezone())) tenant.setTimezone(payload.getTimezone().trim());
         if (!isBlank(payload.getCurrency())) tenant.setCurrency(payload.getCurrency().trim().toUpperCase());
-        if (!isBlank(payload.getDateFormat())) tenant.setDateFormat(payload.getDateFormat().trim());
+        if (!isBlank(payload.getMarketProfile())) tenant.setMarketProfile(payload.getMarketProfile().trim().toUpperCase());
+        if (!isBlank(payload.getTaxRule())) tenant.setTaxRule(payload.getTaxRule().trim().toUpperCase());
+        if (!isBlank(payload.getApprovalMode())) tenant.setApprovalMode(payload.getApprovalMode().trim().toUpperCase());
+        if (!isBlank(payload.getChannels())) tenant.setChannelsJson(payload.getChannels().trim());
+        if (!isBlank(payload.getDataResidency())) tenant.setDataResidency(payload.getDataResidency().trim().toUpperCase());
+        if (!isBlank(payload.getMaskLevel())) tenant.setMaskLevel(payload.getMaskLevel().trim().toUpperCase());
+        if (!isBlank(payload.getDateFormat())) {
+            String dateFormat = normalizeTenantDateFormat(payload.getDateFormat());
+            if (isBlank(dateFormat)) {
+                return ResponseEntity.badRequest().body(errorBody(request, "tenant_date_format_invalid", msg(request, "tenant_date_format_invalid"), null));
+            }
+            tenant.setDateFormat(dateFormat);
+        }
         tenant = tenantRepository.save(tenant);
 
         auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "TENANT", tenant.getId(), "Updated tenant", tenant.getId());
-        return ResponseEntity.ok(tenant);
+        return ResponseEntity.ok(successWithFields(request, "tenant_updated", toTenantView(tenant)));
+    }
+
+    private Map<String, Object> toTenantView(Tenant row) {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("id", row.getId());
+        item.put("name", row.getName());
+        item.put("status", row.getStatus());
+        item.put("quotaUsers", row.getQuotaUsers());
+        item.put("timezone", row.getTimezone());
+        item.put("currency", row.getCurrency());
+        item.put("dateFormat", row.getDateFormat());
+        item.put("marketProfile", row.getMarketProfile());
+        item.put("taxRule", row.getTaxRule());
+        item.put("approvalMode", row.getApprovalMode());
+        item.put("channels", row.getChannelsJson());
+        item.put("dataResidency", row.getDataResidency());
+        item.put("maskLevel", row.getMaskLevel());
+        item.put("createdAt", row.getCreatedAt());
+        item.put("updatedAt", row.getUpdatedAt());
+        return item;
     }
 }
 
