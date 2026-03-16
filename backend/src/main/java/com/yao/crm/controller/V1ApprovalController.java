@@ -32,6 +32,7 @@ public class V1ApprovalController extends BaseApiController {
     private final ApprovalEventRepository eventRepository;
     private final ContractRecordRepository contractRepository;
     private final PaymentRecordRepository paymentRepository;
+    private final QuoteRepository quoteRepository;
     private final AuditLogService auditLogService;
     private final ApprovalSlaService approvalSlaService;
     private final ApprovalTemplateVersionService templateVersionService;
@@ -43,6 +44,7 @@ public class V1ApprovalController extends BaseApiController {
                                 ApprovalEventRepository eventRepository,
                                 ContractRecordRepository contractRepository,
                                 PaymentRecordRepository paymentRepository,
+                                QuoteRepository quoteRepository,
                                 AuditLogService auditLogService,
                                 ApprovalSlaService approvalSlaService,
                                 ApprovalTemplateVersionService templateVersionService,
@@ -55,6 +57,7 @@ public class V1ApprovalController extends BaseApiController {
         this.eventRepository = eventRepository;
         this.contractRepository = contractRepository;
         this.paymentRepository = paymentRepository;
+        this.quoteRepository = quoteRepository;
         this.auditLogService = auditLogService;
         this.approvalSlaService = approvalSlaService;
         this.templateVersionService = templateVersionService;
@@ -85,7 +88,7 @@ public class V1ApprovalController extends BaseApiController {
             t.setStatus("PUBLISHED");
             t = templateRepository.save(t);
             auditLogService.record(currentUser(request), currentRole(request), "CREATE", "APPROVAL_TEMPLATE", t.getId(), "Created approval template", tenantId);
-            return ResponseEntity.status(201).body(toTemplateView(t));
+            return ResponseEntity.status(201).body(successWithFields(request, "approval_template_created", toTemplateView(t)));
         } catch (IllegalArgumentException ex) {
             String code = normalizeCode(ex.getMessage(), "bad_request");
             return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
@@ -112,7 +115,7 @@ public class V1ApprovalController extends BaseApiController {
             items.add(toTemplateView(row));
             if (items.size() >= finalLimit) break;
         }
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        return ResponseEntity.ok(successWithFields(request, "approval_templates_listed", Collections.<String, Object>singletonMap("items", items)));
     }
 
     @PatchMapping("/templates/{id}")
@@ -144,7 +147,7 @@ public class V1ApprovalController extends BaseApiController {
             }
             row = templateRepository.save(row);
             auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "APPROVAL_TEMPLATE", row.getId(), "Updated approval template", tenantId);
-            return ResponseEntity.ok(toTemplateView(row));
+            return ResponseEntity.ok(successWithFields(request, "approval_template_updated", toTemplateView(row)));
         } catch (IllegalArgumentException ex) {
             String code = normalizeCode(ex.getMessage(), "bad_request");
             return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
@@ -162,7 +165,7 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "approval_template_not_found", msg(request, "approval_template_not_found"), null));
         }
         ApprovalTemplate updated = templateVersionService.publish(tenantId, currentUser(request), currentRole(request), optional.get());
-        return ResponseEntity.ok(toTemplateView(updated));
+        return ResponseEntity.ok(successWithFields(request, "approval_template_published", toTemplateView(updated)));
     }
 
     @GetMapping("/templates/{id}/versions")
@@ -171,7 +174,7 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         String tenantId = currentTenant(request);
-        return ResponseEntity.ok(Collections.singletonMap("items", templateVersionService.listVersions(tenantId, id)));
+        return ResponseEntity.ok(successWithFields(request, "approval_template_versions_loaded", Collections.<String, Object>singletonMap("items", templateVersionService.listVersions(tenantId, id))));
     }
 
     @PostMapping("/templates/{id}/rollback/{version}")
@@ -186,7 +189,7 @@ public class V1ApprovalController extends BaseApiController {
         }
         try {
             ApprovalTemplate updated = templateVersionService.rollback(tenantId, currentUser(request), currentRole(request), optional.get(), version == null ? 0 : version);
-            return ResponseEntity.ok(toTemplateView(updated));
+            return ResponseEntity.ok(successWithFields(request, "approval_template_rolled_back", toTemplateView(updated)));
         } catch (IllegalArgumentException ex) {
             String code = normalizeCode(ex.getMessage(), "bad_request");
             return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
@@ -249,27 +252,39 @@ public class V1ApprovalController extends BaseApiController {
 
         recordEvent(tenantId, instance.getId(), null, "SUBMITTED", currentUser(request), "submitted", traceId(request));
         auditLogService.record(currentUser(request), currentRole(request), "SUBMIT", "APPROVAL_INSTANCE", instance.getId(), "Submitted approval", tenantId);
-        return ResponseEntity.status(201).body(instance);
+        return ResponseEntity.status(201).body(successWithFields(request, "approval_instance_submitted", toInstanceView(instance)));
     }
 
     @PostMapping("/tasks/{taskId}/approve")
     public ResponseEntity<?> approveTask(HttpServletRequest request, @PathVariable String taskId, @RequestBody(required = false) V1ApprovalTaskActionRequest payload) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
+            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+        }
         return handleTaskAction(request, taskId, "APPROVED", payload);
     }
 
     @PostMapping("/tasks/{taskId}/reject")
     public ResponseEntity<?> rejectTask(HttpServletRequest request, @PathVariable String taskId, @RequestBody(required = false) V1ApprovalTaskActionRequest payload) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
+            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+        }
         return handleTaskAction(request, taskId, "REJECTED", payload);
     }
 
     @PostMapping("/tasks/{taskId}/transfer")
     public ResponseEntity<?> transferTask(HttpServletRequest request, @PathVariable String taskId, @RequestBody(required = false) V1ApprovalTaskActionRequest payload) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
+            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+        }
         String tenantId = currentTenant(request);
         Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(taskId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalTask task = optional.get();
+        if (!("PENDING".equals(task.getStatus()) || "WAITING".equals(task.getStatus()))) {
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+        }
         String transferTo = payload == null ? "" : payload.getTransferTo();
         if (isBlank(transferTo)) {
             return ResponseEntity.badRequest().body(errorBody(request, "approval_transfer_required", msg(request, "approval_transfer_required"), null));
@@ -296,11 +311,22 @@ public class V1ApprovalController extends BaseApiController {
         recordEvent(tenantId, task.getInstanceId(), task.getId(), "TRANSFERRED", currentUser(request), "transferTo=" + transferTo, traceId(request));
         recordEvent(tenantId, task.getInstanceId(), next.getId(), "PENDING", transferTo.trim(), "transfer accepted", traceId(request));
         auditLogService.record(currentUser(request), currentRole(request), "TRANSFER", "APPROVAL_TASK", task.getId(), "Transferred approval task", tenantId);
-        return ResponseEntity.ok(toTaskView(next));
+        Optional<ApprovalInstance> instanceOptional = instanceRepository.findByIdAndTenantId(task.getInstanceId(), tenantId);
+        Map<String, Object> body = toTaskView(next);
+        body.put("result", "TRANSFERRED");
+        body.put("action", "TRANSFER");
+        body.put("requestIdRef", traceId(request));
+        if (instanceOptional.isPresent()) {
+            body.put("instance", toInstanceView(instanceOptional.get()));
+        }
+        return ResponseEntity.ok(successWithFields(request, "approval_task_transferred", body));
     }
 
     @PostMapping("/tasks/{taskId}/urge")
     public ResponseEntity<?> urgeTask(HttpServletRequest request, @PathVariable String taskId, @RequestBody(required = false) V1ApprovalTaskActionRequest payload) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
+            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+        }
         String tenantId = currentTenant(request);
         Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(taskId, tenantId);
         if (!optional.isPresent()) {
@@ -308,14 +334,22 @@ public class V1ApprovalController extends BaseApiController {
         }
         ApprovalTask task = optional.get();
         if (!("PENDING".equals(task.getStatus()) || "WAITING".equals(task.getStatus()))) {
-            return ResponseEntity.badRequest().body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
         }
         String channel = payload == null || isBlank(payload.getUrgeChannel()) ? "IN_APP" : payload.getUrgeChannel().trim().toUpperCase(Locale.ROOT);
         task.setNotifiedAt(LocalDateTime.now());
         taskRepository.save(task);
         recordEvent(tenantId, task.getInstanceId(), task.getId(), "URGED", currentUser(request), "channel=" + channel, traceId(request));
         auditLogService.record(currentUser(request), currentRole(request), "URGE", "APPROVAL_TASK", task.getId(), "Urged task " + channel, tenantId);
-        return ResponseEntity.ok(toTaskView(task));
+        Optional<ApprovalInstance> instanceOptional = instanceRepository.findByIdAndTenantId(task.getInstanceId(), tenantId);
+        Map<String, Object> body = toTaskView(task);
+        body.put("result", "URGED");
+        body.put("action", "URGE");
+        body.put("requestIdRef", traceId(request));
+        if (instanceOptional.isPresent()) {
+            body.put("instance", toInstanceView(instanceOptional.get()));
+        }
+        return ResponseEntity.ok(successWithFields(request, "approval_task_urged", body));
     }
 
     @GetMapping("/tasks")
@@ -342,7 +376,7 @@ public class V1ApprovalController extends BaseApiController {
             items.add(toTaskView(row));
             if (items.size() >= finalLimit) break;
         }
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        return ResponseEntity.ok(successWithFields(request, "approval_tasks_listed", Collections.<String, Object>singletonMap("items", items)));
     }
 
     @GetMapping("/instances")
@@ -369,7 +403,7 @@ public class V1ApprovalController extends BaseApiController {
             items.add(item);
             if (items.size() >= finalLimit) break;
         }
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        return ResponseEntity.ok(successWithFields(request, "approval_instances_listed", Collections.<String, Object>singletonMap("items", items)));
     }
 
     @GetMapping("/stats")
@@ -428,7 +462,7 @@ public class V1ApprovalController extends BaseApiController {
         body.put("instanceByStatus", instanceByStatus);
         body.put("taskByStatus", taskByStatus);
         body.put("bizByType", bizByType);
-        return ResponseEntity.ok(body);
+        return ResponseEntity.ok(successWithFields(request, "approval_stats_loaded", body));
     }
 
     @GetMapping("/instances/{id}")
@@ -472,7 +506,7 @@ public class V1ApprovalController extends BaseApiController {
             timeline.add(item);
         }
         body.put("timeline", timeline);
-        return ResponseEntity.ok(body);
+        return ResponseEntity.ok(successWithFields(request, "approval_instance_loaded", body));
     }
 
     @PostMapping("/sla/scan")
@@ -481,7 +515,7 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         int affected = approvalSlaService.scanOverdueAndEscalate();
-        return ResponseEntity.ok(Collections.singletonMap("affected", affected));
+        return ResponseEntity.ok(successWithFields(request, "approval_sla_scan_completed", Collections.<String, Object>singletonMap("affected", affected)));
     }
 
     private ResponseEntity<?> handleTaskAction(HttpServletRequest request, String taskId, String actionStatus, V1ApprovalTaskActionRequest payload) {
@@ -492,7 +526,7 @@ public class V1ApprovalController extends BaseApiController {
         }
         ApprovalTask task = optional.get();
         if (!("PENDING".equals(task.getStatus()) || "WAITING".equals(task.getStatus()))) {
-            return ResponseEntity.badRequest().body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
         }
 
         task.setStatus(actionStatus);
@@ -500,6 +534,8 @@ public class V1ApprovalController extends BaseApiController {
         if (payload != null) task.setComment(payload.getComment());
         taskRepository.save(task);
 
+        ApprovalInstance latestInstance = null;
+        Map<String, Object> bizWriteback = new LinkedHashMap<String, Object>();
         Optional<ApprovalInstance> instOpt = instanceRepository.findByIdAndTenantId(task.getInstanceId(), tenantId);
         if (instOpt.isPresent()) {
             ApprovalInstance inst = instOpt.get();
@@ -532,12 +568,38 @@ public class V1ApprovalController extends BaseApiController {
                     inst.setStatus("APPROVED");
                 }
             }
-            instanceRepository.save(inst);
+            latestInstance = instanceRepository.save(inst);
+            if ("QUOTE".equalsIgnoreCase(inst.getBizType())) {
+                Optional<Quote> quoteOpt = quoteRepository.findByIdAndTenantId(inst.getBizId(), tenantId);
+                if (quoteOpt.isPresent()) {
+                    Quote quote = quoteOpt.get();
+                    if ("APPROVED".equalsIgnoreCase(inst.getStatus())) {
+                        quote.setStatus("APPROVED");
+                        quoteRepository.save(quote);
+                    } else if ("REJECTED".equalsIgnoreCase(inst.getStatus())) {
+                        quote.setStatus("REJECTED");
+                        quoteRepository.save(quote);
+                    }
+                    bizWriteback.put("bizType", "QUOTE");
+                    bizWriteback.put("bizId", quote.getId());
+                    bizWriteback.put("status", quote.getStatus());
+                }
+            }
         }
 
         recordEvent(tenantId, task.getInstanceId(), task.getId(), actionStatus, currentUser(request), payload == null ? "" : payload.getComment(), traceId(request));
         auditLogService.record(currentUser(request), currentRole(request), actionStatus, "APPROVAL_TASK", task.getId(), "Approval task action", tenantId);
-        return ResponseEntity.ok(toTaskView(task));
+        Map<String, Object> body = toTaskView(task);
+        body.put("result", actionStatus);
+        body.put("action", actionStatus);
+        body.put("requestIdRef", traceId(request));
+        if (latestInstance != null) {
+            body.put("instance", toInstanceView(latestInstance));
+        }
+        if (!bizWriteback.isEmpty()) {
+            body.put("bizWriteback", bizWriteback);
+        }
+        return ResponseEntity.ok(successWithFields(request, "approval_task_updated", body));
     }
 
     private ApprovalTemplate selectTemplate(String tenantId, String bizType, Long amount, String role, String department) {
@@ -573,6 +635,23 @@ public class V1ApprovalController extends BaseApiController {
         item.put("createdAt", row.getCreatedAt());
         item.put("updatedAt", row.getUpdatedAt());
         return item;
+    }
+
+    private Map<String, Object> toInstanceView(ApprovalInstance row) {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("id", row.getId());
+        out.put("tenantId", row.getTenantId());
+        out.put("templateId", row.getTemplateId());
+        out.put("bizType", row.getBizType());
+        out.put("bizId", row.getBizId());
+        out.put("submitter", row.getSubmitter());
+        out.put("comment", row.getComment());
+        out.put("status", row.getStatus());
+        out.put("currentSeq", row.getCurrentSeq());
+        out.put("templateVersion", row.getTemplateVersion());
+        out.put("createdAt", row.getCreatedAt());
+        out.put("updatedAt", row.getUpdatedAt());
+        return out;
     }
 
     private Map<String, Object> toTemplateView(ApprovalTemplate row) {
@@ -810,6 +889,10 @@ public class V1ApprovalController extends BaseApiController {
         if ("PAYMENT".equals(bizType)) {
             Optional<PaymentRecord> p = paymentRepository.findById(bizId);
             if (p.isPresent() && tenantId.equals(p.get().getTenantId())) return p.get().getAmount();
+        }
+        if ("QUOTE".equals(bizType)) {
+            Optional<Quote> q = quoteRepository.findByIdAndTenantId(bizId, tenantId);
+            if (q.isPresent()) return q.get().getTotalAmount();
         }
         return 0L;
     }
