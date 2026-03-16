@@ -1753,6 +1753,110 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1ApprovalTaskRepeatedApproveRejectShouldReturnConflictWithRequestId() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String quoteId = createQuote(token, "admin");
+
+        String submitBody = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":900,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String instanceId = objectMapper.readTree(submitBody).path("id").asText();
+
+        String detailBody = mockMvc.perform(get("/api/v1/approval/instances/" + instanceId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(detailBody).path("tasks").get(0).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/approve")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"first-approve\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/approve")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"repeat-approve\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_task_closed"))
+                .andExpect(jsonPath("$.requestId").isString());
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/reject")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"repeat-reject\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_task_closed"))
+                .andExpect(jsonPath("$.requestId").isString());
+    }
+
+    @Test
+    void v1ApprovalTaskRepeatedTransferShouldReturnConflictAndKeepNewTaskStable() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String quoteId = createQuote(token, "admin");
+
+        String submitBody = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":1000,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String instanceId = objectMapper.readTree(submitBody).path("id").asText();
+
+        String detailBody = mockMvc.perform(get("/api/v1/approval/instances/" + instanceId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(detailBody).path("tasks").get(0).path("id").asText();
+
+        String transferBody = mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/transfer")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"transfer-1\",\"transferTo\":\"manager\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String newTaskId = objectMapper.readTree(transferBody).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/transfer")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"transfer-2\",\"transferTo\":\"manager\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_task_closed"))
+                .andExpect(jsonPath("$.requestId").isString());
+
+        String latestDetailBody = mockMvc.perform(get("/api/v1/approval/instances/" + instanceId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode tasks = objectMapper.readTree(latestDetailBody).path("tasks");
+        boolean foundPendingTransferredTask = false;
+        for (JsonNode task : tasks) {
+            if (newTaskId.equals(task.path("id").asText()) && "PENDING".equals(task.path("status").asText())) {
+                foundPendingTransferredTask = true;
+                break;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(foundPendingTransferredTask);
+    }
+
+    @Test
     void legacyPaymentShouldEnforceTenantIsolation() throws Exception {
         PaymentRecord record = new PaymentRecord();
         record.setId("pm_other_" + System.currentTimeMillis());
