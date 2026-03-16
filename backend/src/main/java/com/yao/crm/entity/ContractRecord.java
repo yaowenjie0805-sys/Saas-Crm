@@ -28,6 +28,16 @@ public class ContractRecord {
 
     @Column(nullable = false)
     private Long amount;
+    @Column(nullable = false, length = 16)
+    private String settlementCurrency;
+    @Column(nullable = false, length = 40)
+    private String exchangeRateSnapshot;
+    @Column(nullable = false, length = 24)
+    private String invoiceStatus;
+    @Column(nullable = false, length = 24)
+    private String taxDisplayMode;
+    @Column(nullable = false, length = 32)
+    private String complianceTag;
 
     @Column(nullable = false, length = 80)
     private String status;
@@ -51,6 +61,11 @@ public class ContractRecord {
         LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) createdAt = now;
         if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (settlementCurrency == null || settlementCurrency.trim().isEmpty()) settlementCurrency = "CNY";
+        if (exchangeRateSnapshot == null || exchangeRateSnapshot.trim().isEmpty()) exchangeRateSnapshot = "1.000000@SYSTEM";
+        if (invoiceStatus == null || invoiceStatus.trim().isEmpty()) invoiceStatus = "NOT_REQUIRED";
+        if (taxDisplayMode == null || taxDisplayMode.trim().isEmpty()) taxDisplayMode = "TAX_INCLUSIVE";
+        if (complianceTag == null || complianceTag.trim().isEmpty()) complianceTag = "STANDARD";
         updatedAt = now;
     }
 
@@ -69,6 +84,16 @@ public class ContractRecord {
     public void setTitle(String title) { this.title = title; }
     public Long getAmount() { return amount; }
     public void setAmount(Long amount) { this.amount = amount; }
+    public String getSettlementCurrency() { return settlementCurrency; }
+    public void setSettlementCurrency(String settlementCurrency) { this.settlementCurrency = settlementCurrency; }
+    public String getExchangeRateSnapshot() { return exchangeRateSnapshot; }
+    public void setExchangeRateSnapshot(String exchangeRateSnapshot) { this.exchangeRateSnapshot = exchangeRateSnapshot; }
+    public String getInvoiceStatus() { return invoiceStatus; }
+    public void setInvoiceStatus(String invoiceStatus) { this.invoiceStatus = invoiceStatus; }
+    public String getTaxDisplayMode() { return taxDisplayMode; }
+    public void setTaxDisplayMode(String taxDisplayMode) { this.taxDisplayMode = taxDisplayMode; }
+    public String getComplianceTag() { return complianceTag; }
+    public void setComplianceTag(String complianceTag) { this.complianceTag = complianceTag; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public LocalDate getSignDate() { return signDate; }
