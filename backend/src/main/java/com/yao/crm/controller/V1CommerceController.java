@@ -829,7 +829,16 @@ public class V1CommerceController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "order_not_found", msg(request, "order_not_found"), null));
         }
         OrderRecord order = optional.get();
-        if (!"CONFIRMED".equalsIgnoreCase(order.getStatus()) && !"FULFILLING".equalsIgnoreCase(order.getStatus())) {
+        String approvalMode = resolveApprovalMode(tenantId);
+        if ("STAGE_GATE".equals(approvalMode) && !"FULFILLING".equalsIgnoreCase(order.getStatus())) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("requiredStatus", "FULFILLING");
+            details.put("currentStatus", order.getStatus());
+            details.put("approvalMode", approvalMode);
+            auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order to-contract blocked by stage gate", tenantId);
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_fulfilling", msg(request, "order_stage_gate_requires_fulfilling"), details));
+        }
+        if (!"STAGE_GATE".equals(approvalMode) && !"CONFIRMED".equalsIgnoreCase(order.getStatus()) && !"FULFILLING".equalsIgnoreCase(order.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "order_not_confirmed", msg(request, "order_not_confirmed"), null));
         }
         ContractRecord contract = new ContractRecord();
@@ -848,6 +857,8 @@ public class V1CommerceController extends BaseApiController {
         body.put("orderId", order.getId());
         body.put("contractId", saved.getId());
         body.put("contractNo", saved.getContractNo());
+        body.put("approvalMode", approvalMode);
+        auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_PASS", "ORDER", order.getId(), "Order to-contract pass by mode " + approvalMode, tenantId);
         return ResponseEntity.status(201).body(successWithFields(request, "order_contract_created", body));
     }
 
@@ -890,13 +901,53 @@ public class V1CommerceController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "order_not_found", msg(request, "order_not_found"), null));
         }
         OrderRecord row = optional.get();
+        String approvalMode = resolveApprovalMode(tenantId);
+        if ("STAGE_GATE".equals(approvalMode) && "order_confirmed".equals(successCode)) {
+            ResponseEntity<?> guard = ensureOrderConfirmStageGate(request, row, tenantId, approvalMode);
+            if (guard != null) {
+                return guard;
+            }
+        }
         if (!from.equalsIgnoreCase(row.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "order_status_transition_invalid", msg(request, "order_status_transition_invalid"), null));
         }
         row.setStatus(to);
         OrderRecord saved = orderRecordRepository.save(row);
         auditLogService.record(currentUser(request), currentRole(request), "STATUS", "ORDER", saved.getId(), "Order " + to, tenantId);
-        return ResponseEntity.ok(successWithFields(request, successCode, toOrderView(saved)));
+        Map<String, Object> body = toOrderView(saved);
+        body.put("approvalMode", approvalMode);
+        return ResponseEntity.ok(successWithFields(request, successCode, body));
+    }
+
+    private ResponseEntity<?> ensureOrderConfirmStageGate(HttpServletRequest request, OrderRecord order, String tenantId, String approvalMode) {
+        if (isBlank(order.getQuoteId())) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("requiredStatus", "ACCEPTED_QUOTE");
+            details.put("currentStatus", "NO_QUOTE");
+            details.put("approvalMode", approvalMode);
+            auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order confirm blocked: quote link missing", tenantId);
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_quote_accepted", msg(request, "order_stage_gate_requires_quote_accepted"), details));
+        }
+        Optional<Quote> quoteOpt = quoteRepository.findByIdAndTenantId(order.getQuoteId(), tenantId);
+        if (!quoteOpt.isPresent()) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("requiredStatus", "ACCEPTED_QUOTE");
+            details.put("currentStatus", "QUOTE_NOT_FOUND");
+            details.put("approvalMode", approvalMode);
+            auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order confirm blocked: quote not found", tenantId);
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_quote_accepted", msg(request, "order_stage_gate_requires_quote_accepted"), details));
+        }
+        String quoteStatus = quoteOpt.get().getStatus();
+        if (!"ACCEPTED".equalsIgnoreCase(quoteStatus)) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("requiredStatus", "ACCEPTED_QUOTE");
+            details.put("currentStatus", quoteStatus);
+            details.put("approvalMode", approvalMode);
+            auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order confirm blocked by quote stage", tenantId);
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_quote_accepted", msg(request, "order_stage_gate_requires_quote_accepted"), details));
+        }
+        auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_PASS", "ORDER", order.getId(), "Order confirm pass by stage gate", tenantId);
+        return null;
     }
 
     private void resetDefaultPriceBook(String tenantId) {

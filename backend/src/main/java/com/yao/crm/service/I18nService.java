@@ -252,6 +252,8 @@ public class I18nService {
         en.put("order_not_found", "order not found");
         en.put("order_status_transition_invalid", "order status transition is invalid");
         en.put("order_not_confirmed", "order must be confirmed before contract conversion");
+        en.put("order_stage_gate_requires_quote_accepted", "stage gate requires linked quote status ACCEPTED before order confirmation");
+        en.put("order_stage_gate_requires_fulfilling", "stage gate requires order status FULFILLING before contract conversion");
         en.put("orders_listed", "orders loaded");
         en.put("order_created", "order created");
         en.put("order_updated", "order updated");
@@ -494,6 +496,8 @@ public class I18nService {
         zh.put("order_not_found", "\u8ba2\u5355\u4e0d\u5b58\u5728");
         zh.put("order_status_transition_invalid", "\u8ba2\u5355\u72b6\u6001\u6d41\u8f6c\u4e0d\u5408\u6cd5");
         zh.put("order_not_confirmed", "\u8ba2\u5355\u9700\u786e\u8ba4\u540e\u624d\u80fd\u8f6c\u5408\u540c");
+        zh.put("order_stage_gate_requires_quote_accepted", "\u9636\u6bb5\u95e8\u7981\u8981\u6c42\u8ba2\u5355\u5173\u8054\u62a5\u4ef7\u72b6\u6001\u4e3a ACCEPTED \u624d\u80fd\u786e\u8ba4");
+        zh.put("order_stage_gate_requires_fulfilling", "\u9636\u6bb5\u95e8\u7981\u8981\u6c42\u8ba2\u5355\u5728 FULFILLING \u72b6\u6001\u624d\u80fd\u8f6c\u5408\u540c");
         zh.put("orders_listed", "\u8ba2\u5355\u5217\u8868\u52a0\u8f7d\u6210\u529f");
         zh.put("order_created", "\u8ba2\u5355\u521b\u5efa\u6210\u529f");
         zh.put("order_updated", "\u8ba2\u5355\u66f4\u65b0\u6210\u529f");
