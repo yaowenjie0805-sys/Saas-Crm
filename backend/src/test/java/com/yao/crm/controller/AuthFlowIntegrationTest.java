@@ -1633,6 +1633,79 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1ApprovalTaskActionShouldExposeInstanceAndWritebackFields() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String quoteId = createQuote(token, "admin");
+
+        String submitBody = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":1200,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String instanceId = objectMapper.readTree(submitBody).path("id").asText();
+
+        String detailBody = mockMvc.perform(get("/api/v1/approval/instances/" + instanceId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(detailBody).path("tasks").get(0).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/approve")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"approve-now\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.instance.id").value(instanceId))
+                .andExpect(jsonPath("$.requestIdRef").isString())
+                .andExpect(jsonPath("$.bizWriteback.bizType").value("QUOTE"))
+                .andExpect(jsonPath("$.bizWriteback.bizId").value(quoteId))
+                .andExpect(jsonPath("$.bizWriteback.status").value("APPROVED"));
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/urge")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"again\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_task_closed"));
+    }
+
+    @Test
+    void v1ApprovalTaskActionShouldForbidAnalystAndKeepTenantIsolation() throws Exception {
+        String adminToken = login("admin", "admin123");
+        String analystToken = login("analyst", "analyst123");
+        createQuoteApprovalTemplate(adminToken);
+        String quoteId = createQuote(adminToken, "admin");
+        String submitBody = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteId + "\",\"amount\":800,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String instanceId = objectMapper.readTree(submitBody).path("id").asText();
+        String detailBody = mockMvc.perform(get("/api/v1/approval/instances/" + instanceId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String taskId = objectMapper.readTree(detailBody).path("tasks").get(0).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/approve")
+                        .header("Authorization", "Bearer " + analystToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"forbidden\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("forbidden"));
+    }
+
+    @Test
     void legacyPaymentShouldEnforceTenantIsolation() throws Exception {
         PaymentRecord record = new PaymentRecord();
         record.setId("pm_other_" + System.currentTimeMillis());
