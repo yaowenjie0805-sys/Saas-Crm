@@ -19,12 +19,15 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
 @RequestMapping("/api/v1/approval")
 public class V1ApprovalController extends BaseApiController {
+    private static final int URGE_COOLDOWN_MINUTES = 15;
+    private static final int URGE_DAILY_LIMIT = 10;
 
     private final ApprovalTemplateRepository templateRepository;
     private final ApprovalInstanceRepository instanceRepository;
@@ -348,11 +351,29 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalTask task = optional.get();
+        String currentStatus = task.getStatus() == null ? "" : task.getStatus().trim().toUpperCase(Locale.ROOT);
+        if (!"PENDING".equals(currentStatus) && !"WAITING".equals(currentStatus)) {
+            return urgeConflict(request, tenantId, task, "task_closed", null, 0L);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        Optional<ApprovalEvent> lastUrgeOpt = eventRepository.findTopByTenantIdAndTaskIdAndEventTypeOrderByCreatedAtDesc(tenantId, task.getId(), "URGED");
+        if (lastUrgeOpt.isPresent()) {
+            LocalDateTime lastUrgeAt = lastUrgeOpt.get().getCreatedAt();
+            if (lastUrgeAt != null) {
+                long minutesSince = Duration.between(lastUrgeAt, now).toMinutes();
+                if (minutesSince < URGE_COOLDOWN_MINUTES) {
+                    return urgeConflict(request, tenantId, task, "urge_cooldown", lastUrgeAt.plusMinutes(URGE_COOLDOWN_MINUTES), 0L);
+                }
+            }
+        }
+        LocalDateTime dayStart = LocalDate.now().atStartOfDay();
+        long dailyCount = eventRepository.countByTenantIdAndTaskIdAndEventTypeAndCreatedAtBetween(tenantId, task.getId(), "URGED", dayStart, dayStart.plusDays(1));
+        if (dailyCount >= URGE_DAILY_LIMIT) {
+            return urgeConflict(request, tenantId, task, "urge_daily_limit", null, dailyCount);
+        }
         int affected = taskRepository.markTaskUrgedIfOpen(task.getId(), tenantId);
         if (affected <= 0) {
-            recordConflictEvent(request, tenantId, task, "URGE");
-            auditLogService.record(currentUser(request), currentRole(request), "URGE_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+            return urgeConflict(request, tenantId, task, "task_closed", null, dailyCount);
         }
         String channel = payload == null || isBlank(payload.getUrgeChannel()) ? "IN_APP" : payload.getUrgeChannel().trim().toUpperCase(Locale.ROOT);
         task.setNotifiedAt(LocalDateTime.now());
@@ -367,6 +388,19 @@ public class V1ApprovalController extends BaseApiController {
             body.put("instance", toInstanceView(instanceOptional.get()));
         }
         return ResponseEntity.ok(successWithFields(request, "approval_task_urged", body));
+    }
+
+    private ResponseEntity<?> urgeConflict(HttpServletRequest request, String tenantId, ApprovalTask task, String reason, LocalDateTime cooldownUntil, long dailyCount) {
+        recordConflictEvent(request, tenantId, task, "URGE");
+        auditLogService.record(currentUser(request), currentRole(request), "URGE_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task urge blocked: " + reason, tenantId);
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("reason", reason);
+        details.put("dailyLimit", URGE_DAILY_LIMIT);
+        details.put("dailyCount", dailyCount);
+        if (cooldownUntil != null) {
+            details.put("cooldownUntil", cooldownUntil.toString());
+        }
+        return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), details));
     }
 
     @GetMapping("/tasks")
@@ -531,8 +565,11 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        int affected = approvalSlaService.scanOverdueAndEscalate();
-        return ResponseEntity.ok(successWithFields(request, "approval_sla_scan_completed", Collections.<String, Object>singletonMap("affected", affected)));
+        ApprovalSlaService.ScanResult result = approvalSlaService.scanOverdueAndEscalate();
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("affected", result.getAffected());
+        body.put("tierStats", result.getTierStats() == null ? new LinkedHashMap<String, Integer>() : result.getTierStats());
+        return ResponseEntity.ok(successWithFields(request, "approval_sla_scan_completed", body));
     }
 
     private ResponseEntity<?> handleTaskAction(HttpServletRequest request, String taskId, String actionStatus, V1ApprovalTaskActionRequest payload) {

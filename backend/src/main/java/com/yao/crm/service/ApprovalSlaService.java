@@ -9,8 +9,11 @@ import com.yao.crm.repository.ApprovalTaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -35,18 +38,25 @@ public class ApprovalSlaService {
     }
 
     @Transactional
-    public int scanOverdueAndEscalate() {
-        List<ApprovalTask> overdue = taskRepository.findByStatusAndDeadlineAtBefore("PENDING", LocalDateTime.now());
+    public ScanResult scanOverdueAndEscalate() {
+        LocalDateTime now = LocalDateTime.now();
+        List<ApprovalTask> overdue = taskRepository.findByStatusAndDeadlineAtBefore("PENDING", now);
         int handled = 0;
+        Map<String, Integer> tierStats = new LinkedHashMap<String, Integer>();
+        tierStats.put("P1", 0);
+        tierStats.put("P2", 0);
+        tierStats.put("P3", 0);
         for (ApprovalTask task : overdue) {
             if ("ESCALATED".equalsIgnoreCase(task.getStatus())) {
                 continue;
             }
+            int overdueMinutes = resolveOverdueMinutes(task, now);
+            String tier = resolveTier(overdueMinutes);
             if (task.getNotifiedAt() == null) {
                 task.setNotifiedAt(LocalDateTime.now());
                 taskRepository.save(task);
-                recordEvent(task, "SLA_REMINDER", "system", "Pending task overdue");
-                auditLogService.record("system", "SYSTEM", "SLA_REMINDER", "APPROVAL_TASK", task.getId(), "Pending task overdue", task.getTenantId());
+                recordEvent(task, "SLA_REMINDER", "system", "Pending task overdue | tier=" + tier + " | overdueMinutes=" + overdueMinutes);
+                auditLogService.record("system", "SYSTEM", "SLA_REMINDER", "APPROVAL_TASK", task.getId(), "Pending task overdue | tier=" + tier + " | overdueMinutes=" + overdueMinutes, task.getTenantId());
             }
             List<ApprovalTask> existingEsc = taskRepository.findByTenantIdAndEscalationSourceTaskIdOrderByCreatedAtDesc(task.getTenantId(), task.getId());
             if (!existingEsc.isEmpty()) {
@@ -86,12 +96,51 @@ public class ApprovalSlaService {
                 inst.setStatus("PENDING");
                 instanceRepository.save(inst);
             }
-            recordEvent(task, "SLA_ESCALATED", "system", "approval_sla_escalated");
-            auditLogService.record("system", "SYSTEM", "SLA_ESCALATED", "APPROVAL_TASK", task.getId(), "approval_sla_escalated", task.getTenantId());
+            recordEvent(task, "SLA_ESCALATED", "system", "approval_sla_escalated | tier=" + tier + " | overdueMinutes=" + overdueMinutes);
+            auditLogService.record("system", "SYSTEM", "SLA_ESCALATED", "APPROVAL_TASK", task.getId(), "approval_sla_escalated | tier=" + tier + " | overdueMinutes=" + overdueMinutes, task.getTenantId());
             notificationJobService.enqueueSlaEscalated(task.getTenantId(), task.getInstanceId(), task.getId(), task.getApproverRole());
+            tierStats.put(tier, tierStats.get(tier) + 1);
             handled++;
         }
-        return handled;
+        ScanResult result = new ScanResult();
+        result.setAffected(handled);
+        result.setTierStats(tierStats);
+        return result;
+    }
+
+    private int resolveOverdueMinutes(ApprovalTask task, LocalDateTime now) {
+        if (task == null || task.getDeadlineAt() == null) return 0;
+        long mins = Duration.between(task.getDeadlineAt(), now).toMinutes();
+        if (mins <= 0) return 0;
+        if (mins > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        return (int) mins;
+    }
+
+    private String resolveTier(int overdueMinutes) {
+        if (overdueMinutes >= 24 * 60) return "P3";
+        if (overdueMinutes >= 2 * 60) return "P2";
+        return "P1";
+    }
+
+    public static class ScanResult {
+        private int affected;
+        private Map<String, Integer> tierStats;
+
+        public int getAffected() {
+            return affected;
+        }
+
+        public void setAffected(int affected) {
+            this.affected = affected;
+        }
+
+        public Map<String, Integer> getTierStats() {
+            return tierStats;
+        }
+
+        public void setTierStats(Map<String, Integer> tierStats) {
+            this.tierStats = tierStats;
+        }
     }
 
     private void recordEvent(ApprovalTask task, String eventType, String operator, String detail) {

@@ -50,7 +50,20 @@ export function useApprovalPageActions(params) {
 
   const withRequestId = (err) => {
     const code = String(err?.code || '').trim().toLowerCase()
-    const message = code === 'approval_task_closed' ? t('approvalTaskClosedHint') : String(err?.message || '')
+    const reason = String(err?.details?.reason || '').trim().toLowerCase()
+    let message = String(err?.message || '')
+    if (code === 'approval_task_closed') {
+      if (reason === 'urge_cooldown') {
+        const until = String(err?.details?.cooldownUntil || '').trim()
+        message = until ? `${t('approvalUrgeCooldownHint')} (${until})` : t('approvalUrgeCooldownHint')
+      } else if (reason === 'urge_daily_limit') {
+        const count = Number(err?.details?.dailyCount || 0)
+        const limit = Number(err?.details?.dailyLimit || 10)
+        message = `${t('approvalUrgeDailyLimitHint')} (${count}/${limit})`
+      } else {
+        message = t('approvalTaskClosedHint')
+      }
+    }
     const requestId = String(err?.requestId || '').trim()
     return requestId ? `${message} [${requestId}]` : message
   }

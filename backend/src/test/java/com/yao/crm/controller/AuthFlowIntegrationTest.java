@@ -2,9 +2,13 @@ package com.yao.crm.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yao.crm.entity.ApprovalEvent;
+import com.yao.crm.entity.ApprovalTask;
 import com.yao.crm.entity.LeadImportJob;
 import com.yao.crm.entity.LeadImportJobItem;
 import com.yao.crm.entity.PaymentRecord;
+import com.yao.crm.repository.ApprovalEventRepository;
+import com.yao.crm.repository.ApprovalTaskRepository;
 import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.PaymentRecordRepository;
@@ -28,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -47,6 +52,10 @@ class AuthFlowIntegrationTest {
     private LeadImportJobItemRepository leadImportJobItemRepository;
     @Autowired
     private PaymentRecordRepository paymentRecordRepository;
+    @Autowired
+    private ApprovalEventRepository approvalEventRepository;
+    @Autowired
+    private ApprovalTaskRepository approvalTaskRepository;
 
 
     @Test
@@ -1854,6 +1863,136 @@ class AuthFlowIntegrationTest {
                         .content("{\"comment\":\"again\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("approval_task_closed"));
+    }
+
+    @Test
+    void v1ApprovalUrgeShouldEnforceCooldownAndDailyLimitWithReasonDetails() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+
+        String quoteCooldown = createQuote(token, "admin");
+        String submitCooldown = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteCooldown + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteCooldown + "\",\"amount\":1000,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String cooldownInstanceId = objectMapper.readTree(submitCooldown).path("id").asText();
+        String cooldownTaskId = approvalTaskRepository
+                .findByInstanceIdAndTenantIdOrderBySeqAsc(cooldownInstanceId, "tenant_default")
+                .get(0).getId();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + cooldownTaskId + "/urge")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"first\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("URGED"));
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + cooldownTaskId + "/urge")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"second\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_task_closed"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details.reason").value("urge_cooldown"))
+                .andExpect(jsonPath("$.details.cooldownUntil").isString())
+                .andExpect(jsonPath("$.details.dailyLimit").value(10));
+
+        String quoteDaily = createQuote(token, "admin");
+        String submitDaily = mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteDaily + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteDaily + "\",\"amount\":1200,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String dailyInstanceId = objectMapper.readTree(submitDaily).path("id").asText();
+        ApprovalTask dailyTask = approvalTaskRepository
+                .findByInstanceIdAndTenantIdOrderBySeqAsc(dailyInstanceId, "tenant_default")
+                .get(0);
+        LocalDateTime base = LocalDateTime.now().minusMinutes(35);
+        for (int i = 0; i < 10; i++) {
+            ApprovalEvent event = new ApprovalEvent();
+            event.setId("apev_test_" + i + "_" + System.currentTimeMillis());
+            event.setTenantId("tenant_default");
+            event.setInstanceId(dailyTask.getInstanceId());
+            event.setTaskId(dailyTask.getId());
+            event.setEventType("URGED");
+            event.setOperatorUser("admin");
+            event.setDetail("seed-daily-limit");
+            event.setRequestId("seed-" + i);
+            event.setCreatedAt(base.minusMinutes(i));
+            approvalEventRepository.save(event);
+        }
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + dailyTask.getId() + "/urge")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"daily-limit\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("approval_task_closed"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details.reason").value("urge_daily_limit"))
+                .andExpect(jsonPath("$.details.dailyLimit").value(10))
+                .andExpect(jsonPath("$.details.dailyCount", greaterThanOrEqualTo(10)));
+    }
+
+    @Test
+    void v1ApprovalSlaScanShouldExposeTierStats() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+
+        String quoteP1 = createQuote(token, "admin");
+        String quoteP2 = createQuote(token, "admin");
+        String quoteP3 = createQuote(token, "admin");
+
+        String instP1 = objectMapper.readTree(mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteP1 + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteP1 + "\",\"amount\":2000,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).path("id").asText();
+        String instP2 = objectMapper.readTree(mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteP2 + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteP2 + "\",\"amount\":3000,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).path("id").asText();
+        String instP3 = objectMapper.readTree(mockMvc.perform(post("/api/v1/approval/instances/QUOTE/" + quoteP3 + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"bizId\":\"" + quoteP3 + "\",\"amount\":4000,\"role\":\"SALES\",\"department\":\"DEFAULT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).path("id").asText();
+
+        ApprovalTask taskP1 = approvalTaskRepository.findByInstanceIdAndTenantIdOrderBySeqAsc(instP1, "tenant_default").get(0);
+        ApprovalTask taskP2 = approvalTaskRepository.findByInstanceIdAndTenantIdOrderBySeqAsc(instP2, "tenant_default").get(0);
+        ApprovalTask taskP3 = approvalTaskRepository.findByInstanceIdAndTenantIdOrderBySeqAsc(instP3, "tenant_default").get(0);
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        taskP1.setDeadlineAt(now.minusMinutes(35));
+        taskP2.setDeadlineAt(now.minusMinutes(130));
+        taskP3.setDeadlineAt(now.minusMinutes(24 * 60 + 10));
+        approvalTaskRepository.save(taskP1);
+        approvalTaskRepository.save(taskP2);
+        approvalTaskRepository.save(taskP3);
+
+        mockMvc.perform(post("/api/v1/approval/sla/scan")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.affected", greaterThanOrEqualTo(3)))
+                .andExpect(jsonPath("$.tierStats.P1", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.tierStats.P2", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.tierStats.P3", greaterThanOrEqualTo(1)));
     }
 
     @Test
