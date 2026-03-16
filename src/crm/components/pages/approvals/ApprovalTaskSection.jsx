@@ -3,16 +3,17 @@ import { translateStatus } from '../../../shared'
 import VirtualListTable from '../../VirtualListTable'
 
 const ApprovalTaskRow = memo(function ApprovalTaskRow({ task, t, approvals, formatDateTime }) {
+  const pending = !!approvals.pendingTaskIds?.[task.id]
   return (
     <div className="table-row table-row-5 compact">
       <span>{task.id}</span>
       <span>{translateStatus(t, task.status)}</span>
       <span>{task.approverRole}{task.overdue ? ` / ${t('approvalOverdue').toUpperCase()}` : ''}</span>
       <span>
-        <button className="mini-btn" onClick={() => approvals.actTask(task.id, 'approve')}>{t('approvalApprove')}</button>
-        <button className="mini-btn" onClick={() => approvals.actTask(task.id, 'reject')}>{t('approvalReject')}</button>
-        <button className="mini-btn" onClick={() => approvals.actTask(task.id, 'transfer')}>{t('approvalTransfer')}</button>
-        <button className="mini-btn" onClick={() => approvals.urgeTask(task.id)}>{t('approvalUrge')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => approvals.actTask(task.id, 'approve')}>{t('approvalApprove')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => approvals.actTask(task.id, 'reject')}>{t('approvalReject')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => approvals.actTask(task.id, 'transfer')}>{t('approvalTransfer')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => approvals.urgeTask(task.id)}>{t('approvalUrge')}</button>
       </span>
       <span>{formatDateTime(task.createdAt)}</span>
     </div>

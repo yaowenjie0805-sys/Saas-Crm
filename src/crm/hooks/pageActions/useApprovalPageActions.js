@@ -14,8 +14,10 @@ export function useApprovalPageActions(params) {
     loadApprovalStats,
     loadApprovalInstances,
     loadApprovalTasks,
+    loadApprovalDetail,
     approvalInstanceForm,
     setApprovalInstanceForm,
+    approvalDetail,
     approvalActionComment,
     setApprovalActionComment,
     approvalTransferTo,
@@ -29,11 +31,26 @@ export function useApprovalPageActions(params) {
     notificationSize,
     setError,
     setApprovalActionResult,
+    approvalPendingTaskIds,
+    setApprovalPendingTaskIds,
     t,
   } = params
 
+  const setTaskPending = (taskId, pending) => {
+    if (!taskId) return
+    setApprovalPendingTaskIds((prev) => {
+      const next = { ...(prev || {}) }
+      if (pending) next[taskId] = true
+      else delete next[taskId]
+      return next
+    })
+  }
+
+  const isTaskPending = (taskId) => !!(taskId && approvalPendingTaskIds?.[taskId])
+
   const withRequestId = (err) => {
-    const message = String(err?.message || '')
+    const code = String(err?.code || '').trim().toLowerCase()
+    const message = code === 'approval_task_closed' ? t('approvalTaskClosedHint') : String(err?.message || '')
     const requestId = String(err?.requestId || '').trim()
     return requestId ? `${message} [${requestId}]` : message
   }
@@ -106,6 +123,8 @@ export function useApprovalPageActions(params) {
   }
 
   const actApprovalTask = async (taskId, action) => {
+    if (isTaskPending(taskId)) return
+    setTaskPending(taskId, true)
     try {
       const payload = { comment: approvalActionComment }
       if (action === 'transfer') payload.transferTo = approvalTransferTo
@@ -128,11 +147,19 @@ export function useApprovalPageActions(params) {
       if (action === 'transfer') setApprovalTransferTo('')
     } catch (err) {
       setError(withRequestId(err))
+      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') {
+        await loadApprovalTasks()
+        if (approvalDetail?.id) await loadApprovalDetail(approvalDetail.id)
+      }
       handleError(err)
+    } finally {
+      setTaskPending(taskId, false)
     }
   }
 
   const urgeApprovalTask = async (taskId) => {
+    if (isTaskPending(taskId)) return
+    setTaskPending(taskId, true)
     try {
       const result = await api('/v1/approval/tasks/' + taskId + '/urge', { method: 'POST', body: JSON.stringify({ comment: approvalActionComment, urgeChannel: 'IN_APP' }) }, auth.token, lang)
       await loadApprovalStats()
@@ -149,7 +176,13 @@ export function useApprovalPageActions(params) {
       setApprovalActionComment('')
     } catch (err) {
       setError(withRequestId(err))
+      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') {
+        await loadApprovalTasks()
+        if (approvalDetail?.id) await loadApprovalDetail(approvalDetail.id)
+      }
       handleError(err)
+    } finally {
+      setTaskPending(taskId, false)
     }
   }
 

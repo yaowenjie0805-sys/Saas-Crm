@@ -241,6 +241,7 @@ function App() {
   const [approvalActionComment, setApprovalActionComment] = useState('')
   const [approvalTransferTo, setApprovalTransferTo] = useState('')
   const [approvalActionResult, setApprovalActionResult] = useState(null)
+  const [approvalPendingTaskIds, setApprovalPendingTaskIds] = useState({})
   const [notificationJobs, setNotificationJobs] = useState([])
   const [notificationStatusFilter, setNotificationStatusFilter] = useState('ALL')
   const [notificationPage, setNotificationPage] = useState(1)
@@ -1350,6 +1351,10 @@ function App() {
     approvalTransferTo,
     setApprovalTransferTo,
     setApprovalActionResult,
+    approvalPendingTaskIds,
+    setApprovalPendingTaskIds,
+    approvalDetail,
+    loadApprovalDetail,
     loadNotificationJobs,
     setSelectedNotificationJobs,
     notificationJobs,
@@ -1529,6 +1534,7 @@ function App() {
         approvalActionComment, setApprovalActionComment, approvalTransferTo, setApprovalTransferTo, notificationJobs, notificationStatusFilter, setNotificationStatusFilter, notificationPage,
         notificationTotalPages, notificationSize, setNotificationPage, setNotificationSize, selectedNotificationJobs,
         approvalActionResult, setApprovalActionResult,
+        approvalPendingTaskIds, setApprovalPendingTaskIds,
         loadApprovalTasks, loadApprovalTemplates, loadNotificationJobs,
       },
       reporting: {
