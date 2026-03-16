@@ -1471,6 +1471,47 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1LeadConvertAndQuoteToOrderShouldExposeStableContractFields() throws Exception {
+        String token = login("admin", "admin123");
+
+        String leadBody = mockMvc.perform(post("/api/v1/leads")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Lead Contract Test\",\"company\":\"Demo Co\",\"status\":\"NEW\",\"owner\":\"admin\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String leadId = objectMapper.readTree(leadBody).path("id").asText();
+
+        String convertedBody = mockMvc.perform(post("/api/v1/leads/" + leadId + "/convert")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lead.id").value(leadId))
+                .andExpect(jsonPath("$.customerId").isString())
+                .andExpect(jsonPath("$.contactId").isString())
+                .andExpect(jsonPath("$.opportunityId").isString())
+                .andReturn().getResponse().getContentAsString();
+        String customerId = objectMapper.readTree(convertedBody).path("customerId").asText();
+        String opportunityId = objectMapper.readTree(convertedBody).path("opportunityId").asText();
+
+        String quoteId = createQuote(token, "admin", "APPROVED", customerId, opportunityId);
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/to-order")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isString())
+                .andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.orderId").isString())
+                .andExpect(jsonPath("$.orderStatus").value("DRAFT"))
+                .andExpect(jsonPath("$.sourceQuoteId").value(quoteId))
+                .andExpect(jsonPath("$.sourceQuoteStatus").value("ACCEPTED"));
+    }
+
+    @Test
     void v1QuoteSubmitShouldTriggerApprovalByDiscount() throws Exception {
         String token = login("admin", "admin123");
         createQuoteApprovalTemplate(token);
@@ -1572,6 +1613,26 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1SalesShouldNotOperateOtherOwnersQuoteInM1Flow() throws Exception {
+        String adminToken = login("admin", "admin123");
+        String salesToken = login("sales", "sales123");
+
+        String quoteId = createQuote(adminToken, "admin");
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + salesToken)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("scope_forbidden"));
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/to-order")
+                        .header("Authorization", "Bearer " + salesToken)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("scope_forbidden"));
+    }
+
+    @Test
     void legacyPaymentShouldEnforceTenantIsolation() throws Exception {
         PaymentRecord record = new PaymentRecord();
         record.setId("pm_other_" + System.currentTimeMillis());
@@ -1631,11 +1692,15 @@ class AuthFlowIntegrationTest {
     }
 
     private String createQuote(String token, String owner) throws Exception {
+        return createQuote(token, owner, "DRAFT", "c_1001", "");
+    }
+
+    private String createQuote(String token, String owner, String status, String customerId, String opportunityId) throws Exception {
         String body = mockMvc.perform(post("/api/v1/quotes")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Tenant-Id", "tenant_default")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"customerId\":\"c_1001\",\"owner\":\"" + owner + "\",\"status\":\"DRAFT\"}"))
+                        .content("{\"customerId\":\"" + customerId + "\",\"owner\":\"" + owner + "\",\"status\":\"" + status + "\",\"opportunityId\":\"" + opportunityId + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(body).path("id").asText();

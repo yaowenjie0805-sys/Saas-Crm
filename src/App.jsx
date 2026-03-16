@@ -1096,6 +1096,14 @@ function App() {
     if (String(paymentForm.status || '').trim() && !PAYMENT_STATUS_OPTIONS.includes(paymentForm.status)) next.status = t('invalidStatusOption')
     return next
   }
+  const jumpToQuoteAfterLeadConvert = useCallback((prefill = {}) => {
+    const nextOpportunityId = String(prefill?.opportunityId || '')
+    setQuoteOpportunityFilter(nextOpportunityId)
+    markNavStart(activePage, 'quotes')
+    loadReasonRef.current = 'workbench_jump'
+    setActivePage('quotes')
+    navigate(PAGE_TO_PATH.quotes)
+  }, [activePage, markNavStart, navigate])
 
   const {
     toggleTaskDone,
@@ -1169,6 +1177,8 @@ function App() {
     setPaymentPage,
     payments,
     refreshPage,
+    setQuotePrefill,
+    onLeadConvertedToQuote: jumpToQuoteAfterLeadConvert,
   })
 
   const submitLogin = async (e) => {
