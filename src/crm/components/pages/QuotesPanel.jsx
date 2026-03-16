@@ -9,13 +9,16 @@ import { useSelectionSet } from '../../hooks/useSelectionSet'
 const NOOP = () => {}
 const EMPTY_FORM = { id: '', customerId: '', opportunityId: '', owner: '', status: 'DRAFT', validUntil: '' }
 const EMPTY_ROWS = []
-const formatRequestError = (err) => {
-  const message = String(err?.message || 'request_failed')
+const formatRequestError = (err, t) => {
+  const code = String(err?.code || '').trim().toLowerCase()
+  const message = code === 'quote_stage_gate_requires_approval'
+    ? t('quoteStageGateRequiresApproval')
+    : String(err?.message || 'request_failed')
   const requestId = String(err?.requestId || '').trim()
   return requestId ? `${message} [${requestId}]` : message
 }
 
-const QuoteRow = memo(function QuoteRow({ row, checked, onToggle, t, act, openEdit, setSelectedQuoteId }) {
+const QuoteRow = memo(function QuoteRow({ row, checked, onToggle, t, act, openEdit, setSelectedQuoteId, pending }) {
   return (
     <div className="table-row table-row-6">
       <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
@@ -25,9 +28,9 @@ const QuoteRow = memo(function QuoteRow({ row, checked, onToggle, t, act, openEd
       <span>{formatMoney(row.totalAmount)}</span>
       <span>
         <button className="mini-btn" onClick={() => { setSelectedQuoteId(row.id); openEdit(row) }}>{t('detail')}</button>
-        <button className="mini-btn" onClick={() => act(row.id, 'submit')}>{t('submit')}</button>
-        <button className="mini-btn" onClick={() => act(row.id, 'accept')}>{t('accept')}</button>
-        <button className="mini-btn" onClick={() => act(row.id, 'to-order')}>{t('toOrder')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => act(row.id, 'submit')}>{t('submit')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => act(row.id, 'accept')}>{t('accept')}</button>
+        <button className="mini-btn" disabled={pending} onClick={() => act(row.id, 'to-order')}>{t('toOrder')}</button>
       </span>
     </div>
   )
@@ -50,8 +53,10 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
   const [itemJson, setItemJson] = useState('[{"productId":"","quantity":1,"unitPrice":0,"discountRate":0,"taxRate":0}]')
   const [submitResult, setSubmitResult] = useState(null)
   const [orderResult, setOrderResult] = useState(null)
+  const [tenantApprovalMode, setTenantApprovalMode] = useState('STRICT')
   const [openModal, setOpenModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [actionPendingIds, setActionPendingIds] = useState({})
   const [batchOwner, setBatchOwner] = useState('')
   const [batchStatus, setBatchStatus] = useState('')
   const [batchModalOpen, setBatchModalOpen] = useState(false)
@@ -76,12 +81,25 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
       setQuoteItems(data.items || [])
     } catch (err) {
       if (err?.name === 'AbortError') return
-      setError(formatRequestError(err))
+      setError(formatRequestError(err, t))
     }
-  }, [token, lang, effectiveSelectedQuoteId, setError])
+  }, [token, lang, effectiveSelectedQuoteId, setError, t])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (activePage === 'quotes' && effectiveSelectedQuoteId) loadQuoteItems(effectiveSelectedQuoteId) }, [activePage, effectiveSelectedQuoteId, loadQuoteItems])
   useEffect(() => () => { itemAbortRef.current?.abort() }, [])
+  useEffect(() => {
+    let canceled = false
+    if (activePage !== 'quotes' || !token) return () => { canceled = true }
+    ;(async () => {
+      try {
+        const data = await api('/v2/tenant-config', {}, token, lang)
+        if (!canceled) setTenantApprovalMode(String(data?.approvalMode || 'STRICT').toUpperCase())
+      } catch {
+        if (!canceled) setTenantApprovalMode('STRICT')
+      }
+    })()
+    return () => { canceled = true }
+  }, [activePage, token, lang])
 
   const filteredItems = useMemo(() => {
     const owner = ownerFilter.trim().toLowerCase()
@@ -163,7 +181,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
       setForm(EMPTY_FORM)
       await refreshSelf()
     } catch (err) {
-      setError(formatRequestError(err))
+      setError(formatRequestError(err, t))
     }
   }
 
@@ -175,18 +193,27 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
       await loadQuoteItems(effectiveSelectedQuoteId)
       await refreshSelf()
     } catch (err) {
-      setError(formatRequestError(err))
+      setError(formatRequestError(err, t))
     }
   }
 
   const act = async (id, action) => {
+    if (actionPendingIds[id]) return
+    setActionPendingIds((prev) => ({ ...prev, [id]: true }))
     try {
       const data = await api(`/v1/quotes/${id}/${action}`, { method: 'POST' }, token, lang)
       if (action === 'submit') setSubmitResult(data)
       if (action === 'to-order') setOrderResult(data)
       await refreshSelf()
     } catch (err) {
-      setError(formatRequestError(err))
+      setError(formatRequestError(err, t))
+      await refreshSelf()
+    } finally {
+      setActionPendingIds((prev) => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
     }
   }
 
@@ -197,6 +224,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
       <div className="panel-head">
         <h2>{t('quotes')}</h2>
         <div className="inline-tools">
+          <span className="muted-filter">{t('approvalMode')}: {tenantApprovalMode === 'STAGE_GATE' ? t('approvalModeStageGate') : t('approvalModeStrict')}</span>
           <button className="mini-btn" onClick={refreshSelf}>{t('refresh')}</button>
           <button className="primary-btn" disabled={!canWrite} onClick={openCreate}>{t('createQuote')}</button>
         </div>
@@ -266,6 +294,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
               act={act}
               openEdit={openEdit}
               setSelectedQuoteId={setSelectedQuoteId}
+              pending={!!actionPendingIds[row.id]}
             />
           )}
         />
