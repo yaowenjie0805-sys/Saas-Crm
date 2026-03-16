@@ -2,6 +2,12 @@ package com.yao.crm.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yao.crm.entity.LeadImportJob;
+import com.yao.crm.entity.LeadImportJobItem;
+import com.yao.crm.entity.PaymentRecord;
+import com.yao.crm.repository.LeadImportJobItemRepository;
+import com.yao.crm.repository.LeadImportJobRepository;
+import com.yao.crm.repository.PaymentRecordRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -12,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -19,6 +26,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.LocalDateTime;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,6 +39,14 @@ class AuthFlowIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private LeadImportJobRepository leadImportJobRepository;
+
+    @Autowired
+    private LeadImportJobItemRepository leadImportJobItemRepository;
+    @Autowired
+    private PaymentRecordRepository paymentRecordRepository;
 
 
     @Test
@@ -649,6 +666,10 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"bizType\":\"CONTRACT\",\"name\":\"Contract Approval\",\"amountMin\":0,\"amountMax\":999999999,\"approverRoles\":\"MANAGER,ADMIN\"}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("approval_template_created"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
                 .andExpect(jsonPath("$.tenantId").value("tenant_default"));
 
         mockMvc.perform(post("/api/v1/approval/instances/CONTRACT/cr_6001/submit")
@@ -737,6 +758,10 @@ class AuthFlowIntegrationTest {
                         .queryParam("page", "1")
                         .queryParam("size", "10"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("notification_jobs_listed"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
                 .andExpect(jsonPath("$.items").isArray())
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.size").value(10))
@@ -797,6 +822,9 @@ class AuthFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .header("X-Tenant-Id", "tenant_default"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("ops_health_loaded"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.details").isMap())
                 .andExpect(jsonPath("$.database.status").value("UP"))
                 .andExpect(jsonPath("$.notificationScheduler.status").exists())
                 .andExpect(jsonPath("$.requestId").isString());
@@ -820,6 +848,137 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.message").isString())
                 .andExpect(jsonPath("$.requestId").isString())
                 .andExpect(jsonPath("$.details").isMap());
+    }
+
+    @Test
+    void v1AuthLoginSuccessShouldContainStandardSuccessFields() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"tenant_default\",\"username\":\"admin\",\"password\":\"admin123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("auth_success"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.token").isString())
+                .andExpect(jsonPath("$.tenantId").value("tenant_default"));
+    }
+
+    @Test
+    void v1TenantListSuccessShouldContainStandardSuccessFields() throws Exception {
+        String token = login("admin", "admin123");
+        mockMvc.perform(get("/api/v1/tenants")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("tenants_listed"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.items").isArray());
+    }
+
+    @Test
+    void v1AdminInviteSuccessShouldContainStandardSuccessFields() throws Exception {
+        String token = login("admin", "admin123");
+        String unique = "invite_std_" + System.currentTimeMillis();
+        mockMvc.perform(post("/api/v1/admin/users/invite")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + unique + "\",\"role\":\"SALES\",\"ownerScope\":\"" + unique + "\",\"department\":\"DEFAULT\",\"dataScope\":\"SELF\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("invitation_created"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.token").isString());
+    }
+
+    @Test
+    void v1AutomationCreateSuccessShouldContainStandardSuccessFields() throws Exception {
+        String token = login("admin", "admin123");
+        mockMvc.perform(post("/api/v1/automation/rules")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"r1\",\"triggerType\":\"FIELD_CHANGE\",\"triggerExpr\":\"x\",\"actionType\":\"CREATE_TASK\",\"actionPayload\":\"{}\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("automation_rule_created"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.id").isString());
+    }
+
+    @Test
+    void v1IntegrationWebhookSuccessShouldContainStandardSuccessFields() throws Exception {
+        String token = login("admin", "admin123");
+        mockMvc.perform(post("/api/v1/integrations/webhooks/wecom")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"event\":\"approval_sla_escalated\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.code").value("webhook_accepted"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.accepted").value(true));
+    }
+
+    @Test
+    void v1ReportOverviewSuccessShouldContainStandardSuccessFields() throws Exception {
+        String token = login("analyst", "analyst123");
+        mockMvc.perform(get("/api/v1/reports/overview")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("report_overview_loaded"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.filters").isMap());
+    }
+
+    @Test
+    void v1OidcCallbackSuccessShouldContainStandardSuccessFields() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/oidc/callback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"tenant_default\",\"code\":\"SSO-ACCESS\",\"username\":\"oidc_user\",\"displayName\":\"OIDC User\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("auth_success"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.token").isString())
+                .andExpect(jsonPath("$.tenantId").value("tenant_default"));
+    }
+
+    @Test
+    void v1InvitationAcceptSuccessShouldContainStandardSuccessFields() throws Exception {
+        String adminToken = login("admin", "admin123");
+        String unique = "invite_" + System.currentTimeMillis();
+        String inviteBody = mockMvc.perform(post("/api/v1/admin/users/invite")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + unique + "\",\"role\":\"SALES\",\"ownerScope\":\"" + unique + "\",\"department\":\"DEFAULT\",\"dataScope\":\"SELF\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String token = objectMapper.readTree(inviteBody).get("token").asText();
+
+        mockMvc.perform(post("/api/v1/auth/invitations/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"" + token + "\",\"password\":\"invite123\",\"confirmPassword\":\"invite123\",\"displayName\":\"Invite User\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("invitation_accepted"))
+                .andExpect(jsonPath("$.message").isString())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.tenantId").value("tenant_default"))
+                .andExpect(jsonPath("$.username").value(unique))
+                .andExpect(jsonPath("$.displayName").value("Invite User"));
     }
 
     @Test
@@ -1040,6 +1199,80 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1LeadImportCancelInvalidTransitionShouldReturnConflictError() throws Exception {
+        String token = login("admin", "admin123");
+        String csv = "name,company,phone,email,source,owner,status\n" +
+                "Lead A,Acme,13900000000,a@example.com,WEB,sales,NEW\n";
+
+        String created = mockMvc.perform(multipart("/api/v1/leads/import-jobs")
+                        .file("file", csv.getBytes("UTF-8"))
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .header("Accept-Language", "en")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String jobId = objectMapper.readTree(created).get("id").asText();
+
+        mockMvc.perform(post("/api/v1/leads/import-jobs/" + jobId + "/cancel")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/leads/import-jobs/" + jobId + "/cancel")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("lead_import_status_transition_invalid"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap());
+    }
+
+    @Test
+    void v1LeadImportConcurrentLimitShouldReturnConflictError() throws Exception {
+        String token = login("admin", "admin123");
+        String csv = "name,company,phone,email,source,owner,status\n" +
+                "Lead A,Acme,13900000000,a@example.com,WEB,sales,NEW\n";
+
+        String first = mockMvc.perform(multipart("/api/v1/leads/import-jobs")
+                        .file("file", csv.getBytes("UTF-8"))
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String firstJobId = objectMapper.readTree(first).get("id").asText();
+
+        String second = mockMvc.perform(multipart("/api/v1/leads/import-jobs")
+                        .file("file", csv.getBytes("UTF-8"))
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String secondJobId = objectMapper.readTree(second).get("id").asText();
+
+        mockMvc.perform(multipart("/api/v1/leads/import-jobs")
+                        .file("file", csv.getBytes("UTF-8"))
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("lead_import_concurrent_limit_exceeded"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap());
+
+        mockMvc.perform(post("/api/v1/leads/import-jobs/" + firstJobId + "/cancel")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/leads/import-jobs/" + secondJobId + "/cancel")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void legacyAuthInvalidCredentialsShouldContainCompatibilityErrorFields() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1049,6 +1282,389 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
                 .andExpect(jsonPath("$.requestId").isString())
                 .andExpect(jsonPath("$.details").isMap());
+    }
+
+    @Test
+    void v1LeadImportFailedRowsExportJobShouldCreateListAndDownload() throws Exception {
+        String token = login("admin", "admin123");
+        String importJobId = "lij_test_" + System.currentTimeMillis();
+
+        LeadImportJob job = new LeadImportJob();
+        job.setId(importJobId);
+        job.setTenantId("tenant_default");
+        job.setCreatedBy("admin");
+        job.setStatus("FAILED");
+        job.setFileName("failed_rows.csv");
+        job.setTotalRows(1);
+        job.setProcessedRows(1);
+        job.setSuccessCount(0);
+        job.setFailCount(1);
+        job.setPercent(100);
+        job.setCancelRequested(false);
+        job.setCreatedAt(LocalDateTime.now().minusMinutes(10));
+        job.setUpdatedAt(LocalDateTime.now().minusMinutes(1));
+        leadImportJobRepository.save(job);
+
+        LeadImportJobItem item = new LeadImportJobItem();
+        item.setId("lji_test_" + System.currentTimeMillis());
+        item.setTenantId("tenant_default");
+        item.setJobId(importJobId);
+        item.setLineNo(2);
+        item.setStatus("FAILED");
+        item.setRawLine("Lead A,Acme,13900000000,a@example.com,WEB,sales,NEW");
+        item.setErrorCode("lead_import_duplicate");
+        item.setErrorMessage("duplicated lead row");
+        item.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        leadImportJobItemRepository.save(item);
+
+        String created = mockMvc.perform(post("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.code").value("lead_import_export_submitted"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details").isMap())
+                .andExpect(jsonPath("$.jobId").isString())
+                .andReturn().getResponse().getContentAsString();
+        String exportJobId = objectMapper.readTree(created).get("jobId").asText();
+
+        mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .queryParam("status", "ALL")
+                        .queryParam("page", "1")
+                        .queryParam("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("lead_import_export_jobs_listed"))
+                .andExpect(jsonPath("$.items").isArray());
+
+        for (int i = 0; i < 20; i++) {
+            String listBody = mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs")
+                            .header("Authorization", "Bearer " + token)
+                            .header("X-Tenant-Id", "tenant_default")
+                            .queryParam("status", "ALL")
+                            .queryParam("page", "1")
+                            .queryParam("size", "10"))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode items = objectMapper.readTree(listBody).get("items");
+            String statusText = "";
+            for (JsonNode row : items) {
+                if (exportJobId.equals(row.path("jobId").asText())) {
+                    statusText = row.path("status").asText();
+                    break;
+                }
+            }
+            if ("DONE".equals(statusText)) break;
+            Thread.sleep(80L);
+        }
+
+        mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs/" + exportJobId + "/download")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("jobId,lineNo,errorCode,errorMessage,rawLine,createdAt")));
+    }
+
+    @Test
+    void v1OpsMetricsSummaryShouldContainImportMetrics() throws Exception {
+        String token = login("analyst", "analyst123");
+        mockMvc.perform(get("/api/v1/ops/metrics/summary")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("ops_metrics_loaded"))
+                .andExpect(jsonPath("$.importMetrics").isMap())
+                .andExpect(jsonPath("$.importMetrics.importJobTotal").exists())
+                .andExpect(jsonPath("$.importMetrics.importSuccessRate").exists())
+                .andExpect(jsonPath("$.importMetrics.importFailureRate").exists());
+    }
+
+    @Test
+    void v1QuotesAndOrdersShouldRespectSalesScopeOnList() throws Exception {
+        String adminToken = login("admin", "admin123");
+        String salesToken = login("sales", "sales123");
+
+        mockMvc.perform(post("/api/v1/quotes")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"manager\",\"status\":\"DRAFT\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/quotes")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"sales\",\"status\":\"DRAFT\"}"))
+                .andExpect(status().isCreated());
+
+        String quoteListBody = mockMvc.perform(get("/api/v1/quotes")
+                        .header("Authorization", "Bearer " + salesToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .queryParam("page", "1")
+                        .queryParam("size", "100"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode quoteRoot = objectMapper.readTree(quoteListBody);
+        JsonNode quoteItems = quoteRoot.get("items");
+        org.junit.jupiter.api.Assertions.assertEquals(1, quoteRoot.path("page").asInt());
+        org.junit.jupiter.api.Assertions.assertEquals(100, quoteRoot.path("size").asInt());
+        org.junit.jupiter.api.Assertions.assertTrue(quoteRoot.path("total").asLong() >= quoteItems.size());
+        for (JsonNode item : quoteItems) {
+            String owner = item.path("owner").asText();
+            org.junit.jupiter.api.Assertions.assertTrue("sales".equalsIgnoreCase(owner));
+        }
+
+        mockMvc.perform(post("/api/v1/orders")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"manager\",\"status\":\"DRAFT\",\"amount\":100}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/orders")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"sales\",\"status\":\"DRAFT\",\"amount\":100}"))
+                .andExpect(status().isCreated());
+
+        String orderListBody = mockMvc.perform(get("/api/v1/orders")
+                        .header("Authorization", "Bearer " + salesToken)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .queryParam("page", "1")
+                        .queryParam("size", "100"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode orderRoot = objectMapper.readTree(orderListBody);
+        JsonNode orderItems = orderRoot.get("items");
+        org.junit.jupiter.api.Assertions.assertEquals(1, orderRoot.path("page").asInt());
+        org.junit.jupiter.api.Assertions.assertEquals(100, orderRoot.path("size").asInt());
+        org.junit.jupiter.api.Assertions.assertTrue(orderRoot.path("total").asLong() >= orderItems.size());
+        for (JsonNode item : orderItems) {
+            String owner = item.path("owner").asText();
+            org.junit.jupiter.api.Assertions.assertTrue("sales".equalsIgnoreCase(owner));
+        }
+    }
+
+    @Test
+    void v1QuoteSubmitShouldTriggerApprovalAndGateAcceptTransition() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String productId = createProduct(token, "P-HIGH-" + System.currentTimeMillis(), "High Product", 600000);
+        String quoteId = createQuote(token, "admin");
+        upsertQuoteItems(token, quoteId, "[{\"productId\":\"" + productId + "\",\"quantity\":1,\"unitPrice\":600000,\"discountRate\":0.0}]");
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalTriggered").value(true))
+                .andExpect(jsonPath("$.approvalInstanceId").isString());
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/accept")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("quote_status_transition_invalid"));
+    }
+
+    @Test
+    void v1QuoteSubmitShouldTriggerApprovalByDiscount() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String productId = createProduct(token, "P-DIS-" + System.currentTimeMillis(), "Discount Product", 1000);
+        String quoteId = createQuote(token, "admin");
+        upsertQuoteItems(token, quoteId, "[{\"productId\":\"" + productId + "\",\"quantity\":1,\"unitPrice\":1000,\"discountRate\":0.25}]");
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalTriggered").value(true))
+                .andExpect(jsonPath("$.approvalReason").value("DISCOUNT"));
+    }
+
+    @Test
+    void v1QuoteSubmitShouldNotTriggerApprovalWhenThresholdNotMatched() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String productId = createProduct(token, "P-LOW-" + System.currentTimeMillis(), "Low Product", 1000);
+        String quoteId = createQuote(token, "admin");
+        upsertQuoteItems(token, quoteId, "[{\"productId\":\"" + productId + "\",\"quantity\":1,\"unitPrice\":1000,\"discountRate\":0.10}]");
+
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalTriggered").value(false))
+                .andExpect(jsonPath("$.approvalInstanceId").value(""));
+    }
+
+    @Test
+    void v1QuoteRejectShouldWriteBackQuoteStatusRejected() throws Exception {
+        String token = login("admin", "admin123");
+        createQuoteApprovalTemplate(token);
+        String productId = createProduct(token, "P-REJ-" + System.currentTimeMillis(), "Reject Product", 600000);
+        String quoteId = createQuote(token, "admin");
+        upsertQuoteItems(token, quoteId, "[{\"productId\":\"" + productId + "\",\"quantity\":1,\"unitPrice\":600000,\"discountRate\":0.0}]");
+
+        String submitBody = mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/submit")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalTriggered").value(true))
+                .andReturn().getResponse().getContentAsString();
+        String instanceId = objectMapper.readTree(submitBody).path("approvalInstanceId").asText();
+
+        String instanceBody = mockMvc.perform(get("/api/v1/approval/instances/" + instanceId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode tasks = objectMapper.readTree(instanceBody).path("tasks");
+        String taskId = tasks.get(0).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/approval/tasks/" + taskId + "/reject")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        String quoteStatus = findQuoteStatusById(token, quoteId);
+        org.junit.jupiter.api.Assertions.assertEquals("REJECTED", quoteStatus);
+    }
+
+    @Test
+    void v1OrderFulfillmentTransitionsShouldValidate() throws Exception {
+        String token = login("admin", "admin123");
+        String created = mockMvc.perform(post("/api/v1/orders")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"admin\",\"status\":\"DRAFT\",\"amount\":12345}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String orderId = objectMapper.readTree(created).get("id").asText();
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/confirm")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/complete")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("order_status_transition_invalid"));
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/fulfill")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/complete")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void legacyPaymentShouldEnforceTenantIsolation() throws Exception {
+        PaymentRecord record = new PaymentRecord();
+        record.setId("pm_other_" + System.currentTimeMillis());
+        record.setTenantId("tenant_other");
+        record.setCustomerId("c_1001");
+        record.setContractId("ct_1001");
+        record.setOrderId(null);
+        record.setAmount(100L);
+        record.setMethod("Bank");
+        record.setStatus("Received");
+        record.setOwner("admin");
+        record.setRemark("cross tenant");
+        record.setReceivedDate(null);
+        paymentRecordRepository.save(record);
+
+        String token = login("admin", "admin123");
+        mockMvc.perform(patch("/api/payments/" + record.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":200}"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete("/api/payments/" + record.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        String listBody = mockMvc.perform(get("/api/payments/search")
+                        .header("Authorization", "Bearer " + token)
+                        .queryParam("page", "1")
+                        .queryParam("size", "100"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode items = objectMapper.readTree(listBody).get("items");
+        for (JsonNode item : items) {
+            org.junit.jupiter.api.Assertions.assertFalse(record.getId().equals(item.path("id").asText()));
+        }
+    }
+
+    private void createQuoteApprovalTemplate(String token) throws Exception {
+        mockMvc.perform(post("/api/v1/approval/templates")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bizType\":\"QUOTE\",\"name\":\"Quote Approval\",\"amountMin\":0,\"amountMax\":999999999,\"approverRoles\":\"MANAGER\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    private String createProduct(String token, String code, String name, long standardPrice) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/products")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + code + "\",\"name\":\"" + name + "\",\"status\":\"ACTIVE\",\"standardPrice\":" + standardPrice + "}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).path("id").asText();
+    }
+
+    private String createQuote(String token, String owner) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/quotes")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"" + owner + "\",\"status\":\"DRAFT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).path("id").asText();
+    }
+
+    private void upsertQuoteItems(String token, String quoteId, String itemsJson) throws Exception {
+        mockMvc.perform(post("/api/v1/quotes/" + quoteId + "/items")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(itemsJson))
+                .andExpect(status().isOk());
+    }
+
+    private String findQuoteStatusById(String token, String quoteId) throws Exception {
+        String body = mockMvc.perform(get("/api/v1/quotes")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .queryParam("page", "1")
+                        .queryParam("size", "200"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode items = objectMapper.readTree(body).path("items");
+        for (JsonNode item : items) {
+            if (quoteId.equals(item.path("id").asText())) {
+                return item.path("status").asText();
+            }
+        }
+        return "";
     }
 
     private String login(String username, String password) throws Exception {
