@@ -30,7 +30,8 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
   }, [tenants.rows, tenantQuery, tenantStatusFilter])
 
   const tenantTotalPages = Math.max(1, Math.ceil(tenantsFiltered.length / tenantSize))
-  const tenantRows = tenantsFiltered.slice((tenantPage - 1) * tenantSize, tenantPage * tenantSize)
+  const effectiveTenantPage = Math.min(tenantPage, tenantTotalPages)
+  const tenantRows = tenantsFiltered.slice((effectiveTenantPage - 1) * tenantSize, effectiveTenantPage * tenantSize)
 
   return (
     <section className="panel">
@@ -112,7 +113,7 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
         )}
       />
       {tenantsFiltered.length === 0 && <div className="empty-tip">{t('noData')}</div>}
-      {tenantsFiltered.length > 0 && <ServerPager t={t} page={Math.min(tenantPage, tenantTotalPages)} totalPages={tenantTotalPages} size={tenantSize} onPageChange={setTenantPage} onSizeChange={setTenantSize} sizeOptions={PAGE_SIZES} />}
+      {tenantsFiltered.length > 0 && <ServerPager t={t} page={effectiveTenantPage} totalPages={tenantTotalPages} size={tenantSize} onPageChange={setTenantPage} onSizeChange={setTenantSize} sizeOptions={PAGE_SIZES} />}
     </section>
   )
 }
