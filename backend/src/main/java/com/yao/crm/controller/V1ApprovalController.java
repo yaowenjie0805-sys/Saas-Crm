@@ -294,17 +294,20 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalTask task = optional.get();
-        if (!("PENDING".equals(task.getStatus()) || "WAITING".equals(task.getStatus()))) {
-            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
-        }
         String transferTo = payload == null ? "" : payload.getTransferTo();
         if (isBlank(transferTo)) {
             return ResponseEntity.badRequest().body(errorBody(request, "approval_transfer_required", msg(request, "approval_transfer_required"), null));
         }
+        String comment = payload == null ? null : payload.getComment();
+        int affected = taskRepository.transferTaskIfOpen(task.getId(), tenantId, currentUser(request), comment);
+        if (affected <= 0) {
+            recordConflictEvent(request, tenantId, task, "TRANSFER");
+            auditLogService.record(currentUser(request), currentRole(request), "TRANSFER_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+        }
         task.setApproverUser(currentUser(request));
         task.setStatus("TRANSFERRED");
         if (payload != null) task.setComment(payload.getComment());
-        taskRepository.save(task);
 
         ApprovalTask next = new ApprovalTask();
         next.setId(newId("aptk"));
@@ -345,12 +348,14 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalTask task = optional.get();
-        if (!("PENDING".equals(task.getStatus()) || "WAITING".equals(task.getStatus()))) {
+        int affected = taskRepository.markTaskUrgedIfOpen(task.getId(), tenantId);
+        if (affected <= 0) {
+            recordConflictEvent(request, tenantId, task, "URGE");
+            auditLogService.record(currentUser(request), currentRole(request), "URGE_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
             return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
         }
         String channel = payload == null || isBlank(payload.getUrgeChannel()) ? "IN_APP" : payload.getUrgeChannel().trim().toUpperCase(Locale.ROOT);
         task.setNotifiedAt(LocalDateTime.now());
-        taskRepository.save(task);
         recordEvent(tenantId, task.getInstanceId(), task.getId(), "URGED", currentUser(request), "channel=" + channel, traceId(request));
         auditLogService.record(currentUser(request), currentRole(request), "URGE", "APPROVAL_TASK", task.getId(), "Urged task " + channel, tenantId);
         Optional<ApprovalInstance> instanceOptional = instanceRepository.findByIdAndTenantId(task.getInstanceId(), tenantId);
@@ -537,14 +542,17 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalTask task = optional.get();
-        if (!("PENDING".equals(task.getStatus()) || "WAITING".equals(task.getStatus()))) {
+        String comment = payload == null ? null : payload.getComment();
+        int affected = taskRepository.closeTaskIfOpen(task.getId(), tenantId, actionStatus, currentUser(request), comment);
+        if (affected <= 0) {
+            recordConflictEvent(request, tenantId, task, actionStatus);
+            auditLogService.record(currentUser(request), currentRole(request), actionStatus + "_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
             return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
         }
 
         task.setStatus(actionStatus);
         task.setApproverUser(currentUser(request));
         if (payload != null) task.setComment(payload.getComment());
-        taskRepository.save(task);
 
         ApprovalInstance latestInstance = null;
         Map<String, Object> bizWriteback = new LinkedHashMap<String, Object>();
@@ -612,6 +620,10 @@ public class V1ApprovalController extends BaseApiController {
             body.put("bizWriteback", bizWriteback);
         }
         return ResponseEntity.ok(successWithFields(request, "approval_task_updated", body));
+    }
+
+    private void recordConflictEvent(HttpServletRequest request, String tenantId, ApprovalTask task, String action) {
+        recordEvent(tenantId, task.getInstanceId(), task.getId(), "ACTION_CONFLICT", currentUser(request), "action=" + action, traceId(request));
     }
 
     private ApprovalTemplate selectTemplate(String tenantId, String bizType, Long amount, String role, String department) {
