@@ -1657,6 +1657,96 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1OrderStageGateShouldEnforceQuoteAndFulfillingTransitions() throws Exception {
+        String token = login("admin", "admin123");
+        setTenantApprovalMode(token, "STAGE_GATE");
+
+        String manualOrderBody = mockMvc.perform(post("/api/v1/orders")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"admin\",\"status\":\"DRAFT\",\"amount\":9800}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String manualOrderId = objectMapper.readTree(manualOrderBody).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/orders/" + manualOrderId + "/confirm")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("order_stage_gate_requires_quote_accepted"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details.requiredStatus").value("ACCEPTED_QUOTE"))
+                .andExpect(jsonPath("$.details.currentStatus").value("NO_QUOTE"))
+                .andExpect(jsonPath("$.details.approvalMode").value("STAGE_GATE"));
+
+        String stageGateQuoteId = createQuote(token, "admin", "APPROVED", "c_1001", "");
+        String orderBody = mockMvc.perform(post("/api/v1/quotes/" + stageGateQuoteId + "/to-order")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.approvalMode").value("STAGE_GATE"))
+                .andReturn().getResponse().getContentAsString();
+        String orderId = objectMapper.readTree(orderBody).path("orderId").asText();
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/confirm")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalMode").value("STAGE_GATE"));
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/to-contract")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("order_stage_gate_requires_fulfilling"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details.requiredStatus").value("FULFILLING"))
+                .andExpect(jsonPath("$.details.currentStatus").value("CONFIRMED"))
+                .andExpect(jsonPath("$.details.approvalMode").value("STAGE_GATE"));
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/fulfill")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/to-contract")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.approvalMode").value("STAGE_GATE"))
+                .andExpect(jsonPath("$.contractId").isString());
+    }
+
+    @Test
+    void v1OrderStageGateShouldKeepStrictModeCompatible() throws Exception {
+        String token = login("admin", "admin123");
+        setTenantApprovalMode(token, "STRICT");
+
+        String created = mockMvc.perform(post("/api/v1/orders")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerId\":\"c_1001\",\"owner\":\"admin\",\"status\":\"DRAFT\",\"amount\":34567}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String orderId = objectMapper.readTree(created).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/confirm")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalMode").value("STRICT"));
+
+        mockMvc.perform(post("/api/v1/orders/" + orderId + "/to-contract")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.approvalMode").value("STRICT"))
+                .andExpect(jsonPath("$.contractId").isString());
+    }
+
+    @Test
     void v1SalesShouldNotOperateOtherOwnersQuoteInM1Flow() throws Exception {
         String adminToken = login("admin", "admin123");
         String salesToken = login("sales", "sales123");
