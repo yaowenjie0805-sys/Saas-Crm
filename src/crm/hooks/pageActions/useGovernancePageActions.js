@@ -187,6 +187,7 @@ export function useGovernancePageActions(params) {
 
   const updateTenant = async (row) => {
     try {
+      const normalizedDateFormat = normalizeDateFormat(row.dateFormat)
       const updated = await api('/v1/tenants/' + row.id, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -195,7 +196,7 @@ export function useGovernancePageActions(params) {
           quotaUsers: Number(row.quotaUsers || 0),
           timezone: row.timezone,
           currency: row.currency,
-          dateFormat: normalizeDateFormat(row.dateFormat),
+          dateFormat: normalizedDateFormat,
           marketProfile: row.marketProfile || 'CN',
           taxRule: row.taxRule || 'VAT_CN',
           approvalMode: row.approvalMode || 'STRICT',
@@ -217,7 +218,17 @@ export function useGovernancePageActions(params) {
           }),
         }, auth.token, lang)
       }
-      setTenantRows((prev) => prev.map((x) => x.id === updated.id ? { ...updated, dateFormat: normalizeDateFormat(updated.dateFormat) } : x))
+      setTenantRows((prev) => prev.map((x) => (x.id === updated.id ? {
+        ...x,
+        ...updated,
+        dateFormat: normalizeDateFormat(updated.dateFormat || normalizedDateFormat),
+        marketProfile: row.marketProfile || x.marketProfile || 'CN',
+        taxRule: row.taxRule || x.taxRule || 'VAT_CN',
+        approvalMode: row.approvalMode || x.approvalMode || 'STRICT',
+        channels: row.channels || x.channels || '[\"WECOM\",\"DINGTALK\"]',
+        dataResidency: row.dataResidency || x.dataResidency || 'CN',
+        maskLevel: row.maskLevel || x.maskLevel || 'STANDARD',
+      } : x)))
     } catch (err) { handleError(err) }
   }
 

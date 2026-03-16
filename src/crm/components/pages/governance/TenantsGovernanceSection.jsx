@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 import { translateStatus } from '../../../shared'
 import { MARKET_PROFILE_OPTIONS, TENANT_APPROVAL_MODE_OPTIONS } from '../../../shared'
 import ServerPager from '../../ServerPager'
@@ -32,6 +32,10 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
   const tenantTotalPages = Math.max(1, Math.ceil(tenantsFiltered.length / tenantSize))
   const effectiveTenantPage = Math.min(tenantPage, tenantTotalPages)
   const tenantRows = tenantsFiltered.slice((effectiveTenantPage - 1) * tenantSize, effectiveTenantPage * tenantSize)
+
+  useEffect(() => {
+    setTenantPage(1)
+  }, [tenantQuery, tenantStatusFilter, tenantSize, setTenantPage])
 
   return (
     <section className="panel">
