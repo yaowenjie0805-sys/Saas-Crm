@@ -101,7 +101,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"amount\":123456}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("only ADMIN or MANAGER can update amount"));
+                .andExpect(jsonPath("$.code").value("SCOPE_FORBIDDEN"));
     }
 
     @Test
