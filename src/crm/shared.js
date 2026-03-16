@@ -11,25 +11,42 @@ export const CONTRACT_STATUS_OPTIONS = ['Draft', 'Signed']
 export const PAYMENT_STATUS_OPTIONS = ['Pending', 'Received', 'Overdue']
 export const PAYMENT_METHOD_OPTIONS = ['Bank', 'Transfer', 'Cash', 'Card']
 export const FOLLOW_UP_CHANNEL_OPTIONS = ['Phone', 'Email', 'WeChat', 'Visit', 'Meeting']
+export const MARKET_PROFILE_OPTIONS = ['CN', 'GLOBAL']
+export const TENANT_APPROVAL_MODE_OPTIONS = ['STRICT', 'STAGE_GATE']
 
 const normalize = (value) => String(value || '').trim().replace(/[-\s]+/g, '_').toUpperCase()
 
 const ROLE_MAP = {
   ADMIN: 'roleAdmin',
+  ROLEADMIN: 'roleAdmin',
   MANAGER: 'roleManager',
+  ROLEMANAGER: 'roleManager',
   SALES: 'roleSales',
+  ROLESALES: 'roleSales',
   ANALYST: 'roleAnalyst',
+  ROLEANALYST: 'roleAnalyst',
 }
 
 const STATUS_MAP = {
   ACTIVE: 'statusActive',
   PENDING: 'statusPending',
+  WAITING: 'statusWaiting',
   INACTIVE: 'statusInactive',
   NEW: 'statusNew',
   OPEN: 'statusOpen',
   WON: 'statusWon',
   LOST: 'statusLost',
   DRAFT: 'statusDraft',
+  SUBMITTED: 'statusSubmitted',
+  CONFIRMED: 'statusConfirmed',
+  FULFILLING: 'statusFulfilling',
+  APPROVED: 'statusApproved',
+  REJECTED: 'statusRejected',
+  ESCALATED: 'statusEscalated',
+  CANCELED: 'statusCanceled',
+  RETRY: 'statusRetry',
+  SUCCESS: 'statusSuccess',
+  PARTIAL_SUCCESS: 'statusPartialSuccess',
   SIGNED: 'statusSigned',
   RECEIVED: 'statusReceived',
   COMPLETED: 'statusCompleted',
@@ -48,6 +65,12 @@ const STAGE_MAP = {
   NEGOTIATION: 'stageNegotiation',
   CLOSED_WON: 'stageClosedWon',
   CLOSED_LOST: 'stageClosedLost',
+  STAGELEAD: 'stageLead',
+  STAGEQUALIFIED: 'stageQualified',
+  STAGEPROPOSAL: 'stageProposal',
+  STAGENEGOTIATION: 'stageNegotiation',
+  STAGECLOSEDWON: 'stageClosedWon',
+  STAGECLOSEDLOST: 'stageClosedLost',
 }
 
 const CHANNEL_MAP = {
@@ -98,6 +121,14 @@ export const formatMoney = (v) => {
   if (Math.abs(n) >= 1e3) return `￥${(n / 1e3).toFixed(1)}K`
   return `￥${n}`
 }
+export const formatMoneyByCurrency = (v, currency = 'CNY') => {
+  const n = Number(v || 0)
+  if (!Number.isFinite(n)) return `${currency} 0`
+  const symbol = currency === 'CNY' ? '￥' : currency === 'USD' ? '$' : `${currency} `
+  if (Math.abs(n) >= 1e6) return `${symbol}${(n / 1e6).toFixed(2)}M`
+  if (Math.abs(n) >= 1e3) return `${symbol}${(n / 1e3).toFixed(1)}K`
+  return `${symbol}${n}`
+}
 export const translateRole = (t, value) => translateMapped(t, ROLE_MAP, value)
 export const translateStatus = (t, value) => translateMapped(t, STATUS_MAP, value)
 export const translateStage = (t, value) => translateMapped(t, STAGE_MAP, value)
@@ -132,7 +163,11 @@ export const parseHashPage = () => {
 }
 
 export async function api(path, options = {}, token, lang = 'en') {
-  const headers = { 'Content-Type': 'application/json', 'Accept-Language': lang, ...(options.headers || {}) }
+  const body = options.body
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+  const headers = { 'Accept-Language': lang, ...(options.headers || {}) }
+  if (!isFormData && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
+  if (isFormData && headers['Content-Type']) delete headers['Content-Type']
   if (token) headers.Authorization = `Bearer ${token}`
   if (!headers['X-Tenant-Id']) {
     try {
@@ -142,7 +177,7 @@ export async function api(path, options = {}, token, lang = 'en') {
       // ignore localStorage parse errors
     }
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers, body })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const fallback = lang === 'zh' ? '\u8bf7\u6c42\u5931\u8d25' : 'Request failed'

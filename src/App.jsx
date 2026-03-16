@@ -1,15 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { API_BASE, FILTERS_KEY, LANG_KEY, OIDC_STATE_KEY, ROLES, READ_OPS, WRITE_OPS, CUSTOMER_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS, readFilters, api } from './crm/shared'
-import LoginView from './crm/components/LoginView'
-import InvitationAcceptView from './crm/components/InvitationAcceptView'
-import SidebarNav from './crm/components/SidebarNav'
-import MainContent from './crm/components/MainContent'
+import { API_BASE, FILTERS_KEY, LANG_KEY, OIDC_STATE_KEY, CUSTOMER_STATUS_OPTIONS, CONTRACT_STATUS_OPTIONS, PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS, api } from './crm/shared'
+import AuthShell from './crm/components/shell/AuthShell'
+import AppShell from './crm/components/shell/AppShell'
+import { AppProviders } from './crm/context/AppProviders'
 import { tFactory } from './crm/i18n'
+import { usePageDataPolicy } from './crm/hooks/usePageDataPolicy'
+import { useNavPerf } from './crm/hooks/useNavPerf'
+import { useActivePagePolling } from './crm/hooks/useActivePagePolling'
+import { useLoaderOrchestrator } from './crm/hooks/useLoaderOrchestrator'
+import { useAppNavigationModel } from './crm/hooks/useAppNavigationModel'
+import { useAppShellBindings } from './crm/hooks/useAppShellBindings'
+import { useAppMainContentModel } from './crm/hooks/useAppMainContentModel'
+import { useAppPageActions } from './crm/hooks/useAppPageActions'
+import { useAppViewBindings } from './crm/hooks/useAppViewBindings'
+import { useCoreListDomainLoaders } from './crm/hooks/useCoreListDomainLoaders'
+import { useGovernanceDomainLoaders } from './crm/hooks/useGovernanceDomainLoaders'
+import { useApprovalDomainLoaders } from './crm/hooks/useApprovalDomainLoaders'
+import { useReportingAuditDomainLoaders } from './crm/hooks/useReportingAuditDomainLoaders'
+import { useWorkbenchDomainLoaders } from './crm/hooks/useWorkbenchDomainLoaders'
+import { useCommerceDomainLoaders } from './crm/hooks/useCommerceDomainLoaders'
+import { useLeadImportActions } from './crm/hooks/useLeadImportActions'
+import { useAppCrudActions } from './crm/hooks/useAppCrudActions'
+import { useLeadImportDomainLoaders } from './crm/hooks/useLeadImportDomainLoaders'
+import { useAppAuthModel } from './crm/hooks/useAppAuthModel'
+import { useAppStateModel } from './crm/hooks/useAppStateModel'
 import './App.css'
 
 const PAGE_TO_PATH = {
   dashboard: '/dashboard',
+  leads: '/leads',
+  products: '/products',
+  priceBooks: '/price-books',
+  quotes: '/quotes',
+  orders: '/orders',
   customers: '/customers',
   contacts: '/contacts',
   pipeline: '/opportunities',
@@ -18,33 +42,100 @@ const PAGE_TO_PATH = {
   followUps: '/follow-ups',
   tasks: '/tasks',
   reports: '/reports',
+  reportDesigner: '/reports/designer',
   approvals: '/approvals',
   audit: '/audit',
   permissions: '/admin/permissions',
   usersAdmin: '/admin/users',
+  salesAutomation: '/admin/sales-automation',
   adminTenants: '/admin/tenants',
 }
 
 const PATH_TO_PAGE = Object.entries(PAGE_TO_PATH).reduce((acc, [page, path]) => ({ ...acc, [path]: page }), {})
+const PAGE_CHUNK_PRELOADERS = {
+  customers: () => import('./crm/components/pages/CustomersPanel'),
+  quotes: () => import('./crm/components/pages/QuotesPanel'),
+  orders: () => import('./crm/components/pages/OrdersPanel'),
+  approvals: () => import('./crm/components/pages/ApprovalsPageContainer'),
+}
+const SUPPORTED_DATE_FORMATS = ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM-dd-yyyy']
+const LEGACY_DATE_FORMAT = 'YYYY-MM-DD'
+const REFRESH_REASONS = new Set(['topbar_refresh', 'panel_action', 'workbench_jump', 'sidebar_nav'])
+const PAGE_DOMAIN_MAP = {
+  dashboard: 'workbench',
+  leads: 'customer',
+  customers: 'customer',
+  pipeline: 'customer',
+  contacts: 'customer',
+  followUps: 'customer',
+  tasks: 'workbench',
+  products: 'commerce',
+  priceBooks: 'commerce',
+  quotes: 'commerce',
+  orders: 'commerce',
+  contracts: 'commerce',
+  payments: 'commerce',
+  approvals: 'approval',
+  reports: 'reporting',
+  reportDesigner: 'reporting',
+  audit: 'reporting',
+  permissions: 'governance',
+  usersAdmin: 'governance',
+  salesAutomation: 'governance',
+  adminTenants: 'governance',
+}
+const normalizeDateFormat = (raw) => {
+  const text = String(raw || '').trim()
+  if (!text || text === LEGACY_DATE_FORMAT) return 'yyyy-MM-dd'
+  return SUPPORTED_DATE_FORMATS.includes(text) ? text : 'yyyy-MM-dd'
+}
+const parseDateByFormat = (raw, format) => {
+  const text = String(raw || '').trim()
+  if (!text) return null
+  const normalizedFormat = normalizeDateFormat(format)
+  const matcher = {
+    'yyyy-MM-dd': /^(\d{4})-(\d{2})-(\d{2})$/,
+    'dd/MM/yyyy': /^(\d{2})\/(\d{2})\/(\d{4})$/,
+    'MM-dd-yyyy': /^(\d{2})-(\d{2})-(\d{4})$/,
+  }[normalizedFormat]
+  const matched = text.match(matcher)
+  if (!matched) return null
+  let y = 0
+  let m = 0
+  let d = 0
+  if (normalizedFormat === 'yyyy-MM-dd') {
+    y = Number(matched[1]); m = Number(matched[2]); d = Number(matched[3])
+  } else if (normalizedFormat === 'dd/MM/yyyy') {
+    d = Number(matched[1]); m = Number(matched[2]); y = Number(matched[3])
+  } else {
+    m = Number(matched[1]); d = Number(matched[2]); y = Number(matched[3])
+  }
+  const date = new Date(Date.UTC(y, m - 1, d))
+  if (Number.isNaN(date.getTime())) return null
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d) return null
+  return date
+}
 
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [lang, setLang] = useState(() => localStorage.getItem(LANG_KEY) || 'en')
-  const t = tFactory(lang)
-  const [auth, setAuth] = useState(() => JSON.parse(localStorage.getItem('crm_auth') || 'null'))
-  const persisted = useMemo(() => readFilters(), [])
-  const readPageSize = (key, fallback = 8) => {
-    const raw = Number(localStorage.getItem(key) || fallback)
-    if (!Number.isFinite(raw)) return fallback
-    return Math.min(Math.max(Math.floor(raw), 5), 50)
-  }
+  const {
+    lang,
+    setLang,
+    auth,
+    setAuth,
+    persisted,
+    readPageSize,
+  } = useAppStateModel()
+  const t = useMemo(() => tFactory(lang), [lang])
 
-  const [loading, setLoading] = useState(false)
+  const [loading] = useState(false)
   const [error, setError] = useState('')
-  const [crudErrors, setCrudErrors] = useState({ customer: '', opportunity: '', followUp: '', contact: '', contract: '', payment: '' })
-  const [crudFieldErrors, setCrudFieldErrors] = useState({ customer: {}, opportunity: {}, followUp: {}, contact: {}, contract: {}, payment: {} })
-  const [stats, setStats] = useState([])
+  const [loginError, setLoginError] = useState('')
+  const [crudErrors, setCrudErrors] = useState({ lead: '', customer: '', opportunity: '', followUp: '', contact: '', contract: '', payment: '' })
+  const [crudFieldErrors, setCrudFieldErrors] = useState({ lead: {}, customer: {}, opportunity: {}, followUp: {}, contact: {}, contract: {}, payment: {} })
+  const [stats] = useState([])
+  const [leads, setLeads] = useState([])
   const [customers, setCustomers] = useState([])
   const [tasks, setTasks] = useState([])
   const [opportunities, setOpportunities] = useState([])
@@ -54,23 +145,53 @@ function App() {
   const [payments, setPayments] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
   const [reports, setReports] = useState(null)
+  const [workbenchToday, setWorkbenchToday] = useState(null)
+  const [customerTimeline, setCustomerTimeline] = useState([])
+  const [opportunityTimeline, setOpportunityTimeline] = useState([])
   const [permissionMatrix, setPermissionMatrix] = useState([])
   const [permissionConflicts, setPermissionConflicts] = useState([])
   const [permissionRole, setPermissionRole] = useState('SALES')
   const [permissionPreview, setPermissionPreview] = useState(null)
   const [pendingPack, setPendingPack] = useState('')
   const [exportJobs, setExportJobs] = useState([])
+  const [exportJobsPage, setExportJobsPage] = useState(1)
+  const [exportJobsTotalPages, setExportJobsTotalPages] = useState(1)
+  const [exportJobsSize, setExportJobsSize] = useState(() => readPageSize('crm_page_size_audit_export_jobs', 8))
   const [autoRefreshJobs, setAutoRefreshJobs] = useState(true)
   const [exportStatusFilter, setExportStatusFilter] = useState('ALL')
   const [reportExportJobs, setReportExportJobs] = useState([])
+  const [reportExportJobsPage, setReportExportJobsPage] = useState(1)
+  const [reportExportJobsTotalPages, setReportExportJobsTotalPages] = useState(1)
+  const [reportExportJobsSize, setReportExportJobsSize] = useState(() => readPageSize('crm_page_size_report_export_jobs', 8))
+  const [designerTemplates, setDesignerTemplates] = useState([])
+  const [designerRunResult, setDesignerRunResult] = useState(null)
+  const [leadImportJob, setLeadImportJob] = useState(null)
+  const [leadImportJobs, setLeadImportJobs] = useState([])
+  const [leadImportStatusFilter, setLeadImportStatusFilter] = useState('ALL')
+  const [leadImportPage, setLeadImportPage] = useState(1)
+  const [leadImportTotalPages, setLeadImportTotalPages] = useState(1)
+  const [leadImportSize, setLeadImportSize] = useState(() => readPageSize('crm_page_size_lead_import_jobs', 10))
+  const [leadImportFailedRows, setLeadImportFailedRows] = useState([])
+  const [leadImportMetrics, setLeadImportMetrics] = useState(null)
+  const [leadImportExportJobs, setLeadImportExportJobs] = useState([])
+  const [leadImportExportStatusFilter, setLeadImportExportStatusFilter] = useState('ALL')
+  const [leadImportExportPage, setLeadImportExportPage] = useState(1)
+  const [leadImportExportTotalPages, setLeadImportExportTotalPages] = useState(1)
+  const [leadImportExportSize, setLeadImportExportSize] = useState(() => readPageSize('crm_page_size_lead_import_export_jobs', 10))
+  const [leadAssignmentRules, setLeadAssignmentRules] = useState([])
+  const [assignmentRuleForm, setAssignmentRuleForm] = useState({ id: '', name: '', enabled: true, membersText: 'sales:1' })
+  const [automationRules, setAutomationRules] = useState([])
+  const [automationRuleForm, setAutomationRuleForm] = useState({ id: '', name: '', triggerType: 'LEAD_CREATED', triggerExpr: '{}', actionType: 'CREATE_TASK', actionPayload: '{"title":"Follow up lead"}', enabled: true })
   const [autoRefreshReportJobs, setAutoRefreshReportJobs] = useState(true)
   const [reportExportStatusFilter, setReportExportStatusFilter] = useState('ALL')
 
   const [customerQ, setCustomerQ] = useState(persisted.customerQ || '')
+  const [leadQ, setLeadQ] = useState(persisted.leadQ || '')
+  const [leadStatus, setLeadStatus] = useState(persisted.leadStatus || '')
   const [customerStatus, setCustomerStatus] = useState(persisted.customerStatus || '')
   const [oppStage, setOppStage] = useState(persisted.oppStage || '')
-  const [followCustomerId] = useState(persisted.followCustomerId || '')
-  const [followQ] = useState(persisted.followQ || '')
+  const [followCustomerId, setFollowCustomerId] = useState(persisted.followCustomerId || '')
+  const [followQ, setFollowQ] = useState(persisted.followQ || '')
   const [auditUser, setAuditUser] = useState(persisted.auditUser || '')
   const [auditRole, setAuditRole] = useState(persisted.auditRole || '')
   const [auditAction, setAuditAction] = useState(persisted.auditAction || '')
@@ -80,8 +201,16 @@ function App() {
   const [reportDepartment, setReportDepartment] = useState(persisted.reportDepartment || '')
   const [reportTimezone, setReportTimezone] = useState(persisted.reportTimezone || (Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'))
   const [reportCurrency, setReportCurrency] = useState(persisted.reportCurrency || 'CNY')
+  const [quoteOpportunityFilter, setQuoteOpportunityFilter] = useState('')
+  const [orderOpportunityFilter, setOrderOpportunityFilter] = useState('')
+  const [quotePrefill, setQuotePrefill] = useState(null)
 
-  const [loginForm, setLoginForm] = useState({ tenantId: 'tenant_default', username: '', password: '', mfaCode: '' })
+  const [loginForm, setLoginForm] = useState(() => ({
+    tenantId: localStorage.getItem('crm_last_tenant') || 'tenant_default',
+    username: '',
+    password: '',
+    mfaCode: '',
+  }))
   const [mfaChallengeId, setMfaChallengeId] = useState('')
   const [ssoConfig, setSsoConfig] = useState({ enabled: false, providerName: '', mode: 'mock' })
   const [ssoForm, setSsoForm] = useState({ username: 'sso_user', code: 'SSO-ACCESS', displayName: '' })
@@ -91,6 +220,7 @@ function App() {
   const [auditRangeError, setAuditRangeError] = useState('')
   const [activePage, setActivePage] = useState('dashboard')
   const [customerForm, setCustomerForm] = useState({ id: '', name: '', owner: '', status: '', tag: '', value: '' })
+  const [leadForm, setLeadForm] = useState({ id: '', name: '', company: '', phone: '', email: '', status: 'NEW', owner: '', source: '' })
   const [opportunityForm, setOpportunityForm] = useState({ id: '', stage: '', count: '', amount: '', progress: '', owner: '' })
   const [followUpForm, setFollowUpForm] = useState({ id: '', customerId: '', summary: '', channel: '', result: '', nextActionDate: '' })
   const [contactForm, setContactForm] = useState({ id: '', customerId: '', name: '', title: '', phone: '', email: '' })
@@ -116,13 +246,30 @@ function App() {
   const [notificationTotalPages, setNotificationTotalPages] = useState(1)
   const [notificationSize, setNotificationSize] = useState(() => readPageSize('crm_page_size_notification_jobs', 10))
   const [selectedNotificationJobs, setSelectedNotificationJobs] = useState([])
-  const [tenantForm, setTenantForm] = useState({ name: '', quotaUsers: '100', timezone: 'Asia/Shanghai', currency: 'CNY', status: 'ACTIVE' })
+  const [tenantForm, setTenantForm] = useState({
+    name: '',
+    quotaUsers: '100',
+    timezone: 'Asia/Shanghai',
+    currency: 'CNY',
+    status: 'ACTIVE',
+    dateFormat: 'yyyy-MM-dd',
+    marketProfile: 'CN',
+    taxRule: 'VAT_CN',
+    approvalMode: 'STRICT',
+    channels: '["WECOM","DINGTALK"]',
+    dataResidency: 'CN',
+    maskLevel: 'STANDARD',
+  })
   const [lastCreatedTenant, setLastCreatedTenant] = useState(null)
   const [tenantRows, setTenantRows] = useState([])
   const [inviteForm, setInviteForm] = useState({ username: '', role: 'SALES', ownerScope: '', department: 'DEFAULT', dataScope: 'SELF' })
   const [inviteResult, setInviteResult] = useState(null)
+  const [reportDesignerForm, setReportDesignerForm] = useState({ name: '', dataset: 'LEADS', visibility: 'PRIVATE', limit: '100' })
 
   const [customerPage, setCustomerPage] = useState(1)
+  const [leadPage, setLeadPage] = useState(1)
+  const [leadTotalPages, setLeadTotalPages] = useState(1)
+  const [leadSize, setLeadSize] = useState(() => readPageSize('crm_page_size_leads'))
   const [customerTotalPages, setCustomerTotalPages] = useState(1)
   const [customerSize, setCustomerSize] = useState(() => readPageSize('crm_page_size_customers'))
   const [opportunityPage, setOpportunityPage] = useState(1)
@@ -141,54 +288,141 @@ function App() {
   const [paymentPage, setPaymentPage] = useState(1)
   const [paymentTotalPages, setPaymentTotalPages] = useState(1)
   const [paymentSize, setPaymentSize] = useState(() => readPageSize('crm_page_size_payments'))
-  const seqRef = useRef({ customers: 0, opportunities: 0, contacts: 0, contracts: 0, payments: 0 })
+  const seqRef = useRef({ leads: 0, customers: 0, opportunities: 0, contacts: 0, contracts: 0, payments: 0 })
+  const logoutGuardRef = useRef(false)
+  const suppressLoginErrorUntilRef = useRef(0)
+  const { beginPageRequest, canSkipFetch, isInFlight, markInFlight, clearInFlight, markFetched, abortAll } = usePageDataPolicy(10000)
 
+  const {
+    markNavStart,
+    markNavEnd,
+    markAbort,
+    markFetchLatency,
+    markCacheDecision,
+    markChunkPreloadHit,
+    markDuplicateFetchBlocked,
+    markWorkbenchJumpDecision,
+    markWorkbenchActionResult,
+    markPollingActiveInstances,
+    markLoginErrorLeakBlocked,
+    markLoaderFallbackUsed,
+    markAuthChannelMisroute,
+    markRefreshSourceAnomaly,
+    markCustomer360ActionResult,
+    markCustomer360ModuleRefreshLatency,
+    markCustomer360JumpHit,
+    markCustomer360ModuleCacheHit,
+    markCustomer360PrefetchHit,
+    markCustomer360PrefetchAbort,
+    markCustomer360PrefetchModules,
+    getMetrics,
+  } = useNavPerf('[perf]')
+  const [perfMetrics, setPerfMetrics] = useState(() => getMetrics())
+  const [lastPerfSnapshotAt, setLastPerfSnapshotAt] = useState('')
+  const [currentLoaderKey, setCurrentLoaderKey] = useState('')
+  const [lastRefreshReason, setLastRefreshReason] = useState('default')
+  const [currentPageSignature, setCurrentPageSignature] = useState('')
+  const [currentSignatureHit, setCurrentSignatureHit] = useState(false)
+  const [recentWorkbenchJump, setRecentWorkbenchJump] = useState({ targetPage: '', signature: '', reason: 'workbench_jump', hit: false, at: '' })
+  const [domainLoadSource, setDomainLoadSource] = useState({
+    customer: { source: '', at: '' },
+    commerce: { source: '', at: '' },
+    governance: { source: '', at: '' },
+    approval: { source: '', at: '' },
+    reporting: { source: '', at: '' },
+    workbench: { source: '', at: '' },
+  })
+  const loadReasonRef = useRef('default')
+  const workbenchJumpRef = useRef({ page: '', signature: '' })
+  const markWorkbenchJumpMeta = useCallback((meta) => {
+    setRecentWorkbenchJump({
+      targetPage: String(meta?.targetPage || ''),
+      signature: String(meta?.signature || ''),
+      reason: String(meta?.reason || 'workbench_jump'),
+      hit: !!meta?.hit,
+      at: new Date().toISOString(),
+    })
+  }, [])
+  const markDomainLoadSource = useCallback(({ pageKey, reason, event }) => {
+    const domain = PAGE_DOMAIN_MAP[pageKey]
+    if (!domain) return
+    const shortReason = String(reason || 'default')
+    const source = `${event}:${pageKey}:${shortReason}`
+    const at = new Date().toISOString()
+    setDomainLoadSource((prev) => {
+      const current = prev[domain]
+      if (current?.source === source) return prev
+      return {
+        ...prev,
+        [domain]: { source, at },
+      }
+    })
+  }, [])
+
+  const hasAuthToken = !!String(auth?.token || '').trim()
   const role = auth?.role || ''
   const canWrite = ['ADMIN', 'MANAGER', 'SALES'].includes(role)
   const canDeleteCustomer = ['ADMIN', 'MANAGER'].includes(role)
   const canDeleteOpportunity = ['ADMIN', 'MANAGER'].includes(role)
   const canViewAudit = ['ADMIN', 'MANAGER', 'ANALYST'].includes(role)
   const canViewReports = ['ADMIN', 'MANAGER', 'ANALYST'].includes(role)
+  const canViewOpsMetrics = ['ADMIN', 'MANAGER', 'ANALYST'].includes(role)
   const canManagePermissions = role === 'ADMIN'
   const canManageUsers = role === 'ADMIN'
+  const canManageSalesAutomation = ['ADMIN', 'MANAGER'].includes(role)
 
-  const navItems = useMemo(() => {
-    const businessGroup = t('businessGroup')
-    const governanceGroup = t('governanceGroup')
-    const items = [
-      { key: 'dashboard', label: t('dashboard'), group: businessGroup },
-      { key: 'customers', label: t('customers'), group: businessGroup },
-      { key: 'contacts', label: t('contacts'), group: businessGroup },
-      { key: 'pipeline', label: t('pipeline'), group: businessGroup },
-      { key: 'contracts', label: t('contracts'), group: businessGroup },
-      { key: 'payments', label: t('payments'), group: businessGroup },
-      { key: 'followUps', label: t('followUps'), group: businessGroup },
-      { key: 'tasks', label: t('tasks'), group: businessGroup },
-      { key: 'approvals', label: t('approvals'), group: businessGroup },
-      { key: 'reports', label: t('reports'), group: businessGroup },
-    ]
-    if (canViewAudit) items.push({ key: 'audit', label: t('audit'), group: governanceGroup })
-    if (canManagePermissions) items.push({ key: 'permissions', label: t('permissions'), group: governanceGroup })
-    if (canManageUsers) items.push({ key: 'usersAdmin', label: t('usersAdmin'), group: governanceGroup })
-    if (canManageUsers) items.push({ key: 'adminTenants', label: t('tenantsAdmin'), group: governanceGroup })
-    return items
-  }, [canViewAudit, canManagePermissions, canManageUsers, t])
+  const { navGroups, currentPageLabel } = useAppNavigationModel({
+    t,
+    permissions: {
+      canViewAudit,
+      canManagePermissions,
+      canManageUsers,
+      canManageSalesAutomation,
+    },
+    activePage,
+    setActivePage,
+    locationPathname: location.pathname,
+    authToken: auth?.token,
+    navigate,
+    pathToPage: PATH_TO_PAGE,
+    pageToPath: PAGE_TO_PATH,
+  })
 
-  useEffect(() => { if (!navItems.some((it) => it.key === activePage)) setActivePage(navItems[0]?.key || 'dashboard') }, [activePage, navItems])
-  useEffect(() => {
-    const routePage = PATH_TO_PAGE[location.pathname]
-    if (routePage && navItems.some((it) => it.key === routePage)) {
-      setActivePage(routePage)
-      return
-    }
-    if (!routePage && auth?.token && location.pathname !== '/activate') {
-      navigate(PAGE_TO_PATH.dashboard, { replace: true })
-    }
-  }, [location.pathname, navItems, auth?.token, navigate])
-
-  const saveAuth = useCallback((next) => { if (!next) { localStorage.removeItem('crm_auth'); setAuth(null); return } localStorage.setItem('crm_auth', JSON.stringify(next)); setAuth(next) }, [])
   const formatValidation = (err) => { const ve = err?.validationErrors; if (!ve || typeof ve !== 'object') return err.message; const first = Object.entries(ve)[0]; return first ? `${first[0]}: ${first[1]}` : err.message }
-  const handleError = useCallback((err) => { if (err.status === 401 && auth?.token) { saveAuth(null); setError(t('sessionExpired')); return } const msg = err.status === 400 ? formatValidation(err) : err.message; setError(err.requestId ? `${msg} [${err.requestId}]` : msg) }, [auth?.token, saveAuth, t])
+  const formatErrorMessage = useCallback((err) => {
+    const msg = err?.status === 400 ? formatValidation(err) : err?.message
+    return err?.requestId ? `${msg} [${err.requestId}]` : msg
+  }, [])
+  const {
+    saveAuth,
+    handleLoginError,
+    handleError,
+    performLogout,
+  } = useAppAuthModel({
+    auth,
+    setAuth,
+    setError,
+    setLoginError,
+    setCrudErrors,
+    setCrudFieldErrors,
+    setCurrentLoaderKey,
+    setCurrentPageSignature,
+    setCurrentSignatureHit,
+    setRecentWorkbenchJump,
+    setDomainLoadSource,
+    setLastRefreshReason,
+    abortAll,
+    loadReasonRef,
+    workbenchJumpRef,
+    navigate,
+    pathname: location.pathname,
+    logoutGuardRef,
+    suppressLoginErrorUntilRef,
+    markLoginErrorLeakBlocked,
+    markAuthChannelMisroute,
+    t,
+    formatErrorMessage,
+  })
   const setCrudError = (key, msg) => setCrudErrors((prev) => ({ ...prev, [key]: msg || '' }))
   const setCrudFieldError = (key, fields) => setCrudFieldErrors((prev) => ({ ...prev, [key]: fields || {} }))
   const pickFieldErrors = (err, allowed) => {
@@ -200,61 +434,232 @@ function App() {
   }
   const hasInvalidAuditRange = () => !!(auditFrom && auditTo && auditFrom > auditTo)
 
-  const loadCustomers = async (page = customerPage, size = customerSize) => { const reqId = ++seqRef.current.customers; const q = new URLSearchParams({ q: customerQ, status: customerStatus, page: String(page), size: String(size) }); const d = await api('/customers/search?' + q, {}, auth.token, lang); if (reqId !== seqRef.current.customers) return; setCustomers(d.items || []); setCustomerPage(d.page || page); setCustomerTotalPages(Math.max(1, d.totalPages || 1)) }
-  const loadTasks = async () => { const d = await api('/tasks/search?page=1&size=10', {}, auth.token, lang); setTasks(d.items || []) }
-  const loadOpportunities = async (page = opportunityPage, size = opportunitySize) => { const reqId = ++seqRef.current.opportunities; const q = new URLSearchParams({ stage: oppStage, page: String(page), size: String(size) }); const d = await api('/opportunities/search?' + q, {}, auth.token, lang); if (reqId !== seqRef.current.opportunities) return; setOpportunities(d.items || []); setOpportunityPage(d.page || page); setOpportunityTotalPages(Math.max(1, d.totalPages || 1)) }
-  const loadFollowUps = async () => { const q = new URLSearchParams({ customerId: followCustomerId, q: followQ, page: '1', size: '8' }); const d = await api('/follow-ups/search?' + q, {}, auth.token, lang); setFollowUps(d.items || []) }
-  const loadContacts = async (page = contactPage, size = contactSize) => { const reqId = ++seqRef.current.contacts; const q = new URLSearchParams({ customerId: '', q: contactQ, page: String(page), size: String(size) }); const d = await api('/contacts/search?' + q, {}, auth.token, lang); if (reqId !== seqRef.current.contacts) return; setContacts(d.items || []); setContactPage(d.page || page); setContactTotalPages(Math.max(1, d.totalPages || 1)) }
-  const loadContracts = async (page = contractPage, size = contractSize) => { const reqId = ++seqRef.current.contracts; const q = new URLSearchParams({ customerId: '', status: contractStatus, q: contractQ, page: String(page), size: String(size) }); const d = await api('/contracts/search?' + q, {}, auth.token, lang); if (reqId !== seqRef.current.contracts) return; setContracts(d.items || []); setContractPage(d.page || page); setContractTotalPages(Math.max(1, d.totalPages || 1)) }
-  const loadPayments = async (page = paymentPage, size = paymentSize) => { const reqId = ++seqRef.current.payments; const q = new URLSearchParams({ customerId: '', contractId: '', status: paymentStatus, page: String(page), size: String(size) }); const d = await api('/payments/search?' + q, {}, auth.token, lang); if (reqId !== seqRef.current.payments) return; setPayments(d.items || []); setPaymentPage(d.page || page); setPaymentTotalPages(Math.max(1, d.totalPages || 1)) }
-  const loadAudit = async () => { if (!canViewAudit) return; if (hasInvalidAuditRange()) { setAuditRangeError(t('dateRangeInvalid')); return } setAuditRangeError(''); const q = new URLSearchParams({ username: auditUser, role: auditRole, action: auditAction, from: auditFrom, to: auditTo, page: '1', size: '10' }); const d = await api('/audit-logs/search?' + q, {}, auth.token, lang); setAuditLogs(d.items || []) }
-  const loadReports = async () => { if (!canViewReports) return; const q = new URLSearchParams({ from: auditFrom, to: auditTo, role: auditRole, owner: reportOwner, department: reportDepartment, timezone: reportTimezone, currency: reportCurrency }); setReports(await api('/v1/reports/overview?' + q, {}, auth.token, lang)) }
-  const loadPermissionMatrix = async () => { const d = await api('/permissions/matrix', {}, auth.token, lang); setPermissionMatrix(d.matrix || []) }
-  const loadPermissionConflicts = async () => { const d = await api('/permissions/conflicts', {}, auth.token, lang); setPermissionConflicts(d.items || []) }
-  const loadExportJobs = async () => { const q = new URLSearchParams({ limit: '8' }); if (exportStatusFilter !== 'ALL') q.set('status', exportStatusFilter); const d = await api('/audit-logs/export-jobs?' + q, {}, auth.token, lang); setExportJobs(d.items || []) }
-  const loadReportExportJobs = async () => { const q = new URLSearchParams({ limit: '8' }); if (reportExportStatusFilter !== 'ALL') q.set('status', reportExportStatusFilter); const d = await api('/v1/reports/export-jobs?' + q, {}, auth.token, lang); setReportExportJobs(d.items || []) }
+  const {
+    loaders: coreListLoaders,
+    paginationActions: corePaginationActions,
+  } = useCoreListDomainLoaders({
+    authToken: auth?.token,
+    lang,
+    seqRef,
+    beginPageRequest,
+    handleError,
+    leadQ,
+    leadStatus,
+    leadPage,
+    leadSize,
+    setLeads,
+    setLeadPage,
+    setLeadTotalPages,
+    setLeadSize,
+    customerQ,
+    customerStatus,
+    customerPage,
+    customerSize,
+    setCustomers,
+    setCustomerPage,
+    setCustomerTotalPages,
+    setCustomerSize,
+    oppStage,
+    opportunityPage,
+    opportunitySize,
+    setOpportunities,
+    setOpportunityPage,
+    setOpportunityTotalPages,
+    setOpportunitySize,
+    contactQ,
+    contactPage,
+    contactSize,
+    setContacts,
+    setContactPage,
+    setContactTotalPages,
+    setContactSize,
+    contractQ,
+    contractStatus,
+    contractPage,
+    contractSize,
+    setContracts,
+    setContractPage,
+    setContractTotalPages,
+    setContractSize,
+    paymentStatus,
+    paymentPage,
+    paymentSize,
+    setPayments,
+    setPaymentPage,
+    setPaymentTotalPages,
+    setPaymentSize,
+  })
+  const commerceDomain = useCommerceDomainLoaders({
+    authToken: auth?.token,
+    lang,
+    quoteOpportunityFilter,
+    orderOpportunityFilter,
+  })
+  const {
+    loadLeadImportJobs,
+    loadLeadImportFailedRows,
+    loadLeadImportMetrics,
+    loadLeadImportExportJobs,
+  } = useLeadImportDomainLoaders({
+    authToken: auth?.token,
+    lang,
+    canViewOpsMetrics,
+    leadImportStatusFilter,
+    leadImportPage,
+    leadImportSize,
+    leadImportJob,
+    setLeadImportJobs,
+    setLeadImportPage,
+    setLeadImportTotalPages,
+    setLeadImportJob,
+    setLeadImportFailedRows,
+    setLeadImportMetrics,
+    leadImportExportStatusFilter,
+    leadImportExportPage,
+    leadImportExportSize,
+    setLeadImportExportJobs,
+    setLeadImportExportPage,
+    setLeadImportExportTotalPages,
+  })
+  const {
+    loadLeads,
+    loadCustomers,
+    loadOpportunities,
+    loadContacts,
+    loadContracts,
+    loadPayments,
+  } = coreListLoaders
+  const {
+    onLeadPageChange,
+    onCustomerPageChange,
+    onOpportunityPageChange,
+    onContactPageChange,
+    onContractPageChange,
+    onPaymentPageChange,
+    onLeadSizeChange,
+    onCustomerSizeChange,
+    onOpportunitySizeChange,
+    onContactSizeChange,
+    onContractSizeChange,
+    onPaymentSizeChange,
+  } = corePaginationActions
+  const loadTasks = async () => { const controller = beginPageRequest('tasks'); const d = await api('/tasks/search?page=1&size=10', { signal: controller.signal }, auth.token, lang); setTasks(d.items || []) }
+  const loadFollowUps = async () => { const q = new URLSearchParams({ customerId: followCustomerId, q: followQ, page: '1', size: '8' }); const controller = beginPageRequest('followUps'); const d = await api('/follow-ups/search?' + q, { signal: controller.signal }, auth.token, lang); setFollowUps(d.items || []) }
   const loadSsoConfig = async () => { try { const d = await api('/auth/sso/config', {}, null, lang); setSsoConfig(d || { enabled: false, providerName: '', mode: 'mock' }) } catch { setSsoConfig({ enabled: false, providerName: '', mode: 'mock' }) } }
-  const loadAdminUsers = async () => { if (!canManageUsers) return; const d = await api('/v1/admin/users', {}, auth.token, lang); setAdminUsers(d.items || []) }
-  const loadApprovalTemplates = async () => { const q = new URLSearchParams({ limit: '100' }); const d = await api('/v1/approval/templates?' + q, {}, auth.token, lang); setApprovalTemplates(d.items || []) }
-  const loadApprovalStats = async () => { const d = await api('/v1/approval/stats', {}, auth.token, lang); setApprovalStats(d || null) }
-  const loadApprovalTasks = async () => {
-    const q = new URLSearchParams({ status: approvalTaskStatus, limit: '20' })
-    if (approvalOverdueOnly) q.set('overdue', 'true')
-    if (approvalEscalatedOnly) q.set('escalated', 'true')
-    const d = await api('/v1/approval/tasks?' + q, {}, auth.token, lang)
-    setApprovalTasks(d.items || [])
-  }
-  const loadApprovalInstances = async () => { const d = await api('/v1/approval/instances?limit=12', {}, auth.token, lang); setApprovalInstances(d.items || []) }
-  const loadApprovalDetail = async (id) => { const d = await api('/v1/approval/instances/' + id, {}, auth.token, lang); setApprovalDetail(d) }
-  const loadApprovalTemplateVersions = async (templateId) => { const d = await api('/v1/approval/templates/' + templateId + '/versions', {}, auth.token, lang); setApprovalTemplateVersions(d.items || []); setApprovalVersionTemplateId(templateId) }
-  const loadNotificationJobs = async (page = notificationPage, size = notificationSize) => {
-    const q = new URLSearchParams({ page: String(page), size: String(size) })
-    if (notificationStatusFilter !== 'ALL') q.set('status', notificationStatusFilter)
-    const d = await api('/v1/integrations/notifications/jobs?' + q, {}, auth.token, lang)
-    setNotificationJobs(d.items || [])
-    setNotificationPage(d.page || page)
-    setNotificationTotalPages(Math.max(1, d.totalPages || 1))
-    setSelectedNotificationJobs([])
-  }
-  const loadTenants = async () => { if (!canManageUsers) return; const d = await api('/v1/tenants', {}, auth.token, lang); setTenantRows(d.items || []) }
-
-  const loadAll = async () => {
-    if (!auth?.token) return
-    setLoading(true); setError('')
-    try {
-      const d = await api('/dashboard', {}, auth.token, lang)
-      setStats(d.stats || [])
-      await Promise.all([loadCustomers(), loadTasks(), loadOpportunities(), loadFollowUps(), loadContacts(), loadContracts(), loadPayments(), loadAudit(), loadReports(), loadPermissionMatrix(), loadPermissionConflicts(), loadExportJobs(), loadApprovalTemplates(), loadApprovalStats(), loadApprovalTasks(), loadApprovalInstances(), loadNotificationJobs(), canViewReports ? loadReportExportJobs() : Promise.resolve(null), canManageUsers ? loadAdminUsers() : Promise.resolve(null), canManageUsers ? loadTenants() : Promise.resolve(null)])
-    } catch (err) { handleError(err) } finally { setLoading(false) }
-  }
+  const {
+    loadPermissionMatrix,
+    loadPermissionConflicts,
+    loadLeadAssignmentRules,
+    loadAutomationRulesV1,
+    loadAdminUsers,
+    loadTenants,
+  } = useGovernanceDomainLoaders({
+    canManageUsers,
+    canManageSalesAutomation,
+    authToken: auth?.token,
+    lang,
+    setPermissionMatrix,
+    setPermissionConflicts,
+    setLeadAssignmentRules,
+    setAutomationRules,
+    setAdminUsers,
+    setTenantRows,
+    normalizeDateFormat,
+  })
+  const {
+    loadApprovalTemplates,
+    loadApprovalStats,
+    loadApprovalTasks,
+    loadApprovalInstances,
+    loadApprovalDetail,
+    loadApprovalTemplateVersions,
+    loadNotificationJobs,
+  } = useApprovalDomainLoaders({
+    authToken: auth?.token,
+    lang,
+    approvalTaskStatus,
+    approvalOverdueOnly,
+    approvalEscalatedOnly,
+    notificationStatusFilter,
+    notificationPage,
+    notificationSize,
+    setApprovalTemplates,
+    setApprovalStats,
+    setApprovalTasks,
+    setApprovalInstances,
+    setApprovalDetail,
+    setApprovalTemplateVersions,
+    setApprovalVersionTemplateId,
+    setNotificationJobs,
+    setNotificationPage,
+    setNotificationTotalPages,
+    setSelectedNotificationJobs,
+  })
+  const {
+    loadAudit,
+    loadReports,
+    loadExportJobs,
+    loadReportExportJobs,
+    loadDesignerTemplates,
+  } = useReportingAuditDomainLoaders({
+    canViewAudit,
+    canViewReports,
+    authToken: auth?.token,
+    lang,
+    auditUser,
+    auditRole,
+    auditAction,
+    auditFrom,
+    auditTo,
+    reportOwner,
+    reportDepartment,
+    reportTimezone,
+    reportCurrency,
+    exportStatusFilter,
+    exportJobsPage,
+    exportJobsSize,
+    reportExportStatusFilter,
+    reportExportJobsPage,
+    reportExportJobsSize,
+    hasInvalidAuditRange,
+    setAuditRangeError,
+    t,
+    setAuditLogs,
+    setReports,
+    setExportJobs,
+    setExportJobsPage,
+    setExportJobsTotalPages,
+    setReportExportJobs,
+    setReportExportJobsPage,
+    setReportExportJobsTotalPages,
+    setDesignerTemplates,
+  })
+  const {
+    loadWorkbenchToday,
+    loadCustomerTimeline,
+    loadOpportunityTimeline,
+  } = useWorkbenchDomainLoaders({
+    authToken: auth?.token,
+    lang,
+    auditFrom,
+    auditTo,
+    reportOwner,
+    reportDepartment,
+    reportTimezone,
+    setWorkbenchToday,
+    setCustomerTimeline,
+    setOpportunityTimeline,
+  })
 
   useEffect(() => localStorage.setItem(LANG_KEY, lang), [lang])
+  useEffect(() => () => abortAll(), [abortAll])
   useEffect(() => {
-    if (!auth?.token && location.pathname !== '/login' && location.pathname !== '/activate') {
+    const isAuthRoute = location.pathname === '/login' || location.pathname === '/activate'
+    if (!auth?.token && !isAuthRoute) {
       navigate('/login', { replace: true })
       return
     }
-    if (auth?.token && (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/activate')) {
+    if (auth?.token && location.pathname === '/') {
       navigate(PAGE_TO_PATH.dashboard, { replace: true })
     }
   }, [auth?.token, location.pathname, navigate])
@@ -268,38 +673,350 @@ function App() {
     const state = params.get('state')
     if (!code) return
     const expected = localStorage.getItem(OIDC_STATE_KEY)
-    if (expected && state && expected !== state) { setError(t('invalidOidcState')); return }
+    if (expected && state && expected !== state) { setLoginError(t('invalidOidcState')); return }
     localStorage.removeItem(OIDC_STATE_KEY)
     ;(async () => {
-      try { setOidcAuthorizing(true); const d = await api('/auth/sso/login', { method: 'POST', body: JSON.stringify({ code }) }, null, lang); saveAuth(d); const url = new URL(window.location.href); url.searchParams.delete('code'); url.searchParams.delete('state'); window.history.replaceState({}, document.title, url.toString()) } catch (err) { handleError(err) } finally { setOidcAuthorizing(false) }
+      try {
+        setOidcAuthorizing(true)
+        const tenantId = loginForm.tenantId.trim() || localStorage.getItem('crm_last_tenant') || 'tenant_default'
+        const d = await api('/auth/sso/login', { method: 'POST', headers: { 'X-Tenant-Id': tenantId }, body: JSON.stringify({ code }) }, null, lang)
+        saveAuth(d)
+        localStorage.setItem('crm_last_tenant', tenantId)
+        const url = new URL(window.location.href)
+        url.searchParams.delete('code')
+        url.searchParams.delete('state')
+        window.history.replaceState({}, document.title, url.toString())
+      } catch (err) { handleLoginError(err) } finally { setOidcAuthorizing(false) }
     })()
-  }, [auth?.token, ssoConfig?.enabled, ssoConfig?.mode, lang, handleError, saveAuth])
+  }, [auth?.token, ssoConfig?.enabled, ssoConfig?.mode, lang, handleLoginError, saveAuth, loginForm.tenantId])
 
-  useEffect(() => localStorage.setItem(FILTERS_KEY, JSON.stringify({ customerQ, customerStatus, oppStage, followCustomerId, followQ, contactQ, contractQ, contractStatus, paymentStatus, auditUser, auditRole, auditAction, auditFrom, auditTo, reportOwner, reportDepartment, reportTimezone, reportCurrency })), [customerQ, customerStatus, oppStage, followCustomerId, followQ, contactQ, contractQ, contractStatus, paymentStatus, auditUser, auditRole, auditAction, auditFrom, auditTo, reportOwner, reportDepartment, reportTimezone, reportCurrency])
+  useEffect(() => localStorage.setItem(FILTERS_KEY, JSON.stringify({ leadQ, leadStatus, customerQ, customerStatus, oppStage, followCustomerId, followQ, contactQ, contractQ, contractStatus, paymentStatus, auditUser, auditRole, auditAction, auditFrom, auditTo, reportOwner, reportDepartment, reportTimezone, reportCurrency })), [leadQ, leadStatus, customerQ, customerStatus, oppStage, followCustomerId, followQ, contactQ, contractQ, contractStatus, paymentStatus, auditUser, auditRole, auditAction, auditFrom, auditTo, reportOwner, reportDepartment, reportTimezone, reportCurrency])
   useEffect(() => {
     localStorage.setItem('crm_page_size_customers', String(customerSize))
+    localStorage.setItem('crm_page_size_leads', String(leadSize))
     localStorage.setItem('crm_page_size_opportunities', String(opportunitySize))
     localStorage.setItem('crm_page_size_contacts', String(contactSize))
     localStorage.setItem('crm_page_size_contracts', String(contractSize))
     localStorage.setItem('crm_page_size_payments', String(paymentSize))
     localStorage.setItem('crm_page_size_notification_jobs', String(notificationSize))
-  }, [customerSize, opportunitySize, contactSize, contractSize, paymentSize, notificationSize])
-  useEffect(() => { loadAll() }, [auth?.token, lang])
-  useEffect(() => { if (!auth?.token) return; const timer = setTimeout(() => { loadCustomers(1, customerSize).catch(handleError) }, 350); return () => clearTimeout(timer) }, [auth?.token, customerQ, customerStatus, customerSize, lang, handleError])
-  useEffect(() => { if (!auth?.token) return; const timer = setTimeout(() => { loadOpportunities(1, opportunitySize).catch(handleError) }, 350); return () => clearTimeout(timer) }, [auth?.token, oppStage, opportunitySize, lang, handleError])
-  useEffect(() => { if (!auth?.token) return; const timer = setTimeout(() => { loadContacts(1, contactSize).catch(handleError) }, 350); return () => clearTimeout(timer) }, [auth?.token, contactQ, contactSize, lang, handleError])
-  useEffect(() => { if (!auth?.token) return; const timer = setTimeout(() => { loadContracts(1, contractSize).catch(handleError) }, 350); return () => clearTimeout(timer) }, [auth?.token, contractQ, contractStatus, contractSize, lang, handleError])
-  useEffect(() => { if (!auth?.token) return; const timer = setTimeout(() => { loadPayments(1, paymentSize).catch(handleError) }, 350); return () => clearTimeout(timer) }, [auth?.token, paymentStatus, paymentSize, lang, handleError])
-  useEffect(() => { if (!auth?.token || !canViewReports) return; const timer = setTimeout(() => { loadReports().catch(handleError) }, 350); return () => clearTimeout(timer) }, [auth?.token, canViewReports, auditFrom, auditTo, auditRole, reportOwner, reportDepartment, reportTimezone, reportCurrency, lang, handleError])
-  useEffect(() => { if (!auth?.token) return; loadApprovalTasks().catch(handleError) }, [auth?.token, approvalTaskStatus, approvalOverdueOnly, approvalEscalatedOnly, lang, handleError])
+    localStorage.setItem('crm_page_size_lead_import_export_jobs', String(leadImportExportSize))
+  }, [leadSize, customerSize, opportunitySize, contactSize, contractSize, paymentSize, notificationSize, leadImportExportSize])
+  const pageSignature = useCallback((pageKey, filters, pageNo, pageSize) => {
+    return JSON.stringify({
+      pageKey,
+      filters,
+      pageNo: Number(pageNo || 1),
+      pageSize: Number(pageSize || 0),
+    })
+  }, [])
+  const commonPageLoaders = useMemo(() => ({
+    leads: {
+      signature: pageSignature('leads', {
+        q: leadQ,
+        status: leadStatus,
+        importStatus: leadImportStatusFilter,
+        importPage: leadImportPage,
+        importSize: leadImportSize,
+        importExportStatus: leadImportExportStatusFilter,
+        importExportPage: leadImportExportPage,
+        importExportSize: leadImportExportSize,
+        importJobId: leadImportJob?.id || '',
+      }, leadPage, leadSize),
+      delay: 220,
+      run: async (controller) => {
+        const options = { signal: controller?.signal }
+        await loadLeads(leadPage, leadSize, options)
+        await loadLeadImportJobs(leadImportPage, leadImportSize, options)
+        if (leadImportJob?.id) {
+          await loadLeadImportFailedRows(leadImportJob.id, options)
+          await loadLeadImportExportJobs(leadImportJob.id, leadImportExportPage, leadImportExportSize, options)
+        }
+        if (canViewOpsMetrics) await loadLeadImportMetrics(options)
+      },
+    },
+    customers: {
+      signature: pageSignature('customers', { q: customerQ, status: customerStatus }, customerPage, customerSize),
+      delay: 220,
+      run: (controller) => loadCustomers(customerPage, customerSize, { signal: controller?.signal }),
+    },
+    pipeline: {
+      signature: pageSignature('pipeline', { stage: oppStage }, opportunityPage, opportunitySize),
+      delay: 220,
+      run: () => loadOpportunities(opportunityPage, opportunitySize),
+    },
+    contacts: {
+      signature: pageSignature('contacts', { q: contactQ }, contactPage, contactSize),
+      delay: 220,
+      run: () => loadContacts(contactPage, contactSize),
+    },
+    contracts: {
+      signature: pageSignature('contracts', { q: contractQ, status: contractStatus }, contractPage, contractSize),
+      delay: 220,
+      run: () => loadContracts(contractPage, contractSize),
+    },
+    payments: {
+      signature: pageSignature('payments', { status: paymentStatus }, paymentPage, paymentSize),
+      delay: 220,
+      run: () => loadPayments(paymentPage, paymentSize),
+    },
+    priceBooks: {
+      signature: pageSignature('priceBooks', {
+        status: commerceDomain.signatures.priceBooks.filters.status,
+        name: commerceDomain.signatures.priceBooks.filters.name,
+      }, commerceDomain.signatures.priceBooks.pageNo, commerceDomain.signatures.priceBooks.pageSize),
+      delay: 180,
+      run: (controller) => commerceDomain.loaders.loadPriceBooks({ signal: controller?.signal }),
+    },
+    products: {
+      signature: pageSignature('products', {
+        status: commerceDomain.signatures.products.filters.status,
+        code: commerceDomain.signatures.products.filters.code,
+        name: commerceDomain.signatures.products.filters.name,
+        category: commerceDomain.signatures.products.filters.category,
+      }, commerceDomain.signatures.products.pageNo, commerceDomain.signatures.products.pageSize),
+      delay: 180,
+      run: (controller) => commerceDomain.loaders.loadProducts({ signal: controller?.signal }),
+    },
+    quotes: {
+      signature: pageSignature('quotes', {
+        status: commerceDomain.signatures.quotes.filters.status,
+        owner: commerceDomain.signatures.quotes.filters.owner,
+        opportunityId: commerceDomain.signatures.quotes.filters.opportunityId || quoteOpportunityFilter,
+      }, commerceDomain.signatures.quotes.pageNo, commerceDomain.signatures.quotes.pageSize),
+      delay: 180,
+      run: (controller) => commerceDomain.loaders.loadQuotes({ signal: controller?.signal }),
+    },
+    orders: {
+      signature: pageSignature('orders', {
+        status: commerceDomain.signatures.orders.filters.status,
+        owner: commerceDomain.signatures.orders.filters.owner,
+        opportunityId: commerceDomain.signatures.orders.filters.opportunityId || orderOpportunityFilter,
+      }, commerceDomain.signatures.orders.pageNo, commerceDomain.signatures.orders.pageSize),
+      delay: 180,
+      run: (controller) => commerceDomain.loaders.loadOrders({ signal: controller?.signal }),
+    },
+    followUps: {
+      signature: pageSignature('followUps', { customerId: followCustomerId, q: followQ }, 1, 0),
+      delay: 250,
+      run: () => loadFollowUps(),
+    },
+    tasks: {
+      signature: pageSignature('tasks', {}, 1, 0),
+      delay: 0,
+      run: () => loadTasks(),
+    },
+  }), [pageSignature, leadQ, leadStatus, leadPage, leadSize, leadImportStatusFilter, leadImportPage, leadImportSize, leadImportExportStatusFilter, leadImportExportPage, leadImportExportSize, leadImportJob?.id, canViewOpsMetrics, customerQ, customerStatus, customerPage, customerSize, oppStage, opportunityPage, opportunitySize, contactQ, contactPage, contactSize, contractQ, contractStatus, contractPage, contractSize, paymentStatus, paymentPage, paymentSize, quoteOpportunityFilter, orderOpportunityFilter, followCustomerId, followQ, loadLeadImportExportJobs, loadLeadImportMetrics, commerceDomain])
+  const keyPageLoaders = useMemo(() => ({
+    dashboard: {
+      signature: pageSignature('dashboard', {
+        from: auditFrom,
+        to: auditTo,
+        owner: reportOwner,
+        department: reportDepartment,
+        timezone: reportTimezone,
+        role: auditRole,
+        currency: reportCurrency,
+        canViewReports,
+        reportExportStatusFilter,
+        reportExportJobsPage,
+        reportExportJobsSize,
+      }, 1, 0),
+      canRun: () => true,
+      run: () => Promise.all([
+        loadTasks(),
+        loadWorkbenchToday(),
+        canViewReports ? loadReports() : Promise.resolve(null),
+        canViewReports ? loadReportExportJobs(reportExportJobsPage, reportExportJobsSize) : Promise.resolve(null),
+      ]),
+    },
+    reports: {
+      signature: pageSignature('reports', {
+        from: auditFrom,
+        to: auditTo,
+        owner: reportOwner,
+        department: reportDepartment,
+        timezone: reportTimezone,
+        role: auditRole,
+        currency: reportCurrency,
+        canViewReports,
+        reportExportStatusFilter,
+        reportExportJobsPage,
+        reportExportJobsSize,
+      }, 1, 0),
+      canRun: () => canViewReports,
+      run: () => Promise.all([
+        loadReports(),
+        loadReportExportJobs(reportExportJobsPage, reportExportJobsSize),
+      ]),
+    },
+    audit: {
+      signature: pageSignature('audit', {
+        user: auditUser,
+        role: auditRole,
+        action: auditAction,
+        from: auditFrom,
+        to: auditTo,
+        exportStatusFilter,
+        exportJobsPage,
+        exportJobsSize,
+      }, 1, 0),
+      canRun: () => canViewAudit,
+      run: () => Promise.all([
+        loadAudit(),
+        loadExportJobs(exportJobsPage, exportJobsSize),
+      ]),
+    },
+    permissions: {
+      signature: pageSignature('permissions', {}, 1, 0),
+      canRun: () => true,
+      run: () => Promise.all([loadPermissionMatrix(), loadPermissionConflicts()]),
+    },
+    usersAdmin: {
+      signature: pageSignature('usersAdmin', {}, 1, 0),
+      canRun: () => canManageUsers,
+      run: () => Promise.all([loadAdminUsers(), loadTenants()]),
+    },
+    salesAutomation: {
+      signature: pageSignature('salesAutomation', {}, 1, 0),
+      canRun: () => canManageSalesAutomation,
+      run: () => Promise.all([loadLeadAssignmentRules(), loadAutomationRulesV1()]),
+    },
+    adminTenants: {
+      signature: pageSignature('adminTenants', {}, 1, 0),
+      canRun: () => canManageUsers,
+      run: () => loadTenants(),
+    },
+    approvals: {
+      signature: pageSignature('approvals', {
+        taskStatus: approvalTaskStatus,
+        overdueOnly: approvalOverdueOnly,
+        escalatedOnly: approvalEscalatedOnly,
+        notificationStatusFilter,
+        notificationPage,
+        notificationSize,
+      }, 1, 0),
+      canRun: () => true,
+      run: () => Promise.all([
+        loadApprovalTemplates(),
+        loadApprovalStats(),
+        loadApprovalInstances(),
+        loadApprovalTasks(),
+        loadNotificationJobs(notificationPage, notificationSize),
+      ]),
+    },
+    reportDesigner: {
+      signature: pageSignature('reportDesigner', {}, 1, 0),
+      canRun: () => true,
+      run: () => loadDesignerTemplates(),
+    },
+  }), [pageSignature, auditFrom, auditTo, reportOwner, reportDepartment, reportTimezone, auditRole, reportCurrency, canViewReports, reportExportStatusFilter, reportExportJobsPage, reportExportJobsSize, canViewAudit, auditUser, auditAction, exportStatusFilter, exportJobsPage, exportJobsSize, canManageUsers, canManageSalesAutomation, approvalTaskStatus, approvalOverdueOnly, approvalEscalatedOnly, notificationStatusFilter, notificationPage, notificationSize])
+  const { refreshPage } = useLoaderOrchestrator({
+    authToken: hasAuthToken ? auth.token : null,
+    activePage,
+    commonPageLoaders,
+    keyPageLoaders,
+    loadReasonRef,
+    beginPageRequest,
+    canSkipFetch,
+    isInFlight,
+    markInFlight,
+    clearInFlight,
+    markCacheDecision,
+    markDuplicateFetchBlocked,
+    markWorkbenchJumpDecision,
+    markFetched,
+    markFetchLatency,
+    markAbort,
+    markLoaderFallbackUsed,
+    handleError,
+    setLastRefreshReason,
+    setCurrentLoaderKey,
+    setCurrentPageSignature,
+    setCurrentSignatureHit,
+    refreshReasons: REFRESH_REASONS,
+    onLoaderLifecycle: markDomainLoadSource,
+    markRefreshSourceAnomaly,
+  })
+  useEffect(() => {
+    if (!auth?.token) {
+      setError('')
+    }
+  }, [auth?.token])
+  useEffect(() => {
+    if (auth?.token) setLoginError('')
+  }, [auth?.token])
+  useEffect(() => {
+    if (location.pathname === '/login' || location.pathname === '/activate') {
+      setError('')
+      if (!auth?.token) setLoginError('')
+    }
+  }, [auth?.token, location.pathname])
   useEffect(() => { setNotificationPage(1) }, [notificationStatusFilter])
   useEffect(() => { setNotificationPage(1) }, [notificationSize])
-  useEffect(() => { if (!auth?.token) return; loadNotificationJobs(notificationPage, notificationSize).catch(handleError) }, [auth?.token, notificationStatusFilter, notificationPage, notificationSize, lang, handleError])
-  useEffect(() => { if (auth?.token) loadExportJobs() }, [auth?.token, exportStatusFilter, lang])
-  useEffect(() => { if (auth?.token && canViewReports) loadReportExportJobs() }, [auth?.token, canViewReports, reportExportStatusFilter, lang])
+  useEffect(() => { setLeadImportPage(1) }, [leadImportStatusFilter, leadImportSize])
+  useEffect(() => { setExportJobsPage(1) }, [exportStatusFilter, exportJobsSize])
+  useEffect(() => { setReportExportJobsPage(1) }, [reportExportStatusFilter, reportExportJobsSize])
+  useEffect(() => { setLeadImportExportPage(1) }, [leadImportExportStatusFilter, leadImportExportSize, leadImportJob?.id])
   /* eslint-enable react-hooks/exhaustive-deps */
-  useEffect(() => { if (!auth?.token || !autoRefreshJobs || exportJobs.length === 0) return; const pending = exportJobs.some((j) => ['PENDING', 'RUNNING'].includes(j.status)); if (!pending) return; const timer = setInterval(async () => { try { const jobs = await Promise.all(exportJobs.map(async (job) => !['PENDING', 'RUNNING'].includes(job.status) ? job : { ...job, ...(await api('/audit-logs/export-jobs/' + job.jobId, {}, auth.token, lang)) })); setExportJobs(jobs) } catch (err) { handleError(err) } }, 1800); return () => clearInterval(timer) }, [auth?.token, exportJobs, lang, autoRefreshJobs, handleError])
-  useEffect(() => { if (!auth?.token || !autoRefreshReportJobs || reportExportJobs.length === 0) return; const pending = reportExportJobs.some((j) => ['PENDING', 'RUNNING'].includes(j.status)); if (!pending) return; const timer = setInterval(async () => { try { const jobs = await Promise.all(reportExportJobs.map(async (job) => !['PENDING', 'RUNNING'].includes(job.status) ? job : { ...job, ...(await api('/v1/reports/export-jobs/' + job.jobId, {}, auth.token, lang)) })); setReportExportJobs(jobs) } catch (err) { handleError(err) } }, 1800); return () => clearInterval(timer) }, [auth?.token, reportExportJobs, lang, autoRefreshReportJobs, handleError])
+  const activePollers = useMemo(() => ([
+    {
+      id: 'audit-export-jobs',
+      intervalMs: 1800,
+      canRun: () => !!auth?.token && activePage === 'audit' && autoRefreshJobs && exportJobs.some((j) => ['PENDING', 'RUNNING'].includes(j.status)),
+      run: async (signal) => {
+        if (signal.aborted) return
+        await refreshPage('audit', 'panel_action')
+      },
+    },
+    {
+      id: 'report-export-jobs',
+      intervalMs: 1800,
+      canRun: () => !!auth?.token && ['dashboard', 'reports'].includes(activePage) && autoRefreshReportJobs && reportExportJobs.some((j) => ['PENDING', 'RUNNING'].includes(j.status)),
+      run: async (signal) => {
+        if (signal.aborted) return
+        await refreshPage(activePage === 'dashboard' ? 'dashboard' : 'reports', 'panel_action')
+      },
+    },
+    {
+      id: 'lead-import-jobs',
+      intervalMs: 3000,
+      canRun: () => !!auth?.token && activePage === 'leads' && (leadImportJobs || []).some((j) => ['PENDING', 'RUNNING'].includes(String(j.status || '').toUpperCase())),
+      run: async (signal) => {
+        if (signal.aborted) return
+        await refreshPage('leads', 'panel_action')
+      },
+    },
+    {
+      id: 'lead-import-export-jobs',
+      intervalMs: 2500,
+      canRun: () => !!auth?.token && activePage === 'leads' && !!leadImportJob?.id && (leadImportExportJobs || []).some((j) => ['PENDING', 'RUNNING'].includes(String(j.status || '').toUpperCase())),
+      run: async () => {
+        await refreshPage('leads', 'panel_action')
+      },
+    },
+  ]), [
+    auth?.token,
+    activePage,
+    autoRefreshJobs,
+    exportJobs,
+    autoRefreshReportJobs,
+    reportExportJobs,
+    leadImportJobs,
+    leadImportJob?.id,
+    leadImportExportJobs,
+    refreshPage,
+  ])
+  useEffect(() => {
+    const activeCount = (activePollers || []).filter((poller) => {
+      try {
+        return typeof poller?.canRun === 'function' && !!poller.canRun()
+      } catch {
+        return false
+      }
+    }).length
+    markPollingActiveInstances(activeCount)
+  }, [activePollers, markPollingActiveInstances])
+  useActivePagePolling({ enabled: hasAuthToken, pollers: activePollers })
   const validateLogin = () => {
     const next = {}
     if (!loginForm.tenantId?.trim()) next.tenantId = t('fieldRequired')
@@ -329,11 +1046,9 @@ function App() {
   const isValidDateString = (value) => {
     const raw = String(value || '').trim()
     if (!raw) return true
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false
-    const d = new Date(`${raw}T00:00:00Z`)
-    if (Number.isNaN(d.getTime())) return false
-    const [y, m, day] = raw.split('-').map((n) => Number(n))
-    return d.getUTCFullYear() === y && d.getUTCMonth() + 1 === m && d.getUTCDate() === day
+    const tenantFormat = normalizeDateFormat(auth?.dateFormat)
+    if (parseDateByFormat(raw, tenantFormat)) return true
+    return SUPPORTED_DATE_FORMATS.some((fmt) => parseDateByFormat(raw, fmt))
   }
 
   const validateCustomerForm = () => {
@@ -382,8 +1097,84 @@ function App() {
     return next
   }
 
+  const {
+    toggleTaskDone,
+    saveLead,
+    editLead,
+    convertLead,
+    bulkAssignLeadsByRule,
+    bulkUpdateLeadStatus,
+    saveCustomer,
+    editCustomer,
+    removeCustomer,
+    saveOpportunity,
+    editOpportunity,
+    removeOpportunity,
+    saveFollowUp,
+    editFollowUp,
+    removeFollowUp,
+    saveContact,
+    editContact,
+    removeContact,
+    saveContract,
+    editContract,
+    removeContract,
+    savePayment,
+    editPayment,
+    removePayment,
+  } = useAppCrudActions({
+    authToken: auth?.token,
+    lang,
+    t,
+    canWrite,
+    canDeleteCustomer,
+    canDeleteOpportunity,
+    handleError,
+    setCrudError,
+    setCrudFieldError,
+    pickFieldErrors,
+    formatValidation,
+    validateCustomerForm,
+    validateContactForm,
+    validateContractForm,
+    validatePaymentForm,
+    leadForm,
+    setLeadForm,
+    leads,
+    customerForm,
+    setCustomerForm,
+    customerPage,
+    setCustomerPage,
+    customers,
+    opportunityForm,
+    setOpportunityForm,
+    opportunityPage,
+    setOpportunityPage,
+    opportunities,
+    followUpForm,
+    setFollowUpForm,
+    contactForm,
+    setContactForm,
+    contactPage,
+    setContactPage,
+    contacts,
+    contractForm,
+    setContractForm,
+    contractPage,
+    setContractPage,
+    contracts,
+    paymentForm,
+    setPaymentForm,
+    paymentPage,
+    setPaymentPage,
+    payments,
+    refreshPage,
+  })
+
   const submitLogin = async (e) => {
     e.preventDefault()
+    logoutGuardRef.current = false
+    setLoginError('')
     const nextErrors = validateLogin()
     setFormErrors((p) => ({ ...p, login: nextErrors }))
     if (Object.keys(nextErrors).length > 0) return
@@ -391,8 +1182,10 @@ function App() {
       if (mfaChallengeId && loginForm.mfaCode?.trim()) {
         const mfaAuth = await api('/v1/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ challengeId: mfaChallengeId, code: loginForm.mfaCode }), headers: { 'X-Tenant-Id': loginForm.tenantId.trim() } }, null, lang)
         saveAuth(mfaAuth)
+        localStorage.setItem('crm_last_tenant', loginForm.tenantId.trim())
         setMfaChallengeId('')
         setError('')
+        setLoginError('')
         return
       }
 
@@ -405,24 +1198,33 @@ function App() {
       const d = await api('/v1/auth/login', { method: 'POST', body: JSON.stringify(payload), headers: { 'X-Tenant-Id': payload.tenantId } }, null, lang)
       if (d?.mfaRequired) {
         setMfaChallengeId(d.challengeId || '')
-        setError(t('mfaPending'))
+        setLoginError(t('mfaPending'))
         return
       }
       saveAuth(d)
+      localStorage.setItem('crm_last_tenant', payload.tenantId)
       setMfaChallengeId('')
-    } catch (err) { handleError(err) }
+      setLoginError('')
+    } catch (err) { handleLoginError(err) }
   }
 
   const submitSsoLogin = async (e) => {
     e.preventDefault()
+    logoutGuardRef.current = false
+    setLoginError('')
     const nextErrors = validateSso()
     setFormErrors((p) => ({ ...p, sso: nextErrors }))
     if (Object.keys(nextErrors).length > 0) return
-    try { saveAuth(await api('/auth/sso/login', { method: 'POST', body: JSON.stringify(ssoForm) }, null, lang)) } catch (err) { handleError(err) }
+    try {
+      const tenantId = loginForm.tenantId.trim() || localStorage.getItem('crm_last_tenant') || 'tenant_default'
+      saveAuth(await api('/auth/sso/login', { method: 'POST', body: JSON.stringify(ssoForm), headers: { 'X-Tenant-Id': tenantId } }, null, lang))
+      setLoginError('')
+    } catch (err) { handleLoginError(err) }
   }
 
   const startOidcLogin = () => {
-    if (!ssoConfig?.authorizeEndpoint || !ssoConfig?.clientId) { setError('OIDC config missing'); return }
+    logoutGuardRef.current = false
+    if (!ssoConfig?.authorizeEndpoint || !ssoConfig?.clientId) { setLoginError(t('oidcConfigMissing')); return }
     const state = Math.random().toString(36).slice(2) + Date.now().toString(36)
     localStorage.setItem(OIDC_STATE_KEY, state)
     const redirect = ssoConfig.redirectUri || window.location.origin
@@ -432,547 +1234,449 @@ function App() {
     window.location.assign(`${ssoConfig.authorizeEndpoint}?${q}`)
   }
 
-  const toggleTaskDone = async (task) => { if (!canWrite) return; try { await api('/tasks/' + task.id, { method: 'PATCH', body: JSON.stringify({ done: !task.done }) }, auth.token, lang); await loadTasks() } catch (err) { handleError(err) } }
+  const {
+    importLeadsCsv,
+    selectLeadImportJob,
+    cancelLeadImportJob,
+    retryLeadImportJob,
+    createLeadImportFailedRowsExportJob,
+    updateLeadImportExportStatusFilter,
+    onLeadImportExportPageChange,
+    onLeadImportExportSizeChange,
+    downloadLeadImportFailedRowsExportJob,
+    updateLeadImportStatusFilter,
+    onLeadImportPageChange,
+    onLeadImportSizeChange,
+    downloadLeadImportTemplate,
+  } = useLeadImportActions({
+    auth,
+    lang,
+    t,
+    canViewOpsMetrics,
+    handleError,
+    refreshPage,
+    setLeadImportJob,
+    setLeadImportFailedRows,
+    setLeadImportStatusFilter,
+    setLeadImportPage,
+    setLeadImportSize,
+    setLeadImportExportStatusFilter,
+    setLeadImportExportPage,
+    setLeadImportExportSize,
+  })
 
-  const saveCustomer = async () => {
-    if (!canWrite) return
-    setCrudError('customer', '')
-    setCrudFieldError('customer', {})
-    const localErrors = validateCustomerForm()
-    if (Object.keys(localErrors).length > 0) {
-      setCrudFieldError('customer', localErrors)
-      setCrudError('customer', Object.values(localErrors)[0])
-      return
-    }
-    try {
-      const valueRaw = String(customerForm.value || '').trim()
-      const payload = {
-        name: String(customerForm.name || '').trim(),
-        owner: String(customerForm.owner || '').trim(),
-        status: String(customerForm.status || '').trim(),
-        tag: String(customerForm.tag || '').trim(),
-        value: valueRaw ? Number(valueRaw) : 0,
-      }
-      if (customerForm.id) await api('/customers/' + customerForm.id, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang)
-      else await api('/customers', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      setCustomerForm({ id: '', name: '', owner: '', status: '', tag: '', value: '' })
-      await loadCustomers(customerPage, customerSize)
-    } catch (err) { setCrudError('customer', formatValidation(err)); setCrudFieldError('customer', pickFieldErrors(err, ['name', 'owner', 'status', 'value'])); handleError(err) }
-  }
-
-  const editCustomer = (c) => setCustomerForm({ id: c.id, name: c.name || '', owner: c.owner || '', status: c.status || '', tag: c.tag || '', value: String(c.value || '') })
-  const removeCustomer = async (id) => { if (!canDeleteCustomer) return; try { await api('/customers/' + id, { method: 'DELETE' }, auth.token, lang); const nextPage = customerPage > 1 && customers.length <= 1 ? customerPage - 1 : customerPage; await loadCustomers(nextPage, customerSize) } catch (err) { handleError(err) } }
-
-  const saveOpportunity = async () => {
-    if (!canWrite) return
-    setCrudError('opportunity', '')
-    setCrudFieldError('opportunity', {})
-    try {
-      const payload = { stage: opportunityForm.stage, count: Number(opportunityForm.count || 0), amount: Number(opportunityForm.amount || 0), progress: Number(opportunityForm.progress || 0), owner: opportunityForm.owner }
-      if (opportunityForm.id) await api('/opportunities/' + opportunityForm.id, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang)
-      else await api('/opportunities', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      setOpportunityForm({ id: '', stage: '', count: '', amount: '', progress: '', owner: '' })
-      await loadOpportunities(opportunityPage, opportunitySize)
-    } catch (err) { setCrudError('opportunity', formatValidation(err)); setCrudFieldError('opportunity', pickFieldErrors(err, ['stage', 'count', 'amount', 'progress', 'owner'])); handleError(err) }
-  }
-
-  const editOpportunity = (o) => setOpportunityForm({ id: o.id, stage: o.stage || '', count: String(o.count || ''), amount: String(o.amount || ''), progress: String(o.progress || ''), owner: o.owner || '' })
-  const removeOpportunity = async (id) => { if (!canDeleteOpportunity) return; try { await api('/opportunities/' + id, { method: 'DELETE' }, auth.token, lang); const nextPage = opportunityPage > 1 && opportunities.length <= 1 ? opportunityPage - 1 : opportunityPage; await loadOpportunities(nextPage, opportunitySize) } catch (err) { handleError(err) } }
-
-  const saveFollowUp = async () => {
-    if (!canWrite) return
-    setCrudError('followUp', '')
-    setCrudFieldError('followUp', {})
-    try {
-      const payload = { customerId: followUpForm.customerId, summary: followUpForm.summary, channel: followUpForm.channel, result: followUpForm.result, nextActionDate: followUpForm.nextActionDate }
-      if (followUpForm.id) await api('/follow-ups/' + followUpForm.id, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang)
-      else await api('/follow-ups', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      setFollowUpForm({ id: '', customerId: '', summary: '', channel: '', result: '', nextActionDate: '' })
-      await loadFollowUps()
-    } catch (err) { setCrudError('followUp', formatValidation(err)); setCrudFieldError('followUp', pickFieldErrors(err, ['customerId', 'summary', 'channel', 'result', 'nextActionDate'])); handleError(err) }
-  }
-
-  const editFollowUp = (f) => setFollowUpForm({ id: f.id, customerId: f.customerId || '', summary: f.summary || '', channel: f.channel || '', result: f.result || '', nextActionDate: f.nextActionDate || '' })
-  const removeFollowUp = async (id) => { if (!canWrite) return; try { await api('/follow-ups/' + id, { method: 'DELETE' }, auth.token, lang); await loadFollowUps() } catch (err) { handleError(err) } }
-
-  const saveContact = async () => {
-    if (!canWrite) return
-    setCrudError('contact', '')
-    setCrudFieldError('contact', {})
-    const localErrors = validateContactForm()
-    if (Object.keys(localErrors).length > 0) {
-      setCrudFieldError('contact', localErrors)
-      setCrudError('contact', Object.values(localErrors)[0])
-      return
-    }
-    try {
-      const payload = {
-        customerId: String(contactForm.customerId || '').trim(),
-        name: String(contactForm.name || '').trim(),
-        title: String(contactForm.title || '').trim(),
-        phone: String(contactForm.phone || '').trim(),
-        email: String(contactForm.email || '').trim(),
-      }
-      if (contactForm.id) await api('/contacts/' + contactForm.id, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang)
-      else await api('/contacts', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      setContactForm({ id: '', customerId: '', name: '', title: '', phone: '', email: '' })
-      await loadContacts(contactPage, contactSize)
-    } catch (err) {
-      setCrudError('contact', formatValidation(err))
-      setCrudFieldError('contact', pickFieldErrors(err, ['customerId', 'name', 'title', 'phone', 'email']))
-      handleError(err)
-    }
-  }
-
-  const editContact = (c) => setContactForm({ id: c.id, customerId: c.customerId || '', name: c.name || '', title: c.title || '', phone: c.phone || '', email: c.email || '' })
-  const removeContact = async (id) => { if (!canWrite) return; try { await api('/contacts/' + id, { method: 'DELETE' }, auth.token, lang); const nextPage = contactPage > 1 && contacts.length <= 1 ? contactPage - 1 : contactPage; await loadContacts(nextPage, contactSize) } catch (err) { handleError(err) } }
-
-  const saveContract = async () => {
-    if (!canWrite) return
-    setCrudError('contract', '')
-    setCrudFieldError('contract', {})
-    const localErrors = validateContractForm()
-    if (Object.keys(localErrors).length > 0) {
-      setCrudFieldError('contract', localErrors)
-      setCrudError('contract', Object.values(localErrors)[0])
-      return
-    }
-    try {
-      const amountRaw = String(contractForm.amount || '').trim()
-      const payload = {
-        customerId: String(contractForm.customerId || '').trim(),
-        contractNo: String(contractForm.contractNo || '').trim(),
-        title: String(contractForm.title || '').trim(),
-        amount: amountRaw ? Number(amountRaw) : 0,
-        status: String(contractForm.status || '').trim(),
-        signDate: String(contractForm.signDate || '').trim(),
-      }
-      if (contractForm.id) await api('/contracts/' + contractForm.id, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang)
-      else await api('/contracts', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      setContractForm({ id: '', customerId: '', contractNo: '', title: '', amount: '', status: '', signDate: '' })
-      await loadContracts(contractPage, contractSize)
-    } catch (err) { setCrudError('contract', formatValidation(err)); setCrudFieldError('contract', pickFieldErrors(err, ['customerId', 'contractNo', 'title', 'amount', 'status', 'signDate'])); handleError(err) }
-  }
-
-  const editContract = (c) => setContractForm({ id: c.id, customerId: c.customerId || '', contractNo: c.contractNo || '', title: c.title || '', amount: String(c.amount || ''), status: c.status || '', signDate: c.signDate || '' })
-  const removeContract = async (id) => { if (!canDeleteCustomer) return; try { await api('/contracts/' + id, { method: 'DELETE' }, auth.token, lang); const nextPage = contractPage > 1 && contracts.length <= 1 ? contractPage - 1 : contractPage; await loadContracts(nextPage, contractSize) } catch (err) { handleError(err) } }
-
-  const savePayment = async () => {
-    if (!canWrite) return
-    setCrudError('payment', '')
-    setCrudFieldError('payment', {})
-    const localErrors = validatePaymentForm()
-    if (Object.keys(localErrors).length > 0) {
-      setCrudFieldError('payment', localErrors)
-      setCrudError('payment', Object.values(localErrors)[0])
-      return
-    }
-    try {
-      const amountRaw = String(paymentForm.amount || '').trim()
-      const payload = {
-        contractId: String(paymentForm.contractId || '').trim(),
-        amount: amountRaw ? Number(amountRaw) : 0,
-        receivedDate: String(paymentForm.receivedDate || '').trim(),
-        method: String(paymentForm.method || '').trim(),
-        status: String(paymentForm.status || '').trim(),
-        remark: String(paymentForm.remark || '').trim(),
-      }
-      if (paymentForm.id) await api('/payments/' + paymentForm.id, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang)
-      else await api('/payments', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      setPaymentForm({ id: '', contractId: '', amount: '', receivedDate: '', method: '', status: '', remark: '' })
-      await loadPayments(paymentPage, paymentSize)
-    } catch (err) { setCrudError('payment', formatValidation(err)); setCrudFieldError('payment', pickFieldErrors(err, ['contractId', 'amount', 'receivedDate', 'method', 'status', 'remark'])); handleError(err) }
-  }
-
-  const editPayment = (p) => setPaymentForm({ id: p.id, contractId: p.contractId || '', amount: String(p.amount || ''), receivedDate: p.receivedDate || '', method: p.method || '', status: p.status || '', remark: p.remark || '' })
-  const removePayment = async (id) => { if (!canDeleteCustomer) return; try { await api('/payments/' + id, { method: 'DELETE' }, auth.token, lang); const nextPage = paymentPage > 1 && payments.length <= 1 ? paymentPage - 1 : paymentPage; await loadPayments(nextPage, paymentSize) } catch (err) { handleError(err) } }
-
-  const createExportJob = async () => {
-    try {
-      if (hasInvalidAuditRange()) { setAuditRangeError(t('dateRangeInvalid')); return }
-      setAuditRangeError('')
-      const q = new URLSearchParams({ username: auditUser, role: auditRole, action: auditAction, from: auditFrom, to: auditTo })
-      const job = await api('/audit-logs/export-jobs?' + q, { method: 'POST' }, auth.token, lang)
-      setExportJobs((prev) => [{ ...job }, ...prev].slice(0, 8))
-    } catch (err) { handleError(err) }
-  }
-
-  const retryExportJob = async (jobId) => {
-    try { const job = await api('/audit-logs/export-jobs/' + jobId + '/retry', { method: 'POST' }, auth.token, lang); setExportJobs((prev) => [{ ...job }, ...prev].slice(0, 8)) } catch (err) { handleError(err) }
-  }
-
-  const downloadExportJob = async (jobId) => {
-    try {
-      const res = await fetch(`${API_BASE}/audit-logs/export-jobs/${jobId}/download`, { headers: { Authorization: `Bearer ${auth.token}`, 'Accept-Language': lang } })
-      if (!res.ok) throw new Error(t('downloadFailed'))
-      const blob = await res.blob(); const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `audit-${jobId}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
-    } catch (err) { handleError(err) }
-  }
-
-
-  const createReportExportJob = async () => {
-    if (!canViewReports) return
-    try {
-      if (hasInvalidAuditRange()) { setAuditRangeError(t('dateRangeInvalid')); return }
-      setAuditRangeError('')
-      const q = new URLSearchParams({ from: auditFrom, to: auditTo, role: auditRole, owner: reportOwner, department: reportDepartment, timezone: reportTimezone, currency: reportCurrency })
-      const job = await api('/v1/reports/export-jobs?' + q, { method: 'POST' }, auth.token, lang)
-      setReportExportJobs((prev) => [{ ...job }, ...prev].slice(0, 8))
-    } catch (err) { handleError(err) }
-  }
-
-  const retryReportExportJob = async (jobId) => {
-    try { const job = await api('/v1/reports/export-jobs/' + jobId + '/retry', { method: 'POST' }, auth.token, lang); setReportExportJobs((prev) => [{ ...job }, ...prev].slice(0, 8)) } catch (err) { handleError(err) }
-  }
-
-  const downloadReportExportJob = async (jobId) => {
-    try {
-      const res = await fetch(`${API_BASE}/v1/reports/export-jobs/${jobId}/download`, { headers: { Authorization: `Bearer ${auth.token}`, 'Accept-Language': lang } })
-      if (!res.ok) throw new Error(t('downloadFailed'))
-      const blob = await res.blob(); const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `report-${jobId}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
-    } catch (err) { handleError(err) }
-  }
-
-  const exportReportCsv = async () => { await createReportExportJob() }
-  const changePermission = async (roleKey, opKey, grant) => { if (!canManagePermissions) return; try { const payload = grant ? { grant: [opKey], revoke: [] } : { grant: [], revoke: [opKey] }; const d = await api('/permissions/roles/' + roleKey, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang); setPermissionMatrix(d.matrix || []); await loadPermissionConflicts() } catch (err) { handleError(err) } }
-  const previewPermissionPack = async (type) => { if (!canManagePermissions) return; try { const payload = type === 'grant-read' ? { grant: READ_OPS, revoke: [] } : { grant: [], revoke: WRITE_OPS }; const d = await api('/permissions/roles/' + permissionRole + '/preview', { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang); setPermissionPreview(d); setPendingPack(type) } catch (err) { handleError(err) } }
-  const applyPermissionPack = async (type) => { if (!canManagePermissions) return; try { const payload = type === 'grant-read' ? { grant: READ_OPS, revoke: [] } : { grant: [], revoke: WRITE_OPS }; const d = await api('/permissions/roles/' + permissionRole, { method: 'PATCH', body: JSON.stringify(payload) }, auth.token, lang); setPermissionMatrix(d.matrix || []); await loadPermissionConflicts() } catch (err) { handleError(err) } }
-  const commitPendingPack = async () => { if (!pendingPack) return; await applyPermissionPack(pendingPack); setPendingPack(''); setPermissionPreview(null) }
-  const rollbackPermissionRole = async () => { try { const d = await api('/permissions/roles/' + permissionRole + '/rollback', { method: 'POST' }, auth.token, lang); setPermissionMatrix(d.matrix || []); await loadPermissionConflicts(); setPendingPack(''); setPermissionPreview(null) } catch (err) { handleError(err) } }
-
-  const saveAdminUser = async (u) => {
-    const roleValue = String(u.role || '').trim().toUpperCase()
-    const ownerScopeValue = String(u.ownerScope || '').trim()
-    if (!ROLES.includes(roleValue)) { setError(t('invalidRoleText')); return }
-    if (roleValue === 'SALES' && !ownerScopeValue) { setError(t('ownerScopeRequired')); return }
-    if (ownerScopeValue.length > 64) { setError(t('ownerScopeTooLong')); return }
-    try { const d = await api('/v1/admin/users/' + u.id, { method: 'PATCH', body: JSON.stringify({ role: roleValue, ownerScope: ownerScopeValue, enabled: !!u.enabled }) }, auth.token, lang); setAdminUsers((prev) => prev.map((x) => x.id === d.id ? d : x)); setError('') } catch (err) { handleError(err) }
-  }
-
-  const unlockAdminUser = async (id) => { try { const d = await api('/v1/admin/users/' + id + '/unlock', { method: 'POST' }, auth.token, lang); setAdminUsers((prev) => prev.map((x) => x.id === d.id ? d : x)) } catch (err) { handleError(err) } }
-  const getAdminUserError = (u) => { const roleValue = String(u?.role || '').trim().toUpperCase(); const ownerScopeValue = String(u?.ownerScope || '').trim(); if (!ROLES.includes(roleValue)) return t('invalidRoleText'); if (roleValue === 'SALES' && !ownerScopeValue) return t('ownerScopeRequired'); if (ownerScopeValue.length > 64) return t('ownerScopeTooLong'); return '' }
-  const inviteUser = async () => {
-    try {
-      const invited = await api('/v1/admin/users/invite', { method: 'POST', body: JSON.stringify(inviteForm) }, auth.token, lang)
-      setInviteResult(invited)
-      setInviteForm((p) => ({ ...p, username: '', ownerScope: '' }))
-      await loadAdminUsers()
-    } catch (err) { handleError(err) }
-  }
-
-  const createApprovalTemplate = async () => {
-    try {
-      await api('/v1/approval/templates', {
-        method: 'POST',
-        body: JSON.stringify({
-          bizType: approvalTemplateForm.bizType,
-          name: approvalTemplateForm.name,
-          approverRoles: approvalTemplateForm.approverRoles,
-        }),
-      }, auth.token, lang)
-      setApprovalTemplateForm((p) => ({ ...p, name: '' }))
-      await loadApprovalTemplates()
-      await loadApprovalStats()
-      await loadApprovalInstances()
-      await loadApprovalTasks()
-    } catch (err) { handleError(err) }
-  }
-
-  const submitApprovalInstance = async () => {
-    try {
-      await api(`/v1/approval/instances/${approvalInstanceForm.bizType}/${approvalInstanceForm.bizId}/submit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          amount: Number(approvalInstanceForm.amount || 0),
-          role: role,
-          department: auth?.department || 'DEFAULT',
-          comment: 'Submitted from web panel',
-        }),
-      }, auth.token, lang)
-      setApprovalInstanceForm((p) => ({ ...p, bizId: '', amount: '' }))
-      await loadApprovalStats()
-      await loadApprovalInstances()
-      await loadApprovalTasks()
-    } catch (err) { handleError(err) }
-  }
-
-  const updateApprovalTemplate = async (row) => {
-    try {
-      const updated = await api('/v1/approval/templates/' + row.id, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          name: row.name,
-          amountMin: row.amountMin === '' || row.amountMin === null || row.amountMin === undefined ? null : Number(row.amountMin),
-          amountMax: row.amountMax === '' || row.amountMax === null || row.amountMax === undefined ? null : Number(row.amountMax),
-          role: row.role || '',
-          department: row.department || '',
-          approverRoles: row.approverRoles || '',
-          flowDefinition: row.flowDefinition || null,
-          status: row.status || undefined,
-          version: row.version || undefined,
-          enabled: !!row.enabled,
-        }),
-      }, auth.token, lang)
-      setApprovalTemplates((prev) => prev.map((x) => x.id === updated.id ? updated : x))
-      await loadApprovalStats()
-    } catch (err) { handleError(err) }
-  }
-
-  const actApprovalTask = async (taskId, action) => {
-    try {
-      const payload = { comment: approvalActionComment }
-      if (action === 'transfer') payload.transferTo = approvalTransferTo
-      await api('/v1/approval/tasks/' + taskId + '/' + action, { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      await loadApprovalStats()
-      await loadApprovalTasks()
-      await loadApprovalInstances()
-      setApprovalActionComment('')
-      if (action === 'transfer') setApprovalTransferTo('')
-    } catch (err) { handleError(err) }
-  }
-
-  const urgeApprovalTask = async (taskId) => {
-    try {
-      await api('/v1/approval/tasks/' + taskId + '/urge', { method: 'POST', body: JSON.stringify({ comment: approvalActionComment, urgeChannel: 'IN_APP' }) }, auth.token, lang)
-      await loadApprovalStats()
-      await loadApprovalTasks()
-      await loadNotificationJobs()
-      setApprovalActionComment('')
-    } catch (err) { handleError(err) }
-  }
-
-  const publishApprovalTemplate = async (templateId) => {
-    try {
-      await api('/v1/approval/templates/' + templateId + '/publish', { method: 'POST' }, auth.token, lang)
-      await loadApprovalTemplates()
-      await loadApprovalStats()
-      await loadApprovalTemplateVersions(templateId)
-    } catch (err) { handleError(err) }
-  }
-
-  const rollbackApprovalTemplate = async (templateId, version) => {
-    try {
-      await api('/v1/approval/templates/' + templateId + '/rollback/' + version, { method: 'POST' }, auth.token, lang)
-      await loadApprovalTemplates()
-      await loadApprovalStats()
-      await loadApprovalTemplateVersions(templateId)
-    } catch (err) { handleError(err) }
-  }
-
-  const retryNotificationJob = async (jobId) => {
-    try {
-      await api('/v1/integrations/notifications/jobs/' + jobId + '/retry', { method: 'POST' }, auth.token, lang)
-      await loadNotificationJobs()
-    } catch (err) { handleError(err) }
-  }
-
-  const toggleNotificationJob = (jobId, checked) => {
-    setSelectedNotificationJobs((prev) => {
-      const set = new Set(prev)
-      if (checked) set.add(jobId)
-      else set.delete(jobId)
-      return Array.from(set)
-    })
-  }
-
-  const toggleAllNotificationJobs = (checked) => {
-    if (!checked) { setSelectedNotificationJobs([]); return }
-    setSelectedNotificationJobs((notificationJobs || []).map((j) => j.jobId))
-  }
-
-  const retryNotificationJobsByIds = async () => {
-    try {
-      if ((selectedNotificationJobs || []).length === 0) return
-      const result = await api('/v1/integrations/notifications/jobs/batch-retry', {
-        method: 'POST',
-        body: JSON.stringify({ jobIds: selectedNotificationJobs }),
-      }, auth.token, lang)
-      setError(`${t('retry')}: requested=${result.requested}, succeeded=${result.succeeded}, skipped=${result.skipped}`)
-      await loadNotificationJobs(notificationPage, notificationSize)
-    } catch (err) { handleError(err) }
-  }
-
-  const retryNotificationJobsByFilter = async () => {
-    try {
-      const result = await api('/v1/integrations/notifications/jobs/retry-by-filter', {
-        method: 'POST',
-        body: JSON.stringify({ status: notificationStatusFilter, page: notificationPage, size: notificationSize }),
-      }, auth.token, lang)
-      setError(`${t('retry')}: requested=${result.requested}, succeeded=${result.succeeded}, skipped=${result.skipped}`)
-      await loadNotificationJobs(notificationPage, notificationSize)
-    } catch (err) { handleError(err) }
-  }
-
-  const createTenant = async () => {
-    try {
-      const created = await api('/v1/tenants', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: tenantForm.name,
-          status: tenantForm.status,
-          quotaUsers: Number(tenantForm.quotaUsers || 100),
-          timezone: tenantForm.timezone,
-          currency: tenantForm.currency,
-          dateFormat: 'YYYY-MM-DD',
-        }),
-      }, auth.token, lang)
-      setLastCreatedTenant(created)
-      setTenantForm((p) => ({ ...p, name: '' }))
-      await loadTenants()
-    } catch (err) { handleError(err) }
-  }
-
-  const updateTenant = async (row) => {
-    try {
-      const updated = await api('/v1/tenants/' + row.id, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          name: row.name,
-          status: row.status,
-          quotaUsers: Number(row.quotaUsers || 0),
-          timezone: row.timezone,
-          currency: row.currency,
-          dateFormat: row.dateFormat || 'YYYY-MM-DD',
-        }),
-      }, auth.token, lang)
-      setTenantRows((prev) => prev.map((x) => x.id === updated.id ? updated : x))
-    } catch (err) { handleError(err) }
-  }
-
-  const onCustomerPageChange = async (next) => { if (!auth?.token) return; try { await loadCustomers(next, customerSize) } catch (err) { handleError(err) } }
-  const onOpportunityPageChange = async (next) => { if (!auth?.token) return; try { await loadOpportunities(next, opportunitySize) } catch (err) { handleError(err) } }
-  const onContactPageChange = async (next) => { if (!auth?.token) return; try { await loadContacts(next, contactSize) } catch (err) { handleError(err) } }
-  const onContractPageChange = async (next) => { if (!auth?.token) return; try { await loadContracts(next, contractSize) } catch (err) { handleError(err) } }
-  const onPaymentPageChange = async (next) => { if (!auth?.token) return; try { await loadPayments(next, paymentSize) } catch (err) { handleError(err) } }
-  const onCustomerSizeChange = async (nextSize) => { if (!auth?.token) return; setCustomerSize(nextSize); try { await loadCustomers(1, nextSize) } catch (err) { handleError(err) } }
-  const onOpportunitySizeChange = async (nextSize) => { if (!auth?.token) return; setOpportunitySize(nextSize); try { await loadOpportunities(1, nextSize) } catch (err) { handleError(err) } }
-  const onContactSizeChange = async (nextSize) => { if (!auth?.token) return; setContactSize(nextSize); try { await loadContacts(1, nextSize) } catch (err) { handleError(err) } }
-  const onContractSizeChange = async (nextSize) => { if (!auth?.token) return; setContractSize(nextSize); try { await loadContracts(1, nextSize) } catch (err) { handleError(err) } }
-  const onPaymentSizeChange = async (nextSize) => { if (!auth?.token) return; setPaymentSize(nextSize); try { await loadPayments(1, nextSize) } catch (err) { handleError(err) } }
-
-  const currentPageLabel = navItems.find((item) => item.key === activePage)?.label || t('salesOverview')
-  const navGroups = navItems.reduce((acc, item) => { const key = item.group || 'Default'; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc }, {})
-  const onNavigate = (key) => {
-    setActivePage(key)
-    navigate(PAGE_TO_PATH[key] || PAGE_TO_PATH.dashboard)
-  }
-
-  const mainBase = { currentPageLabel, lang, setLang, loadAll, t, canWrite, error, loading, activePage, stats, reports, canViewReports, auditFrom, auditTo, auditRole, reportOwner, setReportOwner, reportDepartment, setReportDepartment, reportTimezone, setReportTimezone, reportCurrency, setReportCurrency, exportReportCsv, reportExportJobs, reportExportStatusFilter, setReportExportStatusFilter, autoRefreshReportJobs, setAutoRefreshReportJobs, loadReportExportJobs, retryReportExportJob, downloadReportExportJob }
-  const mainPermissions = { permissionRole, setPermissionRole, canManagePermissions, previewPermissionPack, pendingPack, commitPendingPack, rollbackPermissionRole, permissionPreview, permissionMatrix, changePermission, permissionConflicts }
-  const mainUsers = { canManageUsers, adminUsers, loadAdminUsers, setAdminUsers, getAdminUserError, saveAdminUser, unlockAdminUser, inviteForm, setInviteForm, inviteUser, inviteResult }
-  const mainCustomers = { customerForm, setCustomerForm, saveCustomer, formError: crudErrors.customer, fieldErrors: crudFieldErrors.customer, customers, editCustomer, canDeleteCustomer, removeCustomer, customerQ, setCustomerQ, customerStatus, setCustomerStatus, pagination: { page: customerPage, totalPages: customerTotalPages, size: customerSize }, onPageChange: onCustomerPageChange, onSizeChange: onCustomerSizeChange, reload: loadCustomers }
-  const mainPipeline = { opportunityForm, setOpportunityForm, saveOpportunity, formError: crudErrors.opportunity, fieldErrors: crudFieldErrors.opportunity, opportunities, editOpportunity, canDeleteOpportunity, removeOpportunity, oppStage, setOppStage, pagination: { page: opportunityPage, totalPages: opportunityTotalPages, size: opportunitySize }, onPageChange: onOpportunityPageChange, onSizeChange: onOpportunitySizeChange, reload: loadOpportunities }
-  const mainFollowUps = { followUpForm, setFollowUpForm, saveFollowUp, formError: crudErrors.followUp, fieldErrors: crudFieldErrors.followUp, followUps, editFollowUp, removeFollowUp }
-  const mainContacts = { contactForm, setContactForm, saveContact, formError: crudErrors.contact, fieldErrors: crudFieldErrors.contact, contacts, editContact, removeContact, contactQ, setContactQ, pagination: { page: contactPage, totalPages: contactTotalPages, size: contactSize }, onPageChange: onContactPageChange, onSizeChange: onContactSizeChange, reload: loadContacts }
-  const mainContracts = { contractForm, setContractForm, saveContract, formError: crudErrors.contract, fieldErrors: crudFieldErrors.contract, contracts, editContract, removeContract, contractQ, setContractQ, contractStatus, setContractStatus, pagination: { page: contractPage, totalPages: contractTotalPages, size: contractSize }, onPageChange: onContractPageChange, onSizeChange: onContractSizeChange, reload: loadContracts }
-  const mainPayments = { paymentForm, setPaymentForm, savePayment, formError: crudErrors.payment, fieldErrors: crudFieldErrors.payment, payments, editPayment, removePayment, paymentStatus, setPaymentStatus, pagination: { page: paymentPage, totalPages: paymentTotalPages, size: paymentSize }, onPageChange: onPaymentPageChange, onSizeChange: onPaymentSizeChange, reload: loadPayments }
-  const mainTasks = { tasks, toggleTaskDone }
-  const mainAudit = { canViewAudit, auditUser, setAuditUser, auditRole, setAuditRole, auditAction, setAuditAction, auditFrom, setAuditFrom, auditTo, setAuditTo, auditRangeError, setAuditRangeError, hasInvalidAuditRange, loadAudit, createExportJob, loadExportJobs, autoRefreshJobs, setAutoRefreshJobs, auditLogs, exportStatusFilter, setExportStatusFilter, exportJobs, downloadExportJob, retryExportJob }
-  const mainApprovals = {
-    template: approvalTemplateForm,
-    setTemplate: setApprovalTemplateForm,
-    templates: approvalTemplates,
-    setTemplates: setApprovalTemplates,
-    updateTemplate: updateApprovalTemplate,
-    publishTemplate: publishApprovalTemplate,
-    rollbackTemplate: rollbackApprovalTemplate,
-    versions: approvalTemplateVersions,
-    loadVersions: loadApprovalTemplateVersions,
-    versionTemplateId: approvalVersionTemplateId,
-    stats: approvalStats,
-    instance: approvalInstanceForm,
-    setInstance: setApprovalInstanceForm,
-    createTemplate: createApprovalTemplate,
-    submitInstance: submitApprovalInstance,
-    tasks: approvalTasks,
-    instances: approvalInstances,
-    detail: approvalDetail,
-    loadDetail: loadApprovalDetail,
-    taskStatus: approvalTaskStatus,
-    setTaskStatus: setApprovalTaskStatus,
-    overdueOnly: approvalOverdueOnly,
-    setOverdueOnly: setApprovalOverdueOnly,
-    escalatedOnly: approvalEscalatedOnly,
-    setEscalatedOnly: setApprovalEscalatedOnly,
-    actionComment: approvalActionComment,
-    setActionComment: setApprovalActionComment,
-    transferTo: approvalTransferTo,
-    setTransferTo: setApprovalTransferTo,
-    actTask: actApprovalTask,
-    urgeTask: urgeApprovalTask,
-    notifications: notificationJobs,
-    notificationStatus: notificationStatusFilter,
-    setNotificationStatus: setNotificationStatusFilter,
-    notificationPage,
-    notificationTotalPages,
-    notificationSize,
-    setNotificationPage,
-    setNotificationSize,
-    selectedNotificationJobs,
+  const {
+    exportReportCsv,
+    createExportJob,
+    retryExportJob,
+    downloadExportJob,
+    retryReportExportJob,
+    downloadReportExportJob,
+    createReportDesignerTemplate,
+    updateReportDesignerTemplate,
+    runReportDesignerTemplate,
+    saveLeadAssignmentRule,
+    saveAutomationRule,
+    changePermission,
+    previewPermissionPack,
+    commitPendingPack,
+    rollbackPermissionRole,
+    saveAdminUser,
+    unlockAdminUser,
+    getAdminUserError,
+    inviteUser,
+    createApprovalTemplate,
+    submitApprovalInstance,
+    updateApprovalTemplate,
+    actApprovalTask,
+    urgeApprovalTask,
+    publishApprovalTemplate,
+    rollbackApprovalTemplate,
+    retryNotificationJob,
     toggleNotificationJob,
     toggleAllNotificationJobs,
-    retryNotification: retryNotificationJob,
-    retryNotificationByIds: retryNotificationJobsByIds,
-    retryNotificationByFilter: retryNotificationJobsByFilter,
-    reloadTasks: loadApprovalTasks,
-    reloadTemplates: loadApprovalTemplates,
-    reloadNotifications: loadNotificationJobs,
-    canRetryNotifications: ['ADMIN', 'MANAGER'].includes(role),
-  }
-  const mainTenants = { form: tenantForm, setForm: setTenantForm, createTenant, rows: tenantRows, setRows: setTenantRows, updateTenant, reload: loadTenants, lastCreated: lastCreatedTenant }
+    retryNotificationJobsByIds,
+    retryNotificationJobsByFilter,
+    createTenant,
+    updateTenant,
+  } = useAppPageActions({
+    auth,
+    lang,
+    role,
+    t,
+    normalizeDateFormat,
+    setError,
+    handleError,
+    assignmentRuleForm,
+    setAssignmentRuleForm,
+    loadLeadAssignmentRules,
+    automationRuleForm,
+    setAutomationRuleForm,
+    loadAutomationRulesV1,
+    canManagePermissions,
+    permissionRole,
+    pendingPack,
+    setPendingPack,
+    setPermissionPreview,
+    setPermissionMatrix,
+    loadPermissionConflicts,
+    setAdminUsers,
+    setInviteResult,
+    setInviteForm,
+    inviteForm,
+    loadAdminUsers,
+    approvalTemplateForm,
+    setApprovalTemplateForm,
+    setApprovalTemplates,
+    loadApprovalTemplates,
+    loadApprovalStats,
+    loadApprovalInstances,
+    loadApprovalTasks,
+    approvalInstanceForm,
+    setApprovalInstanceForm,
+    approvalActionComment,
+    setApprovalActionComment,
+    approvalTransferTo,
+    setApprovalTransferTo,
+    loadNotificationJobs,
+    setSelectedNotificationJobs,
+    notificationJobs,
+    selectedNotificationJobs,
+    notificationStatusFilter,
+    notificationPage,
+    notificationSize,
+    tenantForm,
+    setTenantForm,
+    setLastCreatedTenant,
+    loadTenants,
+    setTenantRows,
+    refreshPage,
+    hasInvalidAuditRange,
+    setAuditRangeError,
+    auditUser,
+    auditRole,
+    auditAction,
+    auditFrom,
+    auditTo,
+    reportOwner,
+    reportDepartment,
+    reportTimezone,
+    reportCurrency,
+    canViewReports,
+    reportDesignerForm,
+    setReportDesignerForm,
+    setDesignerRunResult,
+    loadApprovalTemplateVersions,
+  })
 
-  if (!auth && location.pathname === '/activate') {
-    return <InvitationAcceptView lang={lang} setLang={setLang} t={t} onBackToLogin={() => navigate('/login')} />
-  }
+  const {
+    onPrefetch,
+    onNavigate,
+    trackWorkbenchEvent,
+    buildWorkbenchFilterSignature,
+    navigateToWorkbenchTarget,
+    createQuoteFromOpportunity,
+    viewOrdersFromOpportunity,
+    createFollowUpShortcut,
+    createTaskShortcut,
+    urgeApprovalShortcut,
+    copyPerfSnapshot,
+  } = useAppShellBindings({
+    prefetch: {
+      authToken: auth?.token,
+      pageSignature,
+      customerQ,
+      customerStatus,
+      customerSize,
+      canSkipFetch,
+      loadCustomers,
+      markFetched,
+      loadApprovalTemplates,
+      loadApprovalStats,
+      markChunkPreloadHit,
+      markNavStart,
+      activePage,
+      loadReasonRef,
+      setActivePage,
+      navigate,
+      pageToPath: PAGE_TO_PATH,
+      pageChunkPreloaders: PAGE_CHUNK_PRELOADERS,
+    },
+    workbench: {
+      activePage,
+      setActivePage,
+      navigate,
+      pageToPath: PAGE_TO_PATH,
+      markNavStart,
+      markWorkbenchJumpDecision,
+      markWorkbenchActionResult,
+      loadReasonRef,
+      setPaymentStatus,
+      setContractStatus,
+      setApprovalTaskStatus,
+      setFollowCustomerId,
+      setFollowQ,
+      setFollowUpForm,
+      setQuoteOpportunityFilter,
+      setQuoteStatusFilter: commerceDomain.quotes.setStatusFilter,
+      setQuoteOwnerFilter: commerceDomain.quotes.setOwnerFilter,
+      setQuotePrefill,
+      setOrderOpportunityFilter,
+      setOrderStatusFilter: commerceDomain.orders.setStatusFilter,
+      setOrderOwnerFilter: commerceDomain.orders.setOwnerFilter,
+      setLeadQ,
+      setLeadStatus,
+      setLeadPage,
+      setLeadSize,
+      leadSize,
+      setCustomerQ,
+      setCustomerStatus,
+      setCustomerPage,
+      setCustomerSize,
+      customerSize,
+      workbenchJumpRef,
+      onWorkbenchJumpMeta: markWorkbenchJumpMeta,
+    },
+    perf: {
+      activePage,
+      markNavEnd,
+      devEnabled: typeof import.meta !== 'undefined' && !!import.meta.env?.DEV,
+      getMetrics,
+      setPerfMetrics,
+      currentLoaderKey,
+      lastRefreshReason,
+      currentPageSignature,
+      domainLoadSource,
+      setLastPerfSnapshotAt,
+    },
+  })
+  const consumeQuotePrefill = () => setQuotePrefill(null)
+  const mainContentInputs = useAppViewBindings({
+    base: {
+      currentPageLabel, lang, setLang, refreshPage, t, canWrite, role, error, loading, activePage,
+      stats, reports, workbenchToday, canViewReports, auditFrom, auditTo, auditRole, reportOwner, setReportOwner,
+      reportDepartment, setReportDepartment, reportTimezone, setReportTimezone, reportCurrency, setReportCurrency,
+      reportExportJobs, reportExportStatusFilter, setReportExportStatusFilter, reportExportJobsPage,
+      setReportExportJobsPage, reportExportJobsTotalPages, reportExportJobsSize, setReportExportJobsSize,
+      autoRefreshReportJobs, setAutoRefreshReportJobs, quoteOpportunityFilter, orderOpportunityFilter,
+      quotePrefill, consumeQuotePrefill, auth, tasks, reportDesignerForm, setReportDesignerForm,
+      designerTemplates, designerRunResult,
+    },
+    domains: {
+      customer: {
+        leadForm, setLeadForm, saveLead, convertLead, crudErrors, crudFieldErrors, leads, editLead, leadQ, setLeadQ,
+        leadStatus, setLeadStatus, leadPage, leadTotalPages, leadSize, onLeadPageChange, onLeadSizeChange, loadLeads,
+        bulkAssignLeadsByRule, bulkUpdateLeadStatus,
+        importLeadsCsv, leadImportJob, leadImportJobs, leadImportStatusFilter, updateLeadImportStatusFilter,
+        leadImportPage, leadImportTotalPages, leadImportSize, onLeadImportPageChange, onLeadImportSizeChange,
+        selectLeadImportJob, cancelLeadImportJob, retryLeadImportJob, leadImportFailedRows, downloadLeadImportTemplate,
+        leadImportMetrics, leadImportExportJobs, leadImportExportStatusFilter, updateLeadImportExportStatusFilter,
+        leadImportExportPage, leadImportExportTotalPages, leadImportExportSize, onLeadImportExportPageChange,
+        onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob,
+        customerForm, setCustomerForm, saveCustomer, customers, editCustomer, canDeleteCustomer, removeCustomer,
+        customerQ, setCustomerQ, customerStatus, setCustomerStatus, customerPage, customerTotalPages, customerSize,
+        onCustomerPageChange, onCustomerSizeChange, loadCustomers, loadCustomerTimeline, customerTimeline,
+        opportunityForm, setOpportunityForm, saveOpportunity, opportunities, editOpportunity, canDeleteOpportunity,
+        removeOpportunity, oppStage, setOppStage, opportunityPage, opportunityTotalPages, opportunitySize,
+        onOpportunityPageChange, onOpportunitySizeChange, loadOpportunities, createQuoteFromOpportunity,
+        viewOrdersFromOpportunity, loadOpportunityTimeline, opportunityTimeline, urgeApprovalShortcut,
+        customer360Metrics: {
+          markActionResult: markCustomer360ActionResult,
+          markModuleRefreshLatency: markCustomer360ModuleRefreshLatency,
+          markJumpHit: markCustomer360JumpHit,
+          markModuleCacheHit: markCustomer360ModuleCacheHit,
+          markPrefetchHit: markCustomer360PrefetchHit,
+          markPrefetchAbort: markCustomer360PrefetchAbort,
+          markPrefetchModules: markCustomer360PrefetchModules,
+        },
+        buildWorkbenchFilterSignature,
+        followUpForm, setFollowUpForm, saveFollowUp, followUps, editFollowUp, removeFollowUp, followCustomerId,
+        setFollowCustomerId, followQ, setFollowQ, loadFollowUps, createFollowUpShortcut,
+        contactForm, setContactForm, saveContact, contacts, editContact, removeContact, contactQ, setContactQ,
+        contactPage, contactTotalPages, contactSize, onContactPageChange, onContactSizeChange, loadContacts,
+      },
+      commerce: {
+        commerceDomain,
+        contractForm, setContractForm, saveContract, contracts, editContract, removeContract, contractQ, setContractQ,
+        contractStatus, setContractStatus, contractPage, contractTotalPages, contractSize, onContractPageChange,
+        onContractSizeChange, loadContracts, paymentForm, setPaymentForm, savePayment, payments, editPayment,
+        removePayment, paymentStatus, setPaymentStatus, paymentPage, paymentTotalPages, paymentSize,
+        onPaymentPageChange, onPaymentSizeChange, loadPayments,
+      },
+      governance: {
+        permissionRole, setPermissionRole, canManagePermissions, pendingPack, permissionPreview, permissionMatrix, permissionConflicts,
+        canManageUsers, adminUsers, loadAdminUsers, setAdminUsers, inviteForm, setInviteForm, inviteResult, canManageSalesAutomation, leadAssignmentRules,
+        assignmentRuleForm, setAssignmentRuleForm, loadLeadAssignmentRules,
+        automationRules, automationRuleForm, setAutomationRuleForm, loadAutomationRulesV1,
+        tenantForm, setTenantForm, tenantRows, setTenantRows, loadTenants, lastCreatedTenant,
+      },
+      approval: {
+        approvalTemplateForm, setApprovalTemplateForm, approvalTemplates, setApprovalTemplates, approvalTemplateVersions, loadApprovalTemplateVersions,
+        approvalVersionTemplateId, approvalStats, approvalInstanceForm, setApprovalInstanceForm, approvalTasks, approvalInstances, approvalDetail, loadApprovalDetail, approvalTaskStatus,
+        setApprovalTaskStatus, approvalOverdueOnly, setApprovalOverdueOnly, approvalEscalatedOnly, setApprovalEscalatedOnly,
+        approvalActionComment, setApprovalActionComment, approvalTransferTo, setApprovalTransferTo, notificationJobs, notificationStatusFilter, setNotificationStatusFilter, notificationPage,
+        notificationTotalPages, notificationSize, setNotificationPage, setNotificationSize, selectedNotificationJobs,
+        loadApprovalTasks, loadApprovalTemplates, loadNotificationJobs,
+      },
+      reporting: {
+        canViewAudit, auditUser, setAuditUser, setAuditRole, auditAction, setAuditAction, setAuditFrom, setAuditTo,
+        auditRangeError, setAuditRangeError, hasInvalidAuditRange, loadAudit, createExportJob, loadExportJobs,
+        autoRefreshJobs, setAutoRefreshJobs, auditLogs, exportStatusFilter, setExportStatusFilter, exportJobs,
+        exportJobsPage, setExportJobsPage, exportJobsTotalPages, exportJobsSize, setExportJobsSize, downloadExportJob,
+        retryExportJob,
+      },
+      workbench: {},
+    },
+    actions: {
+      exportReportCsv, loadReportExportJobs, retryReportExportJob, downloadReportExportJob,
+      performLogout, navigateToWorkbenchTarget, createTaskShortcut, trackWorkbenchEvent,
+      toggleTaskDone, createReportDesignerTemplate,
+      updateReportDesignerTemplate, runReportDesignerTemplate, loadDesignerTemplates,
+    },
+    pageActions: {
+      saveLeadAssignmentRule,
+      saveAutomationRule,
+      changePermission,
+      previewPermissionPack,
+      commitPendingPack,
+      rollbackPermissionRole,
+      saveAdminUser,
+      unlockAdminUser,
+      getAdminUserError,
+      inviteUser,
+      createApprovalTemplate,
+      submitApprovalInstance,
+      updateApprovalTemplate,
+      actApprovalTask,
+      urgeApprovalTask,
+      publishApprovalTemplate,
+      rollbackApprovalTemplate,
+      retryNotificationJob,
+      toggleNotificationJob,
+      toggleAllNotificationJobs,
+      retryNotificationJobsByIds,
+      retryNotificationJobsByFilter,
+      createTenant,
+      updateTenant,
+    },
+    crudActions: {
+      saveLead,
+      saveCustomer,
+      removeCustomer,
+      saveOpportunity,
+      removeOpportunity,
+      saveFollowUp,
+      removeFollowUp,
+      saveContact,
+      removeContact,
+      saveContract,
+      removeContract,
+      savePayment,
+      removePayment,
+      toggleTaskDone,
+    },
+    capabilities: {
+      canViewReports,
+      canManagePermissions,
+      canManageUsers,
+      canManageSalesAutomation,
+      canViewAudit,
+    },
+  })
 
-  if (!auth) {
-    return (
-      <LoginView
-        lang={lang}
-        setLang={setLang}
-        t={t}
-        submitLogin={submitLogin}
-        loginForm={loginForm}
-        setLoginForm={setLoginForm}
-        formErrors={formErrors}
-        setFormErrors={setFormErrors}
-        submitSsoLogin={submitSsoLogin}
-        ssoConfig={ssoConfig}
-        ssoForm={ssoForm}
-        setSsoForm={setSsoForm}
-        oidcAuthorizing={oidcAuthorizing}
-        startOidcLogin={startOidcLogin}
-        openActivate={() => navigate('/activate')}
-        error={error}
-      />
-    )
-  }
+  const {
+    mainBase,
+    mainPermissions,
+    mainUsers,
+    mainCommerce,
+    mainLeads,
+    mainCustomers,
+    mainPipeline,
+    mainFollowUps,
+    mainContacts,
+    mainContracts,
+    mainPayments,
+    mainTasks,
+    mainReportDesigner,
+    mainSalesAutomation,
+    mainAudit,
+    mainApprovals,
+    mainTenants,
+  } = useAppMainContentModel(mainContentInputs)
+  const apiContext = useMemo(() => ({ token: auth?.token || '', lang, tenantId: auth?.tenantId || '' }), [auth?.token, auth?.tenantId, lang])
+
+  const isAuthRoute = location.pathname === '/login' || location.pathname === '/activate'
+  const authShell = (
+    <AuthShell
+      auth={isAuthRoute ? null : auth}
+      locationPathname={location.pathname}
+      apiContext={apiContext}
+      lang={lang}
+      setLang={setLang}
+      t={t}
+      navigate={navigate}
+      submitLogin={submitLogin}
+      loginForm={loginForm}
+      setLoginForm={setLoginForm}
+      formErrors={formErrors}
+      setFormErrors={setFormErrors}
+      submitSsoLogin={submitSsoLogin}
+      ssoConfig={ssoConfig}
+      ssoForm={ssoForm}
+      setSsoForm={setSsoForm}
+      oidcAuthorizing={oidcAuthorizing}
+      startOidcLogin={startOidcLogin}
+      loginError={loginError}
+    />
+  )
+  if (!hasAuthToken || isAuthRoute) return <AppProviders apiContext={apiContext}>{authShell}</AppProviders>
 
   return (
-    <div className="app-shell">
-      <SidebarNav auth={auth} navGroups={navGroups} activePage={activePage} onNavigate={onNavigate} saveAuth={saveAuth} t={t} />
-      <MainContent
-        base={mainBase}
-        permissions={mainPermissions}
-        users={mainUsers}
-        customers={mainCustomers}
-        pipeline={mainPipeline}
-        followUps={mainFollowUps}
-        contacts={mainContacts}
-        contracts={mainContracts}
-        payments={mainPayments}
-        tasks={mainTasks}
-        audit={mainAudit}
-        approvals={mainApprovals}
-        tenants={mainTenants}
+    <AppProviders apiContext={apiContext}>
+      <AppShell
+        auth={auth}
+        navGroups={navGroups}
+        activePage={activePage}
+        onNavigate={onNavigate}
+        onPrefetch={onPrefetch}
+        performLogout={performLogout}
+        t={t}
+        mainBase={mainBase}
+        mainPermissions={mainPermissions}
+        mainUsers={mainUsers}
+        mainSalesAutomation={mainSalesAutomation}
+        mainLeads={mainLeads}
+        mainCustomers={mainCustomers}
+        mainPipeline={mainPipeline}
+        mainCommerce={mainCommerce}
+        mainFollowUps={mainFollowUps}
+        mainContacts={mainContacts}
+        mainContracts={mainContracts}
+        mainPayments={mainPayments}
+        mainReportDesigner={mainReportDesigner}
+        mainTasks={mainTasks}
+        mainAudit={mainAudit}
+        mainApprovals={mainApprovals}
+        mainTenants={mainTenants}
+        dev={import.meta.env.DEV}
+        perfMetrics={perfMetrics}
+        currentLoaderKey={currentLoaderKey}
+        lastRefreshReason={lastRefreshReason}
+        currentPageSignature={currentPageSignature}
+        currentSignatureHit={currentSignatureHit}
+        recentWorkbenchJump={recentWorkbenchJump}
+        domainLoadSource={domainLoadSource}
+        copyPerfSnapshot={copyPerfSnapshot}
+        lastPerfSnapshotAt={lastPerfSnapshotAt}
       />
-    </div>
+    </AppProviders>
   )
 }
 
 export default App
+
+
+
 
 
 
