@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 const DB_USER = process.env.DB_USER || 'root'
 const DB_PASSWORD = process.env.DB_PASSWORD || 'root'
 const DB_NAME = process.env.DB_NAME || 'crm_local_e2e'
+const E2E_FAST = process.env.E2E_FAST === '1'
 const IS_WIN = process.platform === 'win32'
 
 function run(cmd, args, label) {
@@ -24,12 +25,15 @@ function run(cmd, args, label) {
 }
 
 async function main() {
+  console.log(`[full-test] Mode: ${E2E_FAST ? 'FAST' : 'FULL'}`)
   console.log('[full-test] Step 1/3: init database')
-  await run(
-    IS_WIN ? 'mysql.exe' : 'mysql',
-    [`-u${DB_USER}`, `-p${DB_PASSWORD}`, '-e', `DROP DATABASE IF EXISTS ${DB_NAME};`],
-    'mysql drop db'
-  )
+  if (!E2E_FAST) {
+    await run(
+      IS_WIN ? 'mysql.exe' : 'mysql',
+      [`-u${DB_USER}`, `-p${DB_PASSWORD}`, '-e', `DROP DATABASE IF EXISTS ${DB_NAME};`],
+      'mysql drop db'
+    )
+  }
   await run(
     IS_WIN ? 'mysql.exe' : 'mysql',
     [`-u${DB_USER}`, `-p${DB_PASSWORD}`, '-e', `CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`],
@@ -37,10 +41,13 @@ async function main() {
   )
 
   console.log('[full-test] Step 2/3: package backend')
+  const mavenArgs = E2E_FAST
+    ? ['-f', 'backend/pom.xml', 'package', '-DskipTests']
+    : ['-f', 'backend/pom.xml', 'clean', 'package', '-DskipTests']
   if (IS_WIN) {
-    await run('cmd.exe', ['/c', 'mvn', '-f', 'backend/pom.xml', 'clean', 'package', '-DskipTests'], 'maven package')
+    await run('cmd.exe', ['/c', 'mvn', ...mavenArgs], 'maven package')
   } else {
-    await run('mvn', ['-f', 'backend/pom.xml', 'clean', 'package', '-DskipTests'], 'maven package')
+    await run('mvn', mavenArgs, 'maven package')
   }
 
   console.log('[full-test] Step 3/3: api smoke test')

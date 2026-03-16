@@ -8,8 +8,9 @@ const API_PORT = process.env.API_PORT || '18080'
 const BASE_URL = `http://127.0.0.1:${API_PORT}`
 const DB_URL = process.env.DB_URL || `jdbc:mysql://127.0.0.1:3306/${DB_NAME}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true`
 
-async function waitHealth() {
+async function waitHealth(isExited) {
   for (let i = 0; i < 150; i += 1) {
+    if (isExited()) return false
     try {
       const res = await fetch(`${BASE_URL}/api/health`)
       if (res.ok) return true
@@ -130,7 +131,7 @@ try {
   if (exited) {
     throw new Error(`backend_exited_early_${exitCode}\n${startupLog}`)
   }
-  const ready = await waitHealth()
+  const ready = await waitHealth(() => exited)
   if (!ready) {
     const exitHint = exited ? `\nbackend_exited_${exitCode}` : ''
     throw new Error(`backend_not_ready${exitHint}\n${startupLog}`)
