@@ -238,6 +238,7 @@ public class I18nService {
         en.put("quote_only_draft_editable", "only draft quote can be edited");
         en.put("quote_status_transition_invalid", "quote status transition is invalid");
         en.put("quote_not_accepted", "quote must be approved or accepted before conversion");
+        en.put("quote_stage_gate_requires_approval", "stage gate requires quote status APPROVED before conversion");
         en.put("quotes_listed", "quotes loaded");
         en.put("quote_created", "quote created");
         en.put("quote_updated", "quote updated");
@@ -479,6 +480,7 @@ public class I18nService {
         zh.put("quote_only_draft_editable", "\u53ea\u6709\u8349\u7a3f\u62a5\u4ef7\u53ef\u7f16\u8f91");
         zh.put("quote_status_transition_invalid", "\u62a5\u4ef7\u72b6\u6001\u6d41\u8f6c\u4e0d\u5408\u6cd5");
         zh.put("quote_not_accepted", "\u62a5\u4ef7\u9700\u5148\u5ba1\u6279/\u63a5\u53d7\u624d\u80fd\u8f6c\u8ba2\u5355");
+        zh.put("quote_stage_gate_requires_approval", "\u9636\u6bb5\u95e8\u7981\u6a21\u5f0f\u4e0b\uff0c\u62a5\u4ef7\u5fc5\u987b\u4e3a APPROVED \u624d\u53ef\u8f6c\u8ba2\u5355");
         zh.put("quotes_listed", "\u62a5\u4ef7\u5217\u8868\u52a0\u8f7d\u6210\u529f");
         zh.put("quote_created", "\u62a5\u4ef7\u521b\u5efa\u6210\u529f");
         zh.put("quote_updated", "\u62a5\u4ef7\u66f4\u65b0\u6210\u529f");

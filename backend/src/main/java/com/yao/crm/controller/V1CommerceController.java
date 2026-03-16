@@ -14,6 +14,7 @@ import com.yao.crm.entity.Product;
 import com.yao.crm.entity.Quote;
 import com.yao.crm.entity.QuoteItem;
 import com.yao.crm.entity.QuoteVersion;
+import com.yao.crm.entity.Tenant;
 import com.yao.crm.repository.ContractRecordRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.OpportunityRepository;
@@ -28,6 +29,7 @@ import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.repository.QuoteItemRepository;
 import com.yao.crm.repository.QuoteRepository;
 import com.yao.crm.repository.QuoteVersionRepository;
+import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,6 +70,7 @@ public class V1CommerceController extends BaseApiController {
     private final ApprovalInstanceRepository approvalInstanceRepository;
     private final ApprovalTaskRepository approvalTaskRepository;
     private final ApprovalEventRepository approvalEventRepository;
+    private final TenantRepository tenantRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -85,6 +88,7 @@ public class V1CommerceController extends BaseApiController {
                                 ApprovalInstanceRepository approvalInstanceRepository,
                                 ApprovalTaskRepository approvalTaskRepository,
                                 ApprovalEventRepository approvalEventRepository,
+                                TenantRepository tenantRepository,
                                 AuditLogService auditLogService,
                                 I18nService i18nService) {
         super(i18nService);
@@ -102,6 +106,7 @@ public class V1CommerceController extends BaseApiController {
         this.approvalInstanceRepository = approvalInstanceRepository;
         this.approvalTaskRepository = approvalTaskRepository;
         this.approvalEventRepository = approvalEventRepository;
+        this.tenantRepository = tenantRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -494,6 +499,7 @@ public class V1CommerceController extends BaseApiController {
         if (!"DRAFT".equalsIgnoreCase(quote.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "quote_status_transition_invalid", msg(request, "quote_status_transition_invalid"), null));
         }
+        String approvalMode = resolveApprovalMode(tenantId);
         List<QuoteItem> rows = quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(tenantId, quote.getId());
         boolean triggerByAmount = (quote.getTotalAmount() == null ? 0L : quote.getTotalAmount()) >= 500000L;
         boolean triggerByDiscount = false;
@@ -503,7 +509,7 @@ public class V1CommerceController extends BaseApiController {
                 break;
             }
         }
-        boolean approvalTriggered = triggerByAmount || triggerByDiscount;
+        boolean approvalTriggered = "STAGE_GATE".equals(approvalMode) || triggerByAmount || triggerByDiscount;
         String approvalInstanceId = "";
         if (approvalTriggered) {
             ApprovalInstance instance = createQuoteApprovalInstance(request, quote);
@@ -517,8 +523,9 @@ public class V1CommerceController extends BaseApiController {
         Map<String, Object> body = toQuoteView(quote, false);
         body.put("approvalTriggered", approvalTriggered);
         body.put("approvalInstanceId", approvalInstanceId);
-        body.put("approvalReason", approvalTriggered ? (triggerByAmount ? "AMOUNT" : "DISCOUNT") : "NONE");
-        auditLogService.record(currentUser(request), currentRole(request), "SUBMIT", "QUOTE", quote.getId(), approvalTriggered ? "submit with approval trigger" : "submit without approval trigger", tenantId);
+        body.put("approvalReason", approvalTriggered ? ("STAGE_GATE".equals(approvalMode) ? "STAGE_GATE" : (triggerByAmount ? "AMOUNT" : "DISCOUNT")) : "NONE");
+        body.put("approvalMode", approvalMode);
+        auditLogService.record(currentUser(request), currentRole(request), "SUBMIT", "QUOTE", quote.getId(), approvalTriggered ? ("submit with approval trigger (" + approvalMode + ")") : "submit without approval trigger", tenantId);
         return ResponseEntity.ok(successWithFields(request, "quote_submitted", body));
     }
 
@@ -541,7 +548,15 @@ public class V1CommerceController extends BaseApiController {
         if (isSalesScoped(request) && !ownerMatchesScope(request, quote.getOwner())) {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
-        if (!"ACCEPTED".equalsIgnoreCase(quote.getStatus()) && !"APPROVED".equalsIgnoreCase(quote.getStatus())) {
+        String approvalMode = resolveApprovalMode(tenantId);
+        if ("STAGE_GATE".equals(approvalMode) && !"APPROVED".equalsIgnoreCase(quote.getStatus())) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("requiredStatus", "APPROVED");
+            details.put("currentStatus", quote.getStatus());
+            details.put("approvalMode", approvalMode);
+            return ResponseEntity.status(409).body(errorBody(request, "quote_stage_gate_requires_approval", msg(request, "quote_stage_gate_requires_approval"), details));
+        }
+        if (!"STAGE_GATE".equals(approvalMode) && !"ACCEPTED".equalsIgnoreCase(quote.getStatus()) && !"APPROVED".equalsIgnoreCase(quote.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "quote_not_accepted", msg(request, "quote_not_accepted"), null));
         }
         OrderRecord order = new OrderRecord();
@@ -564,7 +579,17 @@ public class V1CommerceController extends BaseApiController {
         body.put("orderStatus", saved.getStatus());
         body.put("sourceQuoteId", quote.getId());
         body.put("sourceQuoteStatus", quote.getStatus());
+        body.put("approvalMode", approvalMode);
         return ResponseEntity.status(201).body(successWithFields(request, "quote_order_created", body));
+    }
+
+    private String resolveApprovalMode(String tenantId) {
+        Optional<Tenant> tenantOpt = tenantRepository.findById(tenantId);
+        if (!tenantOpt.isPresent()) return "STRICT";
+        String mode = tenantOpt.get().getApprovalMode();
+        if (isBlank(mode)) return "STRICT";
+        String normalized = mode.trim().toUpperCase(Locale.ROOT);
+        return "STAGE_GATE".equals(normalized) ? "STAGE_GATE" : "STRICT";
     }
 
     @GetMapping("/orders")
