@@ -22,14 +22,23 @@ Database create command:
 mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS crm_local CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
-Windows one-click init:
+Windows one-click init (create DB + Flyway migrate + seed data):
 ```bash
 npm run db:init
+```
+
+Linux/macOS:
+```bash
+bash scripts/init-db.sh root root crm_local
 ```
 
 ## 3. Run Backend (Java)
 ```bash
 mvn -f backend/pom.xml spring-boot:run
+```
+Windows recommended startup (auto cleanup invalid build folder + release 8080 + run):
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1
 ```
 Backend URL:
 - `http://localhost:8080`
@@ -121,6 +130,12 @@ npm run test:full
   - `POST /api/v1/auth/mfa/verify`
   - `POST /api/v1/auth/invitations/accept`
   - `POST /api/v1/auth/oidc/callback`
+  - Success example (`POST /api/v1/auth/invitations/accept`, HTTP 201):
+    - `{ "code": "invitation_accepted", "message": "...", "requestId": "...", "details": {}, "tenantId": "...", "username": "...", "displayName": "..." }`
+  - Success example (`POST /api/v1/approval/templates`, HTTP 201):
+    - `{ "code": "approval_template_created", "message": "...", "requestId": "...", "details": {}, "id": "...", "tenantId": "...", "bizType": "...", "status": "PUBLISHED" }`
+  - Success example (`GET /api/v1/integrations/notifications/jobs`, HTTP 200):
+    - `{ "code": "notification_jobs_listed", "message": "...", "requestId": "...", "details": {}, "items": [], "page": 1, "size": 20, "totalPages": 1, "total": 0 }`
 
 - User Admin / Invitation:
   - `GET /api/v1/admin/users`
@@ -154,9 +169,22 @@ npm run test:full
   - `GET /api/v1/reports/export-jobs/{jobId}/download`
 
 ## 7. Notes
+- IDE startup quick troubleshooting:
+  - Maven Reload/Reimport project in IDEA.
+  - Ensure runtime classpath contains both `flyway-core` and `flyway-mysql`.
+  - Verify dependency tree includes MySQL extension:
+    - `mvn -f backend/pom.xml dependency:tree | findstr flyway`
+  - If you ever see `backend/${project.build.directory}`, delete it and rebuild:
+    - `mvn -f backend/pom.xml clean compile -DskipTests`
+  - If IDEA still throws `Unsupported Database: MySQL 8.0`, run once by Maven to sync runtime:
+    - `mvn -f backend/pom.xml spring-boot:run`
+  - If `8080` is in use, stop old process:
+    - `netstat -ano | findstr :8080`
+    - `taskkill /PID <pid> /F`
 - Backend schema is versioned by Flyway migrations (`backend/src/main/resources/db/migration/V*.sql`).
 - `dev/test/prod` are split by Spring profiles; `test/prod` do not allow schema drift by Hibernate DDL.
 - Backend startup includes Flyway state guard and will fail fast on invalid migration states.
+- Backend startup also performs datasource precheck and fails with readable error if DB is unreachable.
 - Backend auto seeds initial data when tables are empty.
 - Backend also seeds users:
   - `admin / admin123` (role: `ADMIN`)
