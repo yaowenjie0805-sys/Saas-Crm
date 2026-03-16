@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 
 const DB_USER = process.env.DB_USER || 'root'
 const DB_PASSWORD = process.env.DB_PASSWORD || 'root'
-const DB_NAME = process.env.DB_NAME || 'crm_local'
+const DB_NAME = process.env.DB_NAME || 'crm_local_e2e'
 const IS_WIN = process.platform === 'win32'
 
 function run(cmd, args, label) {
@@ -25,6 +25,11 @@ function run(cmd, args, label) {
 
 async function main() {
   console.log('[full-test] Step 1/3: init database')
+  await run(
+    IS_WIN ? 'mysql.exe' : 'mysql',
+    [`-u${DB_USER}`, `-p${DB_PASSWORD}`, '-e', `DROP DATABASE IF EXISTS ${DB_NAME};`],
+    'mysql drop db'
+  )
   await run(
     IS_WIN ? 'mysql.exe' : 'mysql',
     [`-u${DB_USER}`, `-p${DB_PASSWORD}`, '-e', `CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`],

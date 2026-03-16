@@ -1,22 +1,24 @@
 package com.yao.crm.config;
 
+import com.yao.crm.entity.AuditLog;
 import com.yao.crm.entity.Contact;
 import com.yao.crm.entity.ContractRecord;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.entity.FollowUp;
-import com.yao.crm.entity.OrderRecord;
 import com.yao.crm.entity.Opportunity;
+import com.yao.crm.entity.OrderRecord;
 import com.yao.crm.entity.PaymentRecord;
 import com.yao.crm.entity.Product;
 import com.yao.crm.entity.Quote;
 import com.yao.crm.entity.QuoteItem;
 import com.yao.crm.entity.TaskItem;
+import com.yao.crm.entity.Tenant;
 import com.yao.crm.entity.UserAccount;
+import com.yao.crm.repository.AuditLogRepository;
 import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.ContractRecordRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.FollowUpRepository;
-import com.yao.crm.repository.AuditLogRepository;
 import com.yao.crm.repository.OpportunityRepository;
 import com.yao.crm.repository.OrderRecordRepository;
 import com.yao.crm.repository.PaymentRecordRepository;
@@ -56,9 +58,9 @@ public class DataInitializer {
                                       ValueNormalizerService valueNormalizerService) {
         return args -> {
             if (!tenantRepository.existsById("tenant_default")) {
-                com.yao.crm.entity.Tenant tenant = new com.yao.crm.entity.Tenant();
+                Tenant tenant = new Tenant();
                 tenant.setId("tenant_default");
-                tenant.setName("默认租户");
+                tenant.setName("Default Tenant");
                 tenant.setStatus("ACTIVE");
                 tenant.setQuotaUsers(100);
                 tenant.setTimezone("Asia/Shanghai");
@@ -74,60 +76,60 @@ public class DataInitializer {
             }
 
             if (customerRepository.count() == 0) {
-                customerRepository.save(makeCustomer("c_1001", "华景制造", "王凌", "A级客户", 320000L, "Active"));
-                customerRepository.save(makeCustomer("c_1002", "凌峰医疗", "赵宁", "续约客户", 210000L, "Pending"));
-                customerRepository.save(makeCustomer("c_1003", "启光科技", "陈曦", "新线索", 98000L, "Pending"));
-                customerRepository.save(makeCustomer("c_1004", "蓝图物流", "李军", "高潜客户", 450000L, "Active"));
+                customerRepository.save(makeCustomer("c_1001", "HuaJing Manufacturing", "wang", "A", 320000L, "Active"));
+                customerRepository.save(makeCustomer("c_1002", "LingFeng Medical", "zhao", "Renewal", 210000L, "Pending"));
+                customerRepository.save(makeCustomer("c_1003", "QiGuang Tech", "chen", "New", 98000L, "Pending"));
+                customerRepository.save(makeCustomer("c_1004", "BlueMap Logistics", "li", "HighPotential", 450000L, "Active"));
             }
 
             if (opportunityRepository.count() == 0) {
-                opportunityRepository.save(makeOpportunity("o_2001", "Lead", 76, 420000L, 80, "陈曦"));
-                opportunityRepository.save(makeOpportunity("o_2002", "Qualified", 54, 360000L, 64, "赵宁"));
-                opportunityRepository.save(makeOpportunity("o_2003", "Proposal", 31, 530000L, 48, "陈曦"));
-                opportunityRepository.save(makeOpportunity("o_2004", "Negotiation", 15, 290000L, 28, "李军"));
-                opportunityRepository.save(makeOpportunity("o_2005", "Closed Won", 9, 260000L, 20, "陈曦"));
+                opportunityRepository.save(makeOpportunity("o_2001", "Lead", 76, 420000L, 80, "chen"));
+                opportunityRepository.save(makeOpportunity("o_2002", "Qualified", 54, 360000L, 64, "zhao"));
+                opportunityRepository.save(makeOpportunity("o_2003", "Proposal", 31, 530000L, 48, "chen"));
+                opportunityRepository.save(makeOpportunity("o_2004", "Negotiation", 15, 290000L, 28, "li"));
+                opportunityRepository.save(makeOpportunity("o_2005", "Closed Won", 9, 260000L, 20, "chen"));
             }
 
             if (taskRepository.count() == 0) {
-                taskRepository.save(makeTask("t_3001", "准备方案评审材料", "今天 15:30", "High", false, "manager"));
-                taskRepository.save(makeTask("t_3002", "联系采购负责人确认预算", "今天 17:00", "Medium", false, "sales"));
-                taskRepository.save(makeTask("t_3003", "更新季度销售分析", "明天 10:00", "High", false, "admin"));
+                taskRepository.save(makeTask("t_3001", "Prepare proposal review", "today 15:30", "High", false, "manager"));
+                taskRepository.save(makeTask("t_3002", "Confirm budget with purchaser", "today 17:00", "Medium", false, "sales"));
+                taskRepository.save(makeTask("t_3003", "Refresh quarterly sales analysis", "tomorrow 10:00", "High", false, "admin"));
             }
 
             if (followUpRepository.count() == 0) {
-                followUpRepository.save(makeFollowUp("f_4001", "c_1001", "admin", "客户要求确认最终合同条款", "Phone", "Pending", null));
-                followUpRepository.save(makeFollowUp("f_4002", "c_1002", "sales", "已发送修订报价与实施排期", "Email", "Waiting Feedback", null));
+                followUpRepository.save(makeFollowUp("f_4001", "c_1001", "admin", "Confirm final contract clauses", "Phone", "Pending", null));
+                followUpRepository.save(makeFollowUp("f_4002", "c_1002", "sales", "Sent revised quotation and rollout plan", "Email", "Waiting Feedback", null));
             }
 
             if (contactRepository.count() == 0) {
-                contactRepository.save(makeContact("ct_5001", "c_1001", "周凯", "采购总监", "13800138001", "zhoukai@huajing.com", "王凌"));
-                contactRepository.save(makeContact("ct_5002", "c_1002", "刘敏", "IT经理", "13800138002", "liumin@lingfeng.com", "赵宁"));
+                contactRepository.save(makeContact("ct_5001", "c_1001", "Zhou Kai", "Procurement Director", "13800138001", "zhoukai@huajing.com", "wang"));
+                contactRepository.save(makeContact("ct_5002", "c_1002", "Liu Min", "IT Manager", "13800138002", "liumin@lingfeng.com", "zhao"));
             }
 
             if (contractRepository.count() == 0) {
-                contractRepository.save(makeContract("cr_6001", "c_1001", "CT-2026001", "数字化升级项目合同", 180000L, "Draft", LocalDate.now().minusDays(12), "王凌"));
-                contractRepository.save(makeContract("cr_6002", "c_1002", "CT-2026002", "医院数据集成合同", 260000L, "Signed", LocalDate.now().minusDays(25), "赵宁"));
+                contractRepository.save(makeContract("cr_6001", "c_1001", "CT-2026001", "Digital Upgrade Project", 180000L, "Draft", LocalDate.now().minusDays(12), "wang"));
+                contractRepository.save(makeContract("cr_6002", "c_1002", "CT-2026002", "Data Integration", 260000L, "Signed", LocalDate.now().minusDays(25), "zhao"));
             }
 
             if (paymentRepository.count() == 0) {
-                paymentRepository.save(makePayment("pm_7001", "c_1002", "cr_6002", 120000L, LocalDate.now().minusDays(5), "Bank", "Received", "一期回款", "赵宁"));
-                paymentRepository.save(makePayment("pm_7002", "c_1001", "cr_6001", 0L, null, "Bank", "Pending", "待合同签署后回款", "王凌"));
+                paymentRepository.save(makePayment("pm_7001", "c_1002", "cr_6002", 120000L, LocalDate.now().minusDays(5), "Bank", "Received", "Phase 1 payment", "zhao"));
+                paymentRepository.save(makePayment("pm_7002", "c_1001", "cr_6001", 0L, null, "Bank", "Pending", "Pending after contract sign", "wang"));
             }
 
             if (productRepository.count() == 0) {
-                productRepository.save(makeProduct("prd_8001", "SKU-CRM-001", "企业CRM许可", "软件", 120000L, 0.06, "CNY"));
-                productRepository.save(makeProduct("prd_8002", "SKU-SRV-001", "实施服务", "服务", 80000L, 0.06, "CNY"));
+                productRepository.save(makeProduct("prd_8001", "SKU-CRM-001", "CRM License", "Software", 120000L, 0.06, "CNY"));
+                productRepository.save(makeProduct("prd_8002", "SKU-SRV-001", "Implementation Service", "Service", 80000L, 0.06, "CNY"));
             }
 
             if (quoteRepository.count() == 0) {
-                quoteRepository.save(makeQuote("qt_9001", "QT-2026001", "c_1001", "o_2001", "王凌", "APPROVED", 200000L, 12000L, 212000L));
+                quoteRepository.save(makeQuote("qt_9001", "QT-2026001", "c_1001", "o_2001", "wang", "APPROVED", 200000L, 12000L, 212000L));
             }
             if (quoteItemRepository.count() == 0) {
-                quoteItemRepository.save(makeQuoteItem("qti_9001", "qt_9001", "prd_8001", "企业CRM许可", 1, 120000L, 0.0, 0.06, 120000L, 7200L, 127200L));
-                quoteItemRepository.save(makeQuoteItem("qti_9002", "qt_9001", "prd_8002", "实施服务", 1, 80000L, 0.0, 0.06, 80000L, 4800L, 84800L));
+                quoteItemRepository.save(makeQuoteItem("qti_9001", "qt_9001", "prd_8001", "CRM License", 1, 120000L, 0.0, 0.06, 120000L, 7200L, 127200L));
+                quoteItemRepository.save(makeQuoteItem("qti_9002", "qt_9001", "prd_8002", "Implementation Service", 1, 80000L, 0.0, 0.06, 80000L, 4800L, 84800L));
             }
             if (orderRecordRepository.count() == 0) {
-                orderRecordRepository.save(makeOrder("ord_9101", "ORD-2026001", "c_1001", "o_2001", "qt_9001", "王凌", "FULFILLING", 212000L));
+                orderRecordRepository.save(makeOrder("ord_9101", "ORD-2026001", "c_1001", "o_2001", "qt_9001", "wang", "FULFILLING", 212000L));
             }
 
             paymentRepository.findById("pm_7001").ifPresent(payment -> {
@@ -137,12 +139,13 @@ public class DataInitializer {
                 }
             });
 
-            upsertUser(userAccountRepository, passwordEncoder, "u_admin", "admin", "admin123", "ADMIN", "系统管理员", "");
-            upsertUser(userAccountRepository, passwordEncoder, "u_manager", "manager", "manager123", "MANAGER", "销售经理", "");
-            upsertUser(userAccountRepository, passwordEncoder, "u_sales", "sales", "sales123", "SALES", "销售顾问", "陈曦");
-            upsertUser(userAccountRepository, passwordEncoder, "u_analyst", "analyst", "analyst123", "ANALYST", "数据分析师", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_admin", "admin", "admin123", "ADMIN", "System Admin", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_manager", "manager", "manager123", "MANAGER", "Sales Manager", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_sales", "sales", "sales123", "SALES", "Sales Rep", "sales");
+            upsertUser(userAccountRepository, passwordEncoder, "u_analyst", "analyst", "analyst123", "ANALYST", "Data Analyst", "");
 
-            normalizeLegacyValues(customerRepository, opportunityRepository, contractRepository, paymentRepository, followUpRepository, contactRepository, taskRepository, auditLogRepository, valueNormalizerService);
+            normalizeLegacyValues(customerRepository, opportunityRepository, contractRepository, paymentRepository,
+                    followUpRepository, contactRepository, taskRepository, auditLogRepository, valueNormalizerService);
         };
     }
 
@@ -153,7 +156,7 @@ public class DataInitializer {
                                        FollowUpRepository followUpRepository,
                                        ContactRepository contactRepository,
                                        TaskRepository taskRepository,
-                                       com.yao.crm.repository.AuditLogRepository auditLogRepository,
+                                       AuditLogRepository auditLogRepository,
                                        ValueNormalizerService normalizer) {
         for (Customer customer : customerRepository.findAll()) {
             String normalized = normalizer.normalizeCustomerStatus(customer.getStatus());
@@ -245,7 +248,7 @@ public class DataInitializer {
                 taskRepository.save(task);
             }
         }
-        for (com.yao.crm.entity.AuditLog audit : auditLogRepository.findAll()) {
+        for (AuditLog audit : auditLogRepository.findAll()) {
             if (isBlank(audit.getTenantId())) {
                 audit.setTenantId("tenant_default");
                 auditLogRepository.save(audit);
@@ -458,4 +461,3 @@ public class DataInitializer {
         return value == null || value.trim().isEmpty();
     }
 }
-
