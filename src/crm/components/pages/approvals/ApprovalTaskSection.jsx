@@ -25,7 +25,8 @@ function ApprovalTaskSection({ t, approvals, refreshApprovals, formatDateTime })
     <>
       {approvals.actionResult && (
         <div className="info-banner" style={{ marginTop: 8 }}>
-          {`${t('status')}: ${approvals.actionResult.action || '-'} | ${t('idLabel')}: ${approvals.actionResult.taskId || '-'} | requestId: ${approvals.actionResult.requestId || '-'}`}
+          {`${t('status')}: ${approvals.actionResult.action || '-'} / ${approvals.actionResult.result || '-'} | ${t('idLabel')}: ${approvals.actionResult.taskId || '-'} | ${t('requestIdLabel')}: ${approvals.actionResult.requestId || '-'}`}
+          {approvals.actionResult.errorCode ? ` | code: ${approvals.actionResult.errorCode}` : ''}
           {approvals.actionResult.bizType && ` | ${approvals.actionResult.bizType}:${approvals.actionResult.bizId} -> ${approvals.actionResult.bizStatus || '-'}`}
         </div>
       )}

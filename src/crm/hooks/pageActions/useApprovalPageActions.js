@@ -68,6 +68,29 @@ export function useApprovalPageActions(params) {
     return requestId ? `${message} [${requestId}]` : message
   }
 
+  const refreshApprovalViews = async (instanceId = '') => {
+    await loadApprovalStats()
+    await loadApprovalTasks()
+    await loadApprovalInstances()
+    const nextDetailId = String(instanceId || approvalDetail?.id || '').trim()
+    if (nextDetailId) {
+      await loadApprovalDetail(nextDetailId)
+    }
+  }
+
+  const setActionResultFromError = (taskId, action, err) => {
+    const requestId = String(err?.requestId || '').trim()
+    const code = String(err?.code || '').trim().toLowerCase()
+    setApprovalActionResult({
+      action: String(action || '').toUpperCase(),
+      taskId,
+      result: code === 'approval_task_closed' ? 'CONFLICT' : 'FAILED',
+      instanceId: String(approvalDetail?.id || '').trim(),
+      requestId,
+      errorCode: code || '',
+    })
+  }
+
   const createApprovalTemplate = async () => {
     try {
       await api('/v1/approval/templates', {
@@ -142,10 +165,7 @@ export function useApprovalPageActions(params) {
       const payload = { comment: approvalActionComment }
       if (action === 'transfer') payload.transferTo = approvalTransferTo
       const result = await api('/v1/approval/tasks/' + taskId + '/' + action, { method: 'POST', body: JSON.stringify(payload) }, auth.token, lang)
-      await loadApprovalStats()
-      await loadApprovalTasks()
-      await loadApprovalInstances()
-      if (result?.instance?.id) await loadApprovalDetail(result.instance.id)
+      await refreshApprovalViews(result?.instance?.id || '')
       setApprovalActionResult({
         action: String(action || '').toUpperCase(),
         taskId,
@@ -160,10 +180,8 @@ export function useApprovalPageActions(params) {
       if (action === 'transfer') setApprovalTransferTo('')
     } catch (err) {
       setError(withRequestId(err))
-      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') {
-        await loadApprovalTasks()
-        if (approvalDetail?.id) await loadApprovalDetail(approvalDetail.id)
-      }
+      setActionResultFromError(taskId, action, err)
+      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') await refreshApprovalViews()
       handleError(err)
     } finally {
       setTaskPending(taskId, false)
@@ -175,10 +193,8 @@ export function useApprovalPageActions(params) {
     setTaskPending(taskId, true)
     try {
       const result = await api('/v1/approval/tasks/' + taskId + '/urge', { method: 'POST', body: JSON.stringify({ comment: approvalActionComment, urgeChannel: 'IN_APP' }) }, auth.token, lang)
-      await loadApprovalStats()
-      await loadApprovalTasks()
+      await refreshApprovalViews(result?.instance?.id || '')
       await loadNotificationJobs()
-      if (result?.instance?.id) await loadApprovalDetail(result.instance.id)
       setApprovalActionResult({
         action: 'URGE',
         taskId,
@@ -189,10 +205,8 @@ export function useApprovalPageActions(params) {
       setApprovalActionComment('')
     } catch (err) {
       setError(withRequestId(err))
-      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') {
-        await loadApprovalTasks()
-        if (approvalDetail?.id) await loadApprovalDetail(approvalDetail.id)
-      }
+      setActionResultFromError(taskId, 'urge', err)
+      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') await refreshApprovalViews()
       handleError(err)
     } finally {
       setTaskPending(taskId, false)
