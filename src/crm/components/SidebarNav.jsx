@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
+import { translateRole } from '../shared'
 
 const ICONS = {
   dashboard: 'DB',
@@ -9,17 +10,16 @@ const ICONS = {
   payments: 'PM',
   followUps: 'FU',
   tasks: 'TK',
-  approvals: 'AP',
-  reports: 'RP',
   audit: 'AU',
   permissions: 'PR',
   usersAdmin: 'UG',
-  adminTenants: 'TN',
 }
 
-function SidebarNav({ auth, navGroups, activePage, onNavigate, saveAuth, t }) {
+function SidebarNav({ auth, navGroups, activePage, onNavigate, onPrefetch, onLogout, t }) {
   const [collapsed, setCollapsed] = useState({})
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth > 900))
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(() =>
+    typeof window === 'undefined' ? true : window.innerWidth > 900
+  )
   const orderedGroups = useMemo(() => Object.entries(navGroups || {}), [navGroups])
 
   const toggleGroup = (groupName) => {
@@ -28,11 +28,13 @@ function SidebarNav({ auth, navGroups, activePage, onNavigate, saveAuth, t }) {
 
   const navigateAndCloseIfMobile = (key) => {
     onNavigate(key)
-    if (typeof window !== 'undefined' && window.innerWidth <= 900) setMobileMenuOpen(false)
+    if (typeof window !== 'undefined' && window.innerWidth <= 900) {
+      setMobileMenuOpen(false)
+    }
   }
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" data-testid="app-sidebar">
       <div className="sidebar-head">
         <div className="brand-wrap">
           <div className="brand-mark">A</div>
@@ -46,9 +48,9 @@ function SidebarNav({ auth, navGroups, activePage, onNavigate, saveAuth, t }) {
           aria-label={mobileMenuOpen ? t('menuClose') : t('menuOpen')}
           onClick={() => setMobileMenuOpen((v) => !v)}
         >
-          {mobileMenuOpen ? 'Close' : 'Menu'}
+          {mobileMenuOpen ? t('menuClose') : t('menuOpen')}
         </button>
-        <div className="role-pill">{auth.displayName} | {auth.role}</div>
+        <div className="role-pill" data-testid="account-pill">{auth.displayName} | {translateRole(t, auth.role)}</div>
       </div>
 
       <nav className={`menu grouped ${mobileMenuOpen ? 'mobile-open' : ''}`}>
@@ -58,15 +60,16 @@ function SidebarNav({ auth, navGroups, activePage, onNavigate, saveAuth, t }) {
             <section key={groupName} className="menu-group">
               <button className="menu-group-toggle" onClick={() => toggleGroup(groupName)}>
                 <span className="menu-group-title">{groupName}</span>
-                <span className={`menu-group-arrow ${isCollapsed ? 'collapsed' : ''}`}>▾</span>
+                <span className={`menu-group-arrow ${isCollapsed ? 'collapsed' : ''}`}>▼</span>
               </button>
               {!isCollapsed && (
                 <div className="menu-items">
                   {groupItems.map((item) => (
                     <button
                       key={item.key}
+                      data-testid={`nav-${item.key}`}
                       className={activePage === item.key ? 'active' : ''}
-                      onClick={() => navigateAndCloseIfMobile(item.key)}
+                      onMouseEnter={() => onPrefetch?.(item.key)} onFocus={() => onPrefetch?.(item.key)} onClick={() => navigateAndCloseIfMobile(item.key)}
                     >
                       <span className="menu-icon">{ICONS[item.key] || '--'}</span>
                       <span>{item.label}</span>
@@ -79,10 +82,7 @@ function SidebarNav({ auth, navGroups, activePage, onNavigate, saveAuth, t }) {
         })}
       </nav>
 
-      <button
-        className={`logout-btn ${mobileMenuOpen ? '' : 'mobile-hidden'}`}
-        onClick={() => saveAuth(null)}
-      >
+      <button className="logout-btn" onClick={onLogout}>
         {t('logout')}
       </button>
     </aside>
@@ -90,3 +90,5 @@ function SidebarNav({ auth, navGroups, activePage, onNavigate, saveAuth, t }) {
 }
 
 export default SidebarNav
+
+

@@ -5,6 +5,7 @@ import javax.validation.constraints.Min;
 public class UpdatePaymentRequest {
 
     private String contractId;
+    private String orderId;
 
     @Min(value = 0, message = "amount_gte_0")
     private Long amount;
@@ -16,6 +17,8 @@ public class UpdatePaymentRequest {
 
     public String getContractId() { return contractId; }
     public void setContractId(String contractId) { this.contractId = contractId; }
+    public String getOrderId() { return orderId; }
+    public void setOrderId(String orderId) { this.orderId = orderId; }
     public Long getAmount() { return amount; }
     public void setAmount(Long amount) { this.amount = amount; }
     public String getReceivedDate() { return receivedDate; }

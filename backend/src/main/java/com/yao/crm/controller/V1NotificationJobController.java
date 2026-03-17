@@ -37,7 +37,9 @@ public class V1NotificationJobController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         String tenantId = currentTenant(request);
-        return ResponseEntity.ok(notificationJobService.listJobsPaged(tenantId, status, page, size));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> pageBody = (Map<String, Object>) notificationJobService.listJobsPaged(tenantId, status, page, size);
+        return ResponseEntity.ok(successWithFields(request, "notification_jobs_listed", pageBody));
     }
 
     @PostMapping("/jobs/{jobId}/retry")
@@ -50,7 +52,7 @@ public class V1NotificationJobController extends BaseApiController {
         if (job == null) {
             return ResponseEntity.status(404).body(errorBody(request, "notification_job_not_found", msg(request, "notification_job_not_found"), null));
         }
-        return ResponseEntity.ok(Collections.singletonMap("jobId", job.getId()));
+        return ResponseEntity.ok(successWithFields(request, "notification_job_retried", Collections.<String, Object>singletonMap("jobId", job.getId())));
     }
 
     @PostMapping("/jobs/batch-retry")
@@ -64,7 +66,9 @@ public class V1NotificationJobController extends BaseApiController {
             return ResponseEntity.status(400).body(errorBody(request, "batch_limit_exceeded", msg(request, "batch_limit_exceeded"), details));
         }
         String tenantId = currentTenant(request);
-        return ResponseEntity.ok(notificationJobService.batchRetryByIds(tenantId, payload == null ? null : payload.getJobIds()));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) notificationJobService.batchRetryByIds(tenantId, payload == null ? null : payload.getJobIds());
+        return ResponseEntity.ok(successWithFields(request, "notification_jobs_retried", summary));
     }
 
     @PostMapping("/jobs/retry-by-filter")
@@ -80,6 +84,8 @@ public class V1NotificationJobController extends BaseApiController {
             Map<String, Object> details = Collections.<String, Object>singletonMap("maxBatchSize", batchMaxSize);
             return ResponseEntity.status(400).body(errorBody(request, "batch_limit_exceeded", msg(request, "batch_limit_exceeded"), details));
         }
-        return ResponseEntity.ok(notificationJobService.retryByFilter(tenantId, status, page, size));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) notificationJobService.retryByFilter(tenantId, status, page, size);
+        return ResponseEntity.ok(successWithFields(request, "notification_jobs_retried", summary));
     }
 }

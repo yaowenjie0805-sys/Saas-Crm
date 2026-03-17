@@ -128,7 +128,7 @@ public class ContractController extends BaseApiController {
         }
         contract.setStatus(valueNormalizerService.normalizeContractStatus(payload.getStatus()));
         if (!isBlank(payload.getSignDate())) {
-            LocalDate parsed = parseDateOrNull(payload.getSignDate());
+            LocalDate parsed = parseDateOrNull(request, payload.getSignDate());
             if (parsed == null) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
             }
@@ -189,7 +189,7 @@ public class ContractController extends BaseApiController {
             if (isBlank(patch.getSignDate())) {
                 contract.setSignDate(null);
             } else {
-                LocalDate parsed = parseDateOrNull(patch.getSignDate());
+                LocalDate parsed = parseDateOrNull(request, patch.getSignDate());
                 if (parsed == null) {
                     return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
                 }
@@ -226,13 +226,8 @@ public class ContractController extends BaseApiController {
         return "CT-" + System.currentTimeMillis();
     }
 
-    private LocalDate parseDateOrNull(String value) {
-        if (isBlank(value)) return null;
-        try {
-            return LocalDate.parse(value);
-        } catch (Exception ex) {
-            return null;
-        }
+    private LocalDate parseDateOrNull(HttpServletRequest request, String value) {
+        return parseLocalDate(request, value);
     }
 }
 

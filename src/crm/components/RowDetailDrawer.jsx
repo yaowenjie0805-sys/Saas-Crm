@@ -1,4 +1,4 @@
-﻿function RowDetailDrawer({ open, title, rows, onClose, t }) {
+function RowDetailDrawer({ open, title, rows, actions, extra, onClose, t }) {
   if (!open) return null
 
   return (
@@ -16,6 +16,16 @@
             </div>
           ))}
         </div>
+        {(actions || []).length > 0 && (
+          <div className="inline-tools" style={{ marginTop: 10 }}>
+            {actions.map((action) => (
+              <button key={action.label} className={action.className || 'mini-btn'} onClick={action.onClick}>
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {extra ? <div style={{ marginTop: 10 }}>{extra}</div> : null}
       </aside>
     </div>
   )

@@ -110,8 +110,8 @@ function MainContent({ base, permissions, users, salesAutomation, commerce, cust
 
   return (
     <main className="content">
-      <header className="topbar">
-        <div><h1>{currentPageLabel}</h1></div>
+      <header className="topbar" data-testid="topbar">
+        <div><h1 data-testid="page-title">{currentPageLabel}</h1></div>
         <div className="top-actions">
           <input className="tool-input top-search-input" placeholder={t('globalSearch')} />
           <button className="mini-btn">{t('notifications')}</button>
@@ -119,7 +119,7 @@ function MainContent({ base, permissions, users, salesAutomation, commerce, cust
             <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>ZH</button>
             <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
           </div>
-          <button className="primary-btn" onClick={() => refreshPage(activePage, 'topbar_refresh')}>{t('refresh')}</button>
+          <button className="primary-btn" data-testid="topbar-refresh" onClick={() => refreshPage(activePage, 'topbar_refresh')}>{t('refresh')}</button>
           <button className="danger-btn top-logout-btn" onClick={onLogout}>{t('logout')}</button>
           <div className="user-menu-wrap" ref={userMenuRef}>
             <button className="mini-btn account-btn" onClick={() => setUserMenuOpen((v) => !v)}>
@@ -149,6 +149,7 @@ function MainContent({ base, permissions, users, salesAutomation, commerce, cust
         onRetry={() => refreshPage(activePage, 'panel_action')}
         onBackToDashboard={backToDashboard}
       >
+        <div data-testid={`page-${activePage}`}>
         <Suspense fallback={pageSkeleton}>
         {(activePage === 'dashboard' || activePage === 'reports') && (
           <DashboardPanel
@@ -237,6 +238,7 @@ function MainContent({ base, permissions, users, salesAutomation, commerce, cust
         {activePage === 'approvals' && <ApprovalsPageContainer activePage={activePage} t={t} approvals={approvals} refreshApprovals={refreshApprovals} />}
         {activePage === 'audit' && <AuditPanel activePage={activePage} t={t} refreshPage={refreshPage} {...audit} />}
         </Suspense>
+        </div>
       </CrmErrorBoundary>
     </main>
   )

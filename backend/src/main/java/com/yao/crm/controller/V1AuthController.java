@@ -6,6 +6,7 @@ import com.yao.crm.dto.request.V1AcceptInvitationRequest;
 import com.yao.crm.dto.request.SsoLoginRequest;
 import com.yao.crm.entity.UserInvitation;
 import com.yao.crm.entity.UserAccount;
+import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.repository.UserInvitationRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.security.*;
@@ -17,8 +18,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -29,6 +30,7 @@ public class V1AuthController extends BaseApiController {
 
     private final UserAccountRepository userAccountRepository;
     private final UserInvitationRepository userInvitationRepository;
+    private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final LoginRiskService loginRiskService;
@@ -39,6 +41,7 @@ public class V1AuthController extends BaseApiController {
 
     public V1AuthController(UserAccountRepository userAccountRepository,
                             UserInvitationRepository userInvitationRepository,
+                            TenantRepository tenantRepository,
                             PasswordEncoder passwordEncoder,
                             TokenService tokenService,
                             LoginRiskService loginRiskService,
@@ -50,6 +53,7 @@ public class V1AuthController extends BaseApiController {
         super(i18nService);
         this.userAccountRepository = userAccountRepository;
         this.userInvitationRepository = userInvitationRepository;
+        this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
         this.loginRiskService = loginRiskService;
@@ -95,7 +99,11 @@ public class V1AuthController extends BaseApiController {
         invitation.setUsedAt(LocalDateTime.now());
         userInvitationRepository.save(invitation);
         auditLogService.record(user.getUsername(), user.getRole(), "INVITATION_ACCEPT", "AUTH", null, "Accepted invitation", user.getTenantId());
-        return ResponseEntity.status(201).body(Collections.singletonMap("message", msg(request, "invitation_accepted")));
+        Map<String, Object> body = successByKey(request, "invitation_accepted", null);
+        body.put("tenantId", user.getTenantId());
+        body.put("username", user.getUsername());
+        body.put("displayName", user.getDisplayName());
+        return ResponseEntity.status(201).body(body);
     }
 
     @PostMapping("/login")
@@ -133,9 +141,12 @@ public class V1AuthController extends BaseApiController {
             }
             String challengeId = mfaChallengeService.issue(user.getUsername(), user.getRole(), safeOwner(user), user.getTenantId());
             Map<String, Object> body = new HashMap<String, Object>();
+            body.put("code", "mfa_required");
+            body.put("message", msg(request, "mfa_required"));
             body.put("mfaRequired", true);
             body.put("challengeId", challengeId);
             body.put("requestId", traceId(request));
+            body.put("details", new LinkedHashMap<String, Object>());
             return ResponseEntity.status(202).body(body);
         }
 
@@ -192,15 +203,29 @@ public class V1AuthController extends BaseApiController {
         return ResponseEntity.ok(buildAuthBody(request, user, true));
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+        String username = String.valueOf(request.getAttribute("authUsername"));
+        String role = String.valueOf(request.getAttribute("authRole"));
+        String tenantId = String.valueOf(request.getAttribute("authTenantId"));
+        auditLogService.record(username, role, "LOGOUT_V1", "AUTH", null, "User logged out via v1 auth", tenantId);
+        return ResponseEntity.ok(successByKey(request, "logout_success", null));
+    }
+
     private Map<String, Object> buildAuthBody(HttpServletRequest request, UserAccount user, boolean mfaVerified) {
         String token = tokenService.createToken(user.getUsername(), user.getRole(), safeOwner(user), user.getTenantId(), mfaVerified);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = successByKey(request, "auth_success", null);
         body.put("token", token);
         body.put("username", user.getUsername());
         body.put("displayName", user.getDisplayName());
         body.put("role", user.getRole());
         body.put("ownerScope", safeOwner(user));
         body.put("tenantId", user.getTenantId());
+        String tenantDateFormat = tenantRepository.findById(user.getTenantId()).map(t -> t.getDateFormat()).orElse("yyyy-MM-dd");
+        if ("YYYY-MM-DD".equalsIgnoreCase(tenantDateFormat)) {
+            tenantDateFormat = "yyyy-MM-dd";
+        }
+        body.put("dateFormat", tenantDateFormat);
         body.put("department", user.getDepartment());
         body.put("dataScope", user.getDataScope());
         body.put("mfaVerified", mfaVerified);

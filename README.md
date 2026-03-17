@@ -78,12 +78,17 @@ API smoke test:
 npm run test:api
 ```
 
+Browser-backed frontend E2E:
+```bash
+npm run test:e2e
+```
+
 Backend automated tests:
 ```bash
 npm run test:backend
 ```
 
-One command from DB creation to API smoke test:
+One command from DB creation to browser E2E + API smoke test:
 ```bash
 npm run test:full
 ```

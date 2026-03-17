@@ -11,6 +11,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:e2e": "node scripts/run-playwright-e2e.mjs",
+    "test:e2e:runner": "playwright test",
     "test:api": "mvn -f backend/pom.xml -DskipTests package && node scripts/api-smoke-test.mjs",
     "test:backend": "mvn -f backend/pom.xml test",
     "test:full": "node scripts/local-e2e.mjs"
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

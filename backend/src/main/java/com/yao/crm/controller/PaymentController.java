@@ -4,9 +4,11 @@ import com.yao.crm.dto.request.CreatePaymentRequest;
 import com.yao.crm.dto.request.UpdatePaymentRequest;
 import com.yao.crm.entity.ContractRecord;
 import com.yao.crm.entity.Customer;
+import com.yao.crm.entity.OrderRecord;
 import com.yao.crm.entity.PaymentRecord;
 import com.yao.crm.repository.ContractRecordRepository;
 import com.yao.crm.repository.CustomerRepository;
+import com.yao.crm.repository.OrderRecordRepository;
 import com.yao.crm.repository.PaymentRecordRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
@@ -30,12 +32,14 @@ public class PaymentController extends BaseApiController {
     private final PaymentRecordRepository paymentRepository;
     private final ContractRecordRepository contractRepository;
     private final CustomerRepository customerRepository;
+    private final OrderRecordRepository orderRecordRepository;
     private final AuditLogService auditLogService;
     private final ValueNormalizerService valueNormalizerService;
 
     public PaymentController(PaymentRecordRepository paymentRepository,
                              ContractRecordRepository contractRepository,
                              CustomerRepository customerRepository,
+                             OrderRecordRepository orderRecordRepository,
                              AuditLogService auditLogService,
                              ValueNormalizerService valueNormalizerService,
                              I18nService i18nService) {
@@ -43,6 +47,7 @@ public class PaymentController extends BaseApiController {
         this.paymentRepository = paymentRepository;
         this.contractRepository = contractRepository;
         this.customerRepository = customerRepository;
+        this.orderRecordRepository = orderRecordRepository;
         this.auditLogService = auditLogService;
         this.valueNormalizerService = valueNormalizerService;
     }
@@ -61,6 +66,7 @@ public class PaymentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        final String tenantId = currentTenant(request);
 
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
@@ -69,7 +75,7 @@ public class PaymentController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<String>(Arrays.asList("customerId", "contractId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt")),
+                new HashSet<String>(Arrays.asList("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -77,6 +83,7 @@ public class PaymentController extends BaseApiController {
         final String ownerScope = currentOwnerScope(request);
         Specification<PaymentRecord> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(customerId)) {
                 predicates.add(cb.equal(root.get("customerId"), customerId));
             }
@@ -109,14 +116,15 @@ public class PaymentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String tenantId = currentTenant(request);
 
-        Optional<ContractRecord> contractOpt = contractRepository.findById(payload.getContractId());
+        Optional<ContractRecord> contractOpt = contractRepository.findByIdAndTenantId(payload.getContractId(), tenantId);
         if (!contractOpt.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "contract_not_found", "BAD_REQUEST", null));
         }
 
         ContractRecord contract = contractOpt.get();
-        Optional<Customer> customerOpt = customerRepository.findById(contract.getCustomerId());
+        Optional<Customer> customerOpt = customerRepository.findByIdAndTenantId(contract.getCustomerId(), tenantId);
         if (!customerOpt.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -128,9 +136,19 @@ public class PaymentController extends BaseApiController {
         payment.setId(newId("pm"));
         payment.setContractId(contract.getId());
         payment.setCustomerId(contract.getCustomerId());
+        if (!isBlank(payload.getOrderId())) {
+            Optional<OrderRecord> orderOpt = orderRecordRepository.findByIdAndTenantId(payload.getOrderId(), tenantId);
+            if (!orderOpt.isPresent()) {
+                return ResponseEntity.badRequest().body(legacyErrorByKey(request, "order_not_found", "BAD_REQUEST", null));
+            }
+            payment.setOrderId(orderOpt.get().getId());
+        } else {
+            payment.setOrderId(null);
+        }
+        payment.setTenantId(tenantId);
         payment.setAmount(payload.getAmount() == null ? 0L : payload.getAmount());
         if (!isBlank(payload.getReceivedDate())) {
-            LocalDate parsed = parseDateOrNull(payload.getReceivedDate());
+            LocalDate parsed = parseDateOrNull(request, payload.getReceivedDate());
             if (parsed == null) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
             }
@@ -171,8 +189,9 @@ public class PaymentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String tenantId = currentTenant(request);
 
-        Optional<PaymentRecord> optional = paymentRepository.findById(id);
+        Optional<PaymentRecord> optional = paymentRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "payment_not_found", "NOT_FOUND", null));
         }
@@ -183,12 +202,12 @@ public class PaymentController extends BaseApiController {
         }
 
         if (patch.getContractId() != null) {
-            Optional<ContractRecord> contractOpt = contractRepository.findById(patch.getContractId());
+            Optional<ContractRecord> contractOpt = contractRepository.findByIdAndTenantId(patch.getContractId(), tenantId);
             if (!contractOpt.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "contract_not_found", "BAD_REQUEST", null));
             }
             ContractRecord contract = contractOpt.get();
-            Optional<Customer> customerOpt = customerRepository.findById(contract.getCustomerId());
+            Optional<Customer> customerOpt = customerRepository.findByIdAndTenantId(contract.getCustomerId(), tenantId);
             if (!customerOpt.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
@@ -203,13 +222,24 @@ public class PaymentController extends BaseApiController {
                 payment.setOwner(customerOpt.get().getOwner());
             }
         }
+        if (patch.getOrderId() != null) {
+            if (isBlank(patch.getOrderId())) {
+                payment.setOrderId(null);
+            } else {
+                Optional<OrderRecord> orderOpt = orderRecordRepository.findByIdAndTenantId(patch.getOrderId(), tenantId);
+                if (!orderOpt.isPresent()) {
+                    return ResponseEntity.badRequest().body(legacyErrorByKey(request, "order_not_found", "BAD_REQUEST", null));
+                }
+                payment.setOrderId(orderOpt.get().getId());
+            }
+        }
 
         if (patch.getAmount() != null) payment.setAmount(patch.getAmount());
         if (patch.getReceivedDate() != null) {
             if (isBlank(patch.getReceivedDate())) {
                 payment.setReceivedDate(null);
             } else {
-                LocalDate parsed = parseDateOrNull(patch.getReceivedDate());
+                LocalDate parsed = parseDateOrNull(request, patch.getReceivedDate());
                 if (parsed == null) {
                     return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
                 }
@@ -240,8 +270,9 @@ public class PaymentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String tenantId = currentTenant(request);
 
-        if (!paymentRepository.existsById(id)) {
+        if (!paymentRepository.existsByIdAndTenantId(id, tenantId)) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "payment_not_found", "NOT_FOUND", null));
         }
 
@@ -254,13 +285,8 @@ public class PaymentController extends BaseApiController {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
 
-    private LocalDate parseDateOrNull(String value) {
-        if (isBlank(value)) return null;
-        try {
-            return LocalDate.parse(value);
-        } catch (Exception ex) {
-            return null;
-        }
+    private LocalDate parseDateOrNull(HttpServletRequest request, String value) {
+        return parseLocalDate(request, value);
     }
 }
 

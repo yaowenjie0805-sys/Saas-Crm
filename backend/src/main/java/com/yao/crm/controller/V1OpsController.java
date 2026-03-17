@@ -1,9 +1,12 @@
 package com.yao.crm.controller;
 
 import com.yao.crm.entity.ApprovalTask;
+import com.yao.crm.entity.LeadImportJob;
 import com.yao.crm.entity.NotificationJob;
 import com.yao.crm.repository.ApprovalTaskRepository;
+import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.NotificationJobRepository;
+import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.NotificationJobScheduler;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,12 +36,16 @@ public class V1OpsController extends BaseApiController {
     private final NotificationJobScheduler notificationJobScheduler;
     private final ApprovalTaskRepository approvalTaskRepository;
     private final NotificationJobRepository notificationJobRepository;
+    private final LeadImportJobRepository leadImportJobRepository;
+    private final TenantRepository tenantRepository;
     private final String webhookProviders;
 
     public V1OpsController(DataSource dataSource,
                            NotificationJobScheduler notificationJobScheduler,
                            ApprovalTaskRepository approvalTaskRepository,
                            NotificationJobRepository notificationJobRepository,
+                           LeadImportJobRepository leadImportJobRepository,
+                           TenantRepository tenantRepository,
                            @Value("${integration.webhooks.providers:}") String webhookProviders,
                            I18nService i18nService) {
         super(i18nService);
@@ -42,6 +53,8 @@ public class V1OpsController extends BaseApiController {
         this.notificationJobScheduler = notificationJobScheduler;
         this.approvalTaskRepository = approvalTaskRepository;
         this.notificationJobRepository = notificationJobRepository;
+        this.leadImportJobRepository = leadImportJobRepository;
+        this.tenantRepository = tenantRepository;
         this.webhookProviders = webhookProviders == null ? "" : webhookProviders;
     }
 
@@ -60,7 +73,7 @@ public class V1OpsController extends BaseApiController {
         out.put("webhookProviders", webhookProviders);
         out.put("webhookConfigured", !webhookProviders.trim().isEmpty());
         out.put("status", "UP");
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(successWithFields(request, "ops_health_loaded", out));
     }
 
     @GetMapping("/metrics/summary")
@@ -91,8 +104,80 @@ public class V1OpsController extends BaseApiController {
         out.put("notificationRetry", notifyRetry);
         out.put("notificationSuccessRate", successRate);
         out.put("notificationRetryDistribution", retryBuckets);
+        out.put("importMetrics", buildImportMetrics(tenantId));
         out.put("scheduler", schedulerHealth());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(successWithFields(request, "ops_metrics_loaded", out));
+    }
+
+    private Map<String, Object> buildImportMetrics(String tenantId) {
+        String timezone = tenantRepository.findById(tenantId).map(t -> t.getTimezone()).orElse("");
+        ZoneId zoneId;
+        try {
+            zoneId = (timezone == null || timezone.trim().isEmpty()) ? ZoneId.systemDefault() : ZoneId.of(timezone.trim());
+        } catch (Exception ex) {
+            zoneId = ZoneId.systemDefault();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        ZonedDateTime zoneNow = ZonedDateTime.now(zoneId);
+        LocalDateTime from = zoneNow.minusHours(24).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+        List<LeadImportJob> allJobs = leadImportJobRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        List<LeadImportJob> jobs = new ArrayList<LeadImportJob>();
+        for (LeadImportJob row : allJobs) {
+            if (row.getCreatedAt() != null && !row.getCreatedAt().isBefore(from)) {
+                jobs.add(row);
+            }
+        }
+
+        long total = jobs.size();
+        long running = jobs.stream().filter(j -> "PENDING".equalsIgnoreCase(j.getStatus()) || "RUNNING".equalsIgnoreCase(j.getStatus())).count();
+        long success = jobs.stream().filter(j -> "SUCCESS".equalsIgnoreCase(j.getStatus())).count();
+        long partial = jobs.stream().filter(j -> "PARTIAL_SUCCESS".equalsIgnoreCase(j.getStatus())).count();
+        long failed = jobs.stream().filter(j -> "FAILED".equalsIgnoreCase(j.getStatus())).count();
+        long canceled = jobs.stream().filter(j -> "CANCELED".equalsIgnoreCase(j.getStatus())).count();
+
+        long completed = success + partial + failed + canceled;
+        double successRate = completed == 0 ? 1.0 : ((double) (success + partial) / (double) completed);
+        double failureRate = completed == 0 ? 0.0 : ((double) failed / (double) completed);
+        long processedRows = jobs.stream().mapToLong(j -> j.getProcessedRows() == null ? 0 : j.getProcessedRows()).sum();
+        long failedRows = jobs.stream().mapToLong(j -> j.getFailCount() == null ? 0 : j.getFailCount()).sum();
+
+        List<Long> durations = new ArrayList<Long>();
+        for (LeadImportJob row : jobs) {
+            if (row.getCreatedAt() == null) continue;
+            if (!isTerminal(row.getStatus())) continue;
+            LocalDateTime end = row.getUpdatedAt() == null ? now : row.getUpdatedAt();
+            long ms = Math.max(0L, Duration.between(row.getCreatedAt(), end).toMillis());
+            durations.add(ms);
+        }
+        Collections.sort(durations);
+        long avgDurationMs = durations.isEmpty() ? 0L : (long) durations.stream().mapToLong(Long::longValue).average().orElse(0.0);
+        long p95DurationMs = durations.isEmpty() ? 0L : durations.get(Math.max(0, (int) Math.ceil(durations.size() * 0.95) - 1));
+
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("windowHours", 24);
+        out.put("windowFrom", from);
+        out.put("windowTo", now);
+        out.put("timezone", zoneId.getId());
+        out.put("importJobTotal", total);
+        out.put("importRunning", running);
+        out.put("importSuccess", success);
+        out.put("importPartialSuccess", partial);
+        out.put("importFailed", failed);
+        out.put("importCanceled", canceled);
+        out.put("importSuccessRate", successRate);
+        out.put("importFailureRate", failureRate);
+        out.put("importAvgDurationMs", avgDurationMs);
+        out.put("importP95DurationMs", p95DurationMs);
+        out.put("importProcessedRows", processedRows);
+        out.put("importFailedRows", failedRows);
+        return out;
+    }
+
+    private boolean isTerminal(String status) {
+        return "SUCCESS".equalsIgnoreCase(status)
+                || "PARTIAL_SUCCESS".equalsIgnoreCase(status)
+                || "FAILED".equalsIgnoreCase(status)
+                || "CANCELED".equalsIgnoreCase(status);
     }
 
     private Map<String, Object> buildRetryDistribution(List<NotificationJob> jobs) {

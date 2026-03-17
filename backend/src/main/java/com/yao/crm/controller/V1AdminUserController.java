@@ -52,7 +52,9 @@ public class V1AdminUserController extends BaseApiController {
         for (UserAccount user : users) {
             items.add(toView(user));
         }
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("items", items);
+        return ResponseEntity.ok(successWithFields(request, "users_listed", body));
     }
 
     @PatchMapping("/{id}")
@@ -80,7 +82,7 @@ public class V1AdminUserController extends BaseApiController {
         if (payload.getEnabled() != null) user.setEnabled(payload.getEnabled());
         user = userAccountRepository.save(user);
         auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "USER", user.getId(), "Updated user by v1 admin API", tenantId);
-        return ResponseEntity.ok(toView(user));
+        return ResponseEntity.ok(successWithFields(request, "user_updated", toView(user)));
     }
 
     @PostMapping("/invite")
@@ -125,7 +127,7 @@ public class V1AdminUserController extends BaseApiController {
         body.put("expiresAt", invitation.getExpiresAt());
         body.put("inviteLink", "/activate?token=" + invitation.getToken());
         auditLogService.record(currentUser(request), currentRole(request), "INVITE", "USER_INVITATION", invitation.getId(), "Invited user " + invitation.getUsername(), tenantId);
-        return ResponseEntity.status(201).body(body);
+        return ResponseEntity.status(201).body(successWithFields(request, "invitation_created", body));
     }
 
     @PostMapping("/{id}/unlock")
@@ -141,7 +143,7 @@ public class V1AdminUserController extends BaseApiController {
         UserAccount user = optional.get();
         loginRiskService.clearUser(user.getUsername());
         auditLogService.record(currentUser(request), currentRole(request), "UNLOCK", "USER", user.getId(), "Unlocked user in v1 admin API", tenantId);
-        return ResponseEntity.ok(toView(user));
+        return ResponseEntity.ok(successWithFields(request, "user_unlocked", toView(user)));
     }
 
     private Map<String, Object> toView(UserAccount user) {

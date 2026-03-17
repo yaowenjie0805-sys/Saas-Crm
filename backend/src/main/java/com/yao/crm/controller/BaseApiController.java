@@ -9,6 +9,7 @@ import org.springframework.data.domain.Sort;
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -18,6 +19,9 @@ import java.util.Map;
 import java.util.Set;
 
 abstract class BaseApiController {
+    protected static final String DATE_FORMAT_ISO = "yyyy-MM-dd";
+    protected static final String DATE_FORMAT_DMY = "dd/MM/yyyy";
+    protected static final String DATE_FORMAT_MDY = "MM-dd-yyyy";
 
     protected static final Set<String> LEGACY_EXPORT_JOB_ERROR_KEYS = immutableKeys(
             "export_job_not_found",
@@ -132,29 +136,74 @@ abstract class BaseApiController {
 
     protected LocalDateTime parseDateStart(String value) {
         if (isBlank(value)) return null;
-        try {
-            return LocalDate.parse(value).atStartOfDay();
-        } catch (Exception ex) {
-            return null;
-        }
+        LocalDate parsed = parseLocalDate(value);
+        return parsed == null ? null : parsed.atStartOfDay();
+    }
+
+    protected LocalDateTime parseDateStart(HttpServletRequest request, String value) {
+        if (isBlank(value)) return null;
+        LocalDate parsed = parseLocalDate(request, value);
+        return parsed == null ? null : parsed.atStartOfDay();
     }
 
     protected LocalDateTime parseDateEnd(String value) {
         if (isBlank(value)) return null;
-        try {
-            return LocalDate.parse(value).atTime(23, 59, 59);
-        } catch (Exception ex) {
-            return null;
-        }
+        LocalDate parsed = parseLocalDate(value);
+        return parsed == null ? null : parsed.atTime(23, 59, 59);
+    }
+
+    protected LocalDateTime parseDateEnd(HttpServletRequest request, String value) {
+        if (isBlank(value)) return null;
+        LocalDate parsed = parseLocalDate(request, value);
+        return parsed == null ? null : parsed.atTime(23, 59, 59);
     }
 
     protected LocalDate parseLocalDate(Object value) {
+        return parseLocalDate(null, value);
+    }
+
+    protected LocalDate parseLocalDate(HttpServletRequest request, Object value) {
         if (value == null) return null;
         String str = String.valueOf(value);
         if (isBlank(str)) return null;
+        String normalized = str.trim();
+        String tenantFormat = request == null ? DATE_FORMAT_ISO : currentTenantDateFormat(request);
+        LocalDate tenantParsed = parseByFormat(normalized, tenantFormat);
+        if (tenantParsed != null) {
+            return tenantParsed;
+        }
+        for (String format : supportedDateFormats()) {
+            LocalDate parsed = parseByFormat(normalized, format);
+            if (parsed != null) return parsed;
+        }
+        return null;
+    }
+
+    protected String normalizeTenantDateFormat(String input) {
+        if (isBlank(input)) return DATE_FORMAT_ISO;
+        String normalized = input.trim();
+        if ("YYYY-MM-DD".equalsIgnoreCase(normalized)) return DATE_FORMAT_ISO;
+        for (String format : supportedDateFormats()) {
+            if (format.equals(normalized)) return format;
+        }
+        return "";
+    }
+
+    protected Set<String> supportedDateFormats() {
+        return new HashSet<String>(Arrays.asList(DATE_FORMAT_ISO, DATE_FORMAT_DMY, DATE_FORMAT_MDY));
+    }
+
+    protected String currentTenantDateFormat(HttpServletRequest request) {
+        Object formatObj = request.getAttribute("authTenantDateFormat");
+        String format = formatObj == null ? DATE_FORMAT_ISO : String.valueOf(formatObj);
+        String normalized = normalizeTenantDateFormat(format);
+        return isBlank(normalized) ? DATE_FORMAT_ISO : normalized;
+    }
+
+    private LocalDate parseByFormat(String input, String format) {
         try {
-            return LocalDate.parse(str);
-        } catch (Exception ex) {
+            return LocalDate.parse(input, DateTimeFormatter.ofPattern(format));
+        } catch (Exception ignore) {
             return null;
         }
     }
@@ -177,6 +226,34 @@ abstract class BaseApiController {
         body.put("requestId", traceId(request));
         body.put("details", details == null ? new LinkedHashMap<String, Object>() : details);
         return body;
+    }
+
+    protected Map<String, Object> successBody(HttpServletRequest request, String code, String message, Map<String, Object> details) {
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("code", normalizeCode(code, "success"));
+        body.put("message", message);
+        body.put("requestId", traceId(request));
+        body.put("details", details == null ? new LinkedHashMap<String, Object>() : details);
+        return body;
+    }
+
+    protected Map<String, Object> successByKey(HttpServletRequest request, String key, Map<String, Object> details) {
+        String normalized = normalizeCode(key, "success");
+        return successBody(request, normalized, msg(request, normalized), details);
+    }
+
+    protected Map<String, Object> successWithFields(HttpServletRequest request, String key, Map<String, Object> fields) {
+        Map<String, Object> out = successByKey(request, key, null);
+        if (fields != null) {
+            for (Map.Entry<String, Object> entry : fields.entrySet()) {
+                String field = entry.getKey();
+                if ("code".equals(field) || "message".equals(field) || "requestId".equals(field) || "details".equals(field)) {
+                    continue;
+                }
+                out.put(field, entry.getValue());
+            }
+        }
+        return out;
     }
 
     protected Map<String, Object> legacyErrorBody(HttpServletRequest request, String code, String message, Map<String, Object> details) {

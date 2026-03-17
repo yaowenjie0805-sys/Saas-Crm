@@ -33,7 +33,7 @@ public class ReportExportJobService {
     }
 
     public Map<String, Object> submitByTenant(String requestedBy, String tenantId, String roleFilter, LocalDate fromDate, LocalDate toDate) {
-        return submitByTenant(requestedBy, tenantId, roleFilter, fromDate, toDate, "", "", "Asia/Shanghai", "CNY");
+        return submitByTenant(requestedBy, tenantId, roleFilter, fromDate, toDate, "", "", "Asia/Shanghai", "CNY", "en");
     }
 
     public Map<String, Object> submitByTenant(String requestedBy,
@@ -44,9 +44,10 @@ public class ReportExportJobService {
                                               String owner,
                                               String department,
                                               String timezone,
-                                              String currency) {
+                                              String currency,
+                                              String language) {
         cleanupOldFinishedJobs();
-        JobRecord record = createRecord(requestedBy, tenantId, roleFilter, fromDate, toDate, owner, department, timezone, currency, null);
+        JobRecord record = createRecord(requestedBy, tenantId, roleFilter, fromDate, toDate, owner, department, timezone, currency, language, null);
         jobs.put(record.jobId, record);
         start(record);
         return toStatus(record);
@@ -69,17 +70,27 @@ public class ReportExportJobService {
             throw new IllegalArgumentException("forbidden");
         }
 
-        JobRecord retried = createRecord(source.requestedBy, source.tenantId, source.role, source.from, source.to, source.owner, source.department, source.timezone, source.currency, source.jobId);
+        JobRecord retried = createRecord(source.requestedBy, source.tenantId, source.role, source.from, source.to, source.owner, source.department, source.timezone, source.currency, source.language, source.jobId);
         jobs.put(retried.jobId, retried);
         start(retried);
         return toStatus(retried);
     }
 
     public List<Map<String, Object>> list(String requester, boolean canViewAll, int limit, String status) {
-        return listByTenant(requester, "tenant_default", canViewAll, limit, status);
+        Map<String, Object> paged = listByTenantPaged(requester, "tenant_default", canViewAll, 1, Math.max(1, limit), status);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) paged.get("items");
+        return items;
     }
 
     public List<Map<String, Object>> listByTenant(String requester, String tenantId, boolean canViewAll, int limit, String status) {
+        Map<String, Object> paged = listByTenantPaged(requester, tenantId, canViewAll, 1, Math.max(1, limit), status);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) paged.get("items");
+        return items;
+    }
+
+    public Map<String, Object> listByTenantPaged(String requester, String tenantId, boolean canViewAll, int page, int size, String status) {
         cleanupOldFinishedJobs();
         List<JobRecord> rows = new ArrayList<JobRecord>(jobs.values());
         Collections.sort(rows, new Comparator<JobRecord>() {
@@ -92,7 +103,7 @@ public class ReportExportJobService {
         });
 
         String statusFilter = normalizeStatus(status);
-        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        List<Map<String, Object>> filtered = new ArrayList<Map<String, Object>>();
         for (JobRecord row : rows) {
             if (!tenantId.equals(row.tenantId)) {
                 continue;
@@ -103,12 +114,26 @@ public class ReportExportJobService {
             if (statusFilter != null && !statusFilter.equals(row.status)) {
                 continue;
             }
-            out.add(toStatus(row));
-            if (out.size() >= Math.max(1, limit)) {
-                break;
-            }
+            filtered.add(toStatus(row));
         }
-        return out;
+        int safeSize = Math.max(1, size);
+        int safePage = Math.max(1, page);
+        int total = filtered.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) total / safeSize));
+        if (safePage > totalPages) {
+            safePage = totalPages;
+        }
+        int fromIndex = Math.min((safePage - 1) * safeSize, total);
+        int toIndex = Math.min(fromIndex + safeSize, total);
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>(filtered.subList(fromIndex, toIndex));
+
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("items", out);
+        body.put("page", safePage);
+        body.put("size", safeSize);
+        body.put("totalPages", totalPages);
+        body.put("total", total);
+        return body;
     }
 
     public Map<String, Object> status(String jobId, String requester, boolean canViewAll) {
@@ -170,6 +195,7 @@ public class ReportExportJobService {
                                    String department,
                                    String timezone,
                                    String currency,
+                                   String language,
                                    String sourceJobId) {
         JobRecord record = new JobRecord();
         record.jobId = "rpt_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
@@ -185,6 +211,7 @@ public class ReportExportJobService {
         record.department = department == null ? "" : department.trim();
         record.timezone = timezone == null || timezone.trim().isEmpty() ? "Asia/Shanghai" : timezone.trim();
         record.currency = currency == null || currency.trim().isEmpty() ? "CNY" : currency.trim().toUpperCase(Locale.ROOT);
+        record.language = language == null || language.trim().isEmpty() ? "en" : language.trim().toLowerCase(Locale.ROOT);
         record.createdAt = LocalDateTime.now();
         return record;
     }
@@ -193,7 +220,7 @@ public class ReportExportJobService {
         try {
             record.status = "RUNNING";
             record.progress = 20;
-            String csv = reportService.exportOverviewCsvByTenant(record.tenantId, record.from, record.to, record.role, record.owner, record.department);
+            String csv = reportService.exportOverviewCsvByTenant(record.tenantId, record.from, record.to, record.role, record.owner, record.department, record.language);
             record.progress = 95;
             record.csv = csv;
             record.rowCount = countRows(csv);
@@ -234,6 +261,7 @@ public class ReportExportJobService {
         filters.put("department", record.department == null ? "" : record.department);
         filters.put("timezone", record.timezone == null ? "" : record.timezone);
         filters.put("currency", record.currency == null ? "" : record.currency);
+        filters.put("language", record.language == null ? "en" : record.language);
         body.put("filters", filters);
         return body;
     }
@@ -273,6 +301,7 @@ public class ReportExportJobService {
         private String department;
         private String timezone;
         private String currency;
+        private String language;
         private LocalDate from;
         private LocalDate to;
         private String status;

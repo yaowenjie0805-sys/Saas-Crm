@@ -16,8 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -66,12 +65,14 @@ public class ReportController extends BaseApiController {
             return range.errorBody;
         }
 
-        String csv = reportService.exportOverviewCsv(range.from, range.to, role);
+        boolean zh = request.getHeader("Accept-Language") != null
+                && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
+        String csv = reportService.exportOverviewCsvByTenant("tenant_default", range.from, range.to, role, "", "", zh ? "zh" : "en");
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
-        String fileName = "report-overview-" + date + ".csv";
+        String fileName = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + date + ".csv";
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + fileName)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                 .body(csv);
     }
@@ -94,17 +95,26 @@ public class ReportController extends BaseApiController {
     @GetMapping("/reports/export-jobs")
     public ResponseEntity<?> listReportExportJobs(HttpServletRequest request,
                                                   @RequestParam(defaultValue = "8") int limit,
+                                                  @RequestParam(defaultValue = "1") int page,
+                                                  @RequestParam(defaultValue = "8") int size,
                                                   @RequestParam(defaultValue = "") String status) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        List<Map<String, Object>> items = reportExportJobService.list(
+        int safeSize = Math.max(1, Math.min(100, size));
+        int safePage = Math.max(1, page);
+        if (page <= 1 && size == 8 && limit > 0) {
+            safeSize = Math.max(1, Math.min(100, limit));
+        }
+        Map<String, Object> body = reportExportJobService.listByTenantPaged(
                 currentUser(request),
+                "tenant_default",
                 hasAnyRole(request, "ADMIN", "MANAGER"),
-                Math.max(1, Math.min(50, limit)),
+                safePage,
+                safeSize,
                 status
         );
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/reports/export-jobs/{jobId}")
@@ -159,8 +169,11 @@ public class ReportController extends BaseApiController {
         }
         try {
             String csv = reportExportJobService.download(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            boolean zh = request.getHeader("Accept-Language") != null
+                    && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
+            String fileName = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + jobId + ".csv";
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=report-overview-" + jobId + ".csv")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                     .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                     .body(csv);
         } catch (IllegalStateException ex) {
@@ -188,12 +201,12 @@ public class ReportController extends BaseApiController {
     }
 
     private DateRange validateDateRange(HttpServletRequest request, String fromRaw, String toRaw) {
-        LocalDate fromDate = parseDate(fromRaw);
+        LocalDate fromDate = parseLocalDate(request, fromRaw);
         if (fromRaw != null && !fromRaw.trim().isEmpty() && fromDate == null) {
             return DateRange.error(ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null)));
         }
 
-        LocalDate toDate = parseDate(toRaw);
+        LocalDate toDate = parseLocalDate(request, toRaw);
         if (toRaw != null && !toRaw.trim().isEmpty() && toDate == null) {
             return DateRange.error(ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null)));
         }
@@ -203,17 +216,6 @@ public class ReportController extends BaseApiController {
         }
 
         return DateRange.ok(fromDate, toDate);
-    }
-
-    private LocalDate parseDate(String raw) {
-        if (raw == null || raw.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(raw.trim());
-        } catch (Exception ignore) {
-            return null;
-        }
     }
 
     private static final class DateRange {
@@ -236,5 +238,3 @@ public class ReportController extends BaseApiController {
         }
     }
 }
-
-

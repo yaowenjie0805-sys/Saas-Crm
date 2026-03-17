@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -43,8 +42,8 @@ public class V1ReportController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
 
-        LocalDate fromDate = parseLocalDate(from);
-        LocalDate toDate = parseLocalDate(to);
+        LocalDate fromDate = parseLocalDate(request, from);
+        LocalDate toDate = parseLocalDate(request, to);
         if ((fromDate == null && !isBlank(from)) || (toDate == null && !isBlank(to))) {
             return ResponseEntity.badRequest().body(errorBody(request, "invalid_date_format", msg(request, "invalid_date_format"), null));
         }
@@ -61,7 +60,27 @@ public class V1ReportController extends BaseApiController {
         filters.put("owner", owner);
         filters.put("tenantId", currentTenant(request));
         data.put("filters", filters);
-        return ResponseEntity.ok(data);
+        return ResponseEntity.ok(successWithFields(request, "report_overview_loaded", data));
+    }
+
+    @GetMapping("/funnel")
+    public ResponseEntity<?> funnel(HttpServletRequest request,
+                                    @RequestParam(defaultValue = "") String from,
+                                    @RequestParam(defaultValue = "") String to,
+                                    @RequestParam(defaultValue = "") String owner) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
+            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+        }
+        LocalDate fromDate = parseLocalDate(request, from);
+        LocalDate toDate = parseLocalDate(request, to);
+        if ((fromDate == null && !isBlank(from)) || (toDate == null && !isBlank(to))) {
+            return ResponseEntity.badRequest().body(errorBody(request, "invalid_date_format", msg(request, "invalid_date_format"), null));
+        }
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "date_range_invalid", msg(request, "date_range_invalid"), null));
+        }
+        Map<String, Object> data = reportService.funnelByTenant(currentTenant(request), fromDate, toDate, owner);
+        return ResponseEntity.ok(successWithFields(request, "report_funnel_loaded", data));
     }
 
     @PostMapping("/export-jobs")
@@ -76,12 +95,13 @@ public class V1ReportController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        LocalDate fromDate = parseLocalDate(from);
-        LocalDate toDate = parseLocalDate(to);
+        LocalDate fromDate = parseLocalDate(request, from);
+        LocalDate toDate = parseLocalDate(request, to);
         if ((fromDate == null && !isBlank(from)) || (toDate == null && !isBlank(to))) {
             return ResponseEntity.badRequest().body(errorBody(request, "invalid_date_format", msg(request, "invalid_date_format"), null));
         }
-        return ResponseEntity.accepted().body(reportExportJobService.submitByTenant(
+        @SuppressWarnings("unchecked")
+        Map<String, Object> job = (Map<String, Object>) reportExportJobService.submitByTenant(
                 currentUser(request),
                 currentTenant(request),
                 role,
@@ -90,24 +110,35 @@ public class V1ReportController extends BaseApiController {
                 owner,
                 department,
                 timezone,
-                currency
-        ));
+                currency,
+                request.getHeader("Accept-Language")
+        );
+        return ResponseEntity.accepted().body(successWithFields(request, "report_export_submitted", job));
     }
 
     @GetMapping("/export-jobs")
     public ResponseEntity<?> listExportJobs(HttpServletRequest request,
                                             @RequestParam(defaultValue = "8") int limit,
+                                            @RequestParam(defaultValue = "1") int page,
+                                            @RequestParam(defaultValue = "8") int size,
                                             @RequestParam(defaultValue = "") String status) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        return ResponseEntity.ok(Collections.singletonMap("items", reportExportJobService.listByTenant(
+        int safeSize = Math.max(1, Math.min(100, size));
+        int safePage = Math.max(1, page);
+        if (page <= 1 && size == 8 && limit > 0) {
+            safeSize = Math.max(1, Math.min(100, limit));
+        }
+        Map<String, Object> body = reportExportJobService.listByTenantPaged(
                 currentUser(request),
                 currentTenant(request),
                 hasAnyRole(request, "ADMIN", "MANAGER"),
-                Math.max(1, Math.min(limit, 100)),
+                safePage,
+                safeSize,
                 status
-        )));
+        );
+        return ResponseEntity.ok(successWithFields(request, "report_export_jobs_listed", body));
     }
 
     @PostMapping("/export-jobs/{jobId}/retry")
@@ -116,12 +147,14 @@ public class V1ReportController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         try {
-            return ResponseEntity.accepted().body(reportExportJobService.retryByTenant(
+            @SuppressWarnings("unchecked")
+            Map<String, Object> retried = (Map<String, Object>) reportExportJobService.retryByTenant(
                     jobId,
                     currentUser(request),
                     currentTenant(request),
                     hasAnyRole(request, "ADMIN", "MANAGER")
-            ));
+            );
+            return ResponseEntity.accepted().body(successWithFields(request, "report_export_retried", retried));
         } catch (IllegalArgumentException ex) {
             String code = normalizeCode(ex.getMessage(), "bad_request");
             return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
@@ -134,7 +167,9 @@ public class V1ReportController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         try {
-            return ResponseEntity.ok(reportExportJobService.statusByTenant(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER")));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> statusBody = (Map<String, Object>) reportExportJobService.statusByTenant(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            return ResponseEntity.ok(successWithFields(request, "report_export_status_loaded", statusBody));
         } catch (IllegalArgumentException ex) {
             String code = normalizeCode(ex.getMessage(), "bad_request");
             return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
@@ -148,7 +183,8 @@ public class V1ReportController extends BaseApiController {
         }
         try {
             String csv = reportExportJobService.downloadByTenant(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
-            String filename = "report-overview-" + jobId + ".csv";
+            boolean zh = request.getHeader("Accept-Language") != null && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
+            String filename = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + jobId + ".csv";
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -162,4 +198,3 @@ public class V1ReportController extends BaseApiController {
         }
     }
 }
-

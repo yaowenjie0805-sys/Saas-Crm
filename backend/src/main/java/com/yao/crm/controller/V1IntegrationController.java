@@ -41,7 +41,7 @@ public class V1IntegrationController extends BaseApiController {
         body.put("accepted", true);
         body.put("provider", provider);
         body.put("tenantId", tenantId);
-        return ResponseEntity.accepted().body(body);
+        return ResponseEntity.accepted().body(successWithFields(request, "webhook_accepted", body));
     }
 }
 

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.persistence.criteria.Predicate;
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.*;
 
 @RestController
@@ -69,8 +70,8 @@ public class AuditController extends BaseApiController {
                 "createdAt"
         );
 
-        LocalDateTime fromTime = parseDateStart(from);
-        LocalDateTime toTime = parseDateEnd(to);
+        LocalDateTime fromTime = parseDateStart(request, from);
+        LocalDateTime toTime = parseDateEnd(request, to);
         if ((!isBlank(from) && fromTime == null) || (!isBlank(to) && toTime == null)) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
         }
@@ -98,15 +99,22 @@ public class AuditController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        LocalDateTime fromTime = parseDateStart(from);
-        LocalDateTime toTime = parseDateEnd(to);
+        LocalDateTime fromTime = parseDateStart(request, from);
+        LocalDateTime toTime = parseDateEnd(request, to);
         if ((!isBlank(from) && fromTime == null) || (!isBlank(to) && toTime == null)) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
         }
 
         List<AuditLog> logs = auditLogRepository.findAll(buildAuditSpec(username, role, action, fromTime, toTime));
+        boolean zh = request.getHeader("Accept-Language") != null
+                && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
         StringBuilder csv = new StringBuilder();
-        csv.append("id,username,role,action,resource,resourceId,details,createdAt\n");
+        csv.append('\uFEFF');
+        if (zh) {
+            csv.append("id,用户,角色,动作,资源,资源ID,详情,创建时间\n");
+        } else {
+            csv.append("id,username,role,action,resource,resourceId,details,createdAt\n");
+        }
         for (AuditLog log : logs) {
             csv.append(escapeCsv(log.getId())).append(',')
                     .append(escapeCsv(log.getUsername())).append(',')
@@ -120,7 +128,7 @@ public class AuditController extends BaseApiController {
         }
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-logs.csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + (zh ? "审计日志.csv" : "audit-logs.csv") + "\"")
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                 .body(csv.toString());
     }
@@ -137,28 +145,44 @@ public class AuditController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        LocalDateTime fromTime = parseDateStart(from);
-        LocalDateTime toTime = parseDateEnd(to);
+        LocalDateTime fromTime = parseDateStart(request, from);
+        LocalDateTime toTime = parseDateEnd(request, to);
         if ((!isBlank(from) && fromTime == null) || (!isBlank(to) && toTime == null)) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
         }
-        return ResponseEntity.status(202).body(auditExportJobService.submit(currentUser(request), role, username, action, fromTime, toTime));
+        return ResponseEntity.status(202).body(auditExportJobService.submit(
+                currentUser(request),
+                role,
+                username,
+                action,
+                fromTime,
+                toTime,
+                request.getHeader("Accept-Language")
+        ));
     }
 
     @GetMapping("/audit-logs/export-jobs")
     public ResponseEntity<?> listExportJobs(HttpServletRequest request,
                                             @RequestParam(defaultValue = "8") int limit,
+                                            @RequestParam(defaultValue = "1") int page,
+                                            @RequestParam(defaultValue = "8") int size,
                                             @RequestParam(defaultValue = "") String status) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        List<Map<String, Object>> items = auditExportJobService.list(
+        int safeSize = Math.max(1, Math.min(100, size));
+        int safePage = Math.max(1, page);
+        if (page <= 1 && size == 8 && limit > 0) {
+            safeSize = Math.max(1, Math.min(100, limit));
+        }
+        Map<String, Object> body = auditExportJobService.listPaged(
                 currentUser(request),
                 hasAnyRole(request, "ADMIN", "MANAGER"),
-                Math.max(1, Math.min(50, limit)),
+                safePage,
+                safeSize,
                 status
         );
-        return ResponseEntity.ok(Collections.singletonMap("items", items));
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/audit-logs/export-jobs/{jobId}/retry")
@@ -213,8 +237,11 @@ public class AuditController extends BaseApiController {
         }
         try {
             String csv = auditExportJobService.download(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            boolean zh = request.getHeader("Accept-Language") != null
+                    && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
+            String filename = (zh ? "审计日志-" : "audit-logs-") + jobId + ".csv";
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-logs-" + jobId + ".csv\"")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                     .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                     .body(csv);
         } catch (IllegalStateException ex) {

@@ -12,6 +12,7 @@ public class DashboardResponse {
     private List<Opportunity> opportunities;
     private List<TaskItem> tasks;
     private List<Customer> customers;
+    private String requestId;
 
     public List<StatItem> getStats() { return stats; }
     public void setStats(List<StatItem> stats) { this.stats = stats; }
@@ -21,4 +22,6 @@ public class DashboardResponse {
     public void setTasks(List<TaskItem> tasks) { this.tasks = tasks; }
     public List<Customer> getCustomers() { return customers; }
     public void setCustomers(List<Customer> customers) { this.customers = customers; }
+    public String getRequestId() { return requestId; }
+    public void setRequestId(String requestId) { this.requestId = requestId; }
 }

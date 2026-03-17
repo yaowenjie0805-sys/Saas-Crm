@@ -84,7 +84,6 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
       setError(formatRequestError(err, t))
     }
   }, [token, lang, effectiveSelectedQuoteId, setError, t])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (activePage === 'quotes' && effectiveSelectedQuoteId) loadQuoteItems(effectiveSelectedQuoteId) }, [activePage, effectiveSelectedQuoteId, loadQuoteItems])
   useEffect(() => () => { itemAbortRef.current?.abort() }, [])
   useEffect(() => {
@@ -220,13 +219,13 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
   if (activePage !== 'quotes') return null
 
   return (
-    <section className="panel">
+    <section className="panel" data-testid="quotes-page">
       <div className="panel-head">
-        <h2>{t('quotes')}</h2>
+        <h2 data-testid="quotes-heading">{t('quotes')}</h2>
         <div className="inline-tools">
           <span className="muted-filter">{t('approvalMode')}: {tenantApprovalMode === 'STAGE_GATE' ? t('approvalModeStageGate') : t('approvalModeStrict')}</span>
-          <button className="mini-btn" onClick={refreshSelf}>{t('refresh')}</button>
-          <button className="primary-btn" disabled={!canWrite} onClick={openCreate}>{t('createQuote')}</button>
+          <button className="mini-btn" data-testid="quotes-refresh" onClick={refreshSelf}>{t('refresh')}</button>
+          <button className="primary-btn" data-testid="quotes-create" disabled={!canWrite} onClick={openCreate}>{t('createQuote')}</button>
         </div>
       </div>
       <div className="filter-row" style={{ marginBottom: 8 }}>
@@ -300,7 +299,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
         />
       )}
 
-      <div className="panel" style={{ marginTop: 12, boxShadow: 'none' }}>
+      <div className="panel" style={{ marginTop: 12, boxShadow: 'none' }} data-testid="quote-items-panel">
         <div className="panel-head"><h2>{t('quoteItems')}</h2><span>{effectiveSelectedQuoteId || '-'}</span></div>
         <textarea className="tool-input" style={{ width: '100%', minHeight: 120 }} value={itemJson} onChange={(e) => setItemJson(e.target.value)} />
         <div className="inline-tools" style={{ marginTop: 8 }}><button className="mini-btn" disabled={!canWrite || !effectiveSelectedQuoteId} onClick={saveItems}>{t('save')}</button></div>

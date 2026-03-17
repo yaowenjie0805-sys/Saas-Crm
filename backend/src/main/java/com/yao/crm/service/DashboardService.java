@@ -42,14 +42,17 @@ public class DashboardService {
         if (!opportunities.isEmpty()) {
             int total = 0;
             for (Opportunity opportunity : opportunities) {
-                total += (100 - opportunity.getProgress());
+                int progress = opportunity.getProgress() == null ? 0 : opportunity.getProgress();
+                if (progress < 0) progress = 0;
+                if (progress > 100) progress = 100;
+                total += (100 - progress);
             }
             avgCycle = Math.round((float) total / opportunities.size());
         }
 
         int doneTasks = 0;
         for (TaskItem task : tasks) {
-            if (Boolean.TRUE.equals(task.getDone())) {
+            if (task != null && Boolean.TRUE.equals(task.getDone())) {
                 doneTasks++;
             }
         }

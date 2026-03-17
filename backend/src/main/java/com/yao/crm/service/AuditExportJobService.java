@@ -27,15 +27,23 @@ public class AuditExportJobService {
                                       String username,
                                       String action,
                                       LocalDateTime fromTime,
-                                      LocalDateTime toTime) {
+                                      LocalDateTime toTime,
+                                      String language) {
         cleanupOldFinishedJobs();
-        JobRecord record = createRecord(requestedBy, role, username, action, fromTime, toTime, null);
+        JobRecord record = createRecord(requestedBy, role, username, action, fromTime, toTime, null, language);
         jobs.put(record.jobId, record);
         start(record);
         return toStatus(record);
     }
 
     public List<Map<String, Object>> list(String requester, boolean canViewAll, int limit, String status) {
+        Map<String, Object> paged = listPaged(requester, canViewAll, 1, Math.max(1, limit), status);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) paged.get("items");
+        return items;
+    }
+
+    public Map<String, Object> listPaged(String requester, boolean canViewAll, int page, int size, String status) {
         cleanupOldFinishedJobs();
         List<JobRecord> rows = new ArrayList<JobRecord>(jobs.values());
         rows.sort(new Comparator<JobRecord>() {
@@ -48,7 +56,7 @@ public class AuditExportJobService {
         });
 
         String statusFilter = normalizeStatus(status);
-        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        List<Map<String, Object>> filtered = new ArrayList<Map<String, Object>>();
         for (JobRecord row : rows) {
             if (!canViewAll && !Objects.equals(row.requestedBy, requester)) {
                 continue;
@@ -56,12 +64,27 @@ public class AuditExportJobService {
             if (statusFilter != null && !statusFilter.equals(row.status)) {
                 continue;
             }
-            out.add(toStatus(row));
-            if (out.size() >= Math.max(1, limit)) {
-                break;
-            }
+            filtered.add(toStatus(row));
         }
-        return out;
+
+        int safeSize = Math.max(1, size);
+        int safePage = Math.max(1, page);
+        int total = filtered.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) total / safeSize));
+        if (safePage > totalPages) {
+            safePage = totalPages;
+        }
+        int fromIndex = Math.min((safePage - 1) * safeSize, total);
+        int toIndex = Math.min(fromIndex + safeSize, total);
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>(filtered.subList(fromIndex, toIndex));
+
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("items", out);
+        body.put("page", safePage);
+        body.put("size", safeSize);
+        body.put("totalPages", totalPages);
+        body.put("total", total);
+        return body;
     }
 
     public Map<String, Object> retry(String jobId, String requester, boolean canViewAll) {
@@ -81,7 +104,8 @@ public class AuditExportJobService {
                 source.filterAction,
                 source.from,
                 source.to,
-                source.jobId
+                source.jobId,
+                source.language
         );
         jobs.put(retried.jobId, retried);
         start(retried);
@@ -130,7 +154,8 @@ public class AuditExportJobService {
                                    String action,
                                    LocalDateTime fromTime,
                                    LocalDateTime toTime,
-                                   String sourceJobId) {
+                                   String sourceJobId,
+                                   String language) {
         JobRecord record = new JobRecord();
         record.jobId = "exp_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
         record.requestedBy = requestedBy;
@@ -143,6 +168,7 @@ public class AuditExportJobService {
         record.from = fromTime;
         record.to = toTime;
         record.sourceJobId = sourceJobId;
+        record.language = language == null ? "en" : language;
         return record;
     }
 
@@ -174,8 +200,14 @@ public class AuditExportJobService {
             List<AuditLog> logs = auditLogRepository.findAll(spec);
             record.progress = 75;
 
+            boolean zh = String.valueOf(record.language).toLowerCase(Locale.ROOT).startsWith("zh");
             StringBuilder csv = new StringBuilder();
-            csv.append("id,username,role,action,resource,resourceId,details,createdAt\n");
+            csv.append('\uFEFF');
+            if (zh) {
+                csv.append("id,用户,角色,动作,资源,资源ID,详情,创建时间\n");
+            } else {
+                csv.append("id,username,role,action,resource,resourceId,details,createdAt\n");
+            }
             for (AuditLog log : logs) {
                 csv.append(escapeCsv(log.getId())).append(',')
                         .append(escapeCsv(log.getUsername())).append(',')
@@ -273,6 +305,7 @@ public class AuditExportJobService {
         private String filterAction;
         private LocalDateTime from;
         private LocalDateTime to;
+        private String language;
         private int rowCount;
         private String csv;
         private String error;

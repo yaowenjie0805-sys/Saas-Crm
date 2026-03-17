@@ -26,7 +26,7 @@ public class AuditLog {
     @Column(length = 64)
     private String resourceId;
 
-    @Column(length = 500)
+    @Column(columnDefinition = "TEXT")
     private String details;
 
     @Column(nullable = false, length = 64)

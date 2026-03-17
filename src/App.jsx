@@ -119,6 +119,10 @@ const parseDateByFormat = (raw, format) => {
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
+  const perfEnabledByQuery = useMemo(() => {
+    const params = new URLSearchParams(location.search || '')
+    return params.get('perf') === '1'
+  }, [location.search])
   const {
     lang,
     setLang,
@@ -1627,7 +1631,7 @@ function App() {
   const isAuthRoute = location.pathname === '/login' || location.pathname === '/activate'
   const authShell = (
     <AuthShell
-      auth={isAuthRoute ? null : auth}
+      auth={!hasAuthToken || isAuthRoute ? null : auth}
       locationPathname={location.pathname}
       apiContext={apiContext}
       lang={lang}
@@ -1677,7 +1681,7 @@ function App() {
         mainAudit={mainAudit}
         mainApprovals={mainApprovals}
         mainTenants={mainTenants}
-        dev={import.meta.env.DEV}
+        dev={import.meta.env.DEV && perfEnabledByQuery}
         perfMetrics={perfMetrics}
         currentLoaderKey={currentLoaderKey}
         lastRefreshReason={lastRefreshReason}

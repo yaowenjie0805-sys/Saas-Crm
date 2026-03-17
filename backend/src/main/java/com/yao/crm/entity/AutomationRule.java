@@ -25,13 +25,13 @@ public class AutomationRule {
     @Column(nullable = false, length = 80)
     private String triggerType;
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String triggerExpr;
 
     @Column(nullable = false, length = 80)
     private String actionType;
 
-    @Column(nullable = false, length = 1000)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String actionPayload;
 
     @Column(nullable = false)

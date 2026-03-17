@@ -3,13 +3,21 @@ package com.yao.crm.service;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.entity.FollowUp;
 import com.yao.crm.entity.Opportunity;
+import com.yao.crm.entity.OrderRecord;
+import com.yao.crm.entity.PaymentRecord;
+import com.yao.crm.entity.Quote;
 import com.yao.crm.entity.TaskItem;
 import com.yao.crm.entity.UserAccount;
+import com.yao.crm.entity.Lead;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.FollowUpRepository;
 import com.yao.crm.repository.OpportunityRepository;
+import com.yao.crm.repository.OrderRecordRepository;
+import com.yao.crm.repository.PaymentRecordRepository;
+import com.yao.crm.repository.QuoteRepository;
 import com.yao.crm.repository.TaskRepository;
 import com.yao.crm.repository.UserAccountRepository;
+import com.yao.crm.repository.LeadRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -28,20 +36,32 @@ public class ReportService {
     private final OpportunityRepository opportunityRepository;
     private final TaskRepository taskRepository;
     private final FollowUpRepository followUpRepository;
+    private final QuoteRepository quoteRepository;
+    private final OrderRecordRepository orderRecordRepository;
+    private final PaymentRecordRepository paymentRecordRepository;
     private final UserAccountRepository userAccountRepository;
+    private final LeadRepository leadRepository;
     private final ValueNormalizerService valueNormalizerService;
 
     public ReportService(CustomerRepository customerRepository,
                          OpportunityRepository opportunityRepository,
                          TaskRepository taskRepository,
                          FollowUpRepository followUpRepository,
+                         QuoteRepository quoteRepository,
+                         OrderRecordRepository orderRecordRepository,
+                         PaymentRecordRepository paymentRecordRepository,
                          UserAccountRepository userAccountRepository,
+                         LeadRepository leadRepository,
                          ValueNormalizerService valueNormalizerService) {
         this.customerRepository = customerRepository;
         this.opportunityRepository = opportunityRepository;
         this.taskRepository = taskRepository;
         this.followUpRepository = followUpRepository;
+        this.quoteRepository = quoteRepository;
+        this.orderRecordRepository = orderRecordRepository;
+        this.paymentRecordRepository = paymentRecordRepository;
         this.userAccountRepository = userAccountRepository;
+        this.leadRepository = leadRepository;
         this.valueNormalizerService = valueNormalizerService;
     }
 
@@ -78,6 +98,21 @@ public class ReportService {
                 .filter(f -> matchRoleIdentity(f.getAuthor(), roleIdentities))
                 .filter(f -> ownerFilter.isEmpty() || (!isBlank(f.getAuthor()) && ownerFilter.equals(f.getAuthor().trim().toLowerCase())))
                 .collect(Collectors.toList());
+        List<Quote> quotes = quoteRepository.findByTenantId(tenantId).stream()
+                .filter(qt -> inDateRange(qt.getCreatedAt(), fromDate, toDate))
+                .filter(qt -> matchRoleIdentity(qt.getOwner(), roleIdentities))
+                .filter(qt -> ownerFilter.isEmpty() || (!isBlank(qt.getOwner()) && ownerFilter.equals(qt.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
+        List<OrderRecord> orders = orderRecordRepository.findByTenantId(tenantId).stream()
+                .filter(or -> inDateRange(or.getCreatedAt(), fromDate, toDate))
+                .filter(or -> matchRoleIdentity(or.getOwner(), roleIdentities))
+                .filter(or -> ownerFilter.isEmpty() || (!isBlank(or.getOwner()) && ownerFilter.equals(or.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
+        List<PaymentRecord> payments = paymentRecordRepository.findByTenantId(tenantId).stream()
+                .filter(pr -> inDateRange(pr.getCreatedAt(), fromDate, toDate))
+                .filter(pr -> matchRoleIdentity(pr.getOwner(), roleIdentities))
+                .filter(pr -> ownerFilter.isEmpty() || (!isBlank(pr.getOwner()) && ownerFilter.equals(pr.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
 
         Set<String> departmentIdentities = loadDepartmentIdentities(tenantId, deptFilter);
         if (!departmentIdentities.isEmpty()) {
@@ -85,6 +120,9 @@ public class ReportService {
             opportunities = opportunities.stream().filter(o -> departmentIdentities.contains(normalized(o.getOwner()))).collect(Collectors.toList());
             tasks = tasks.stream().filter(t -> departmentIdentities.contains(normalized(t.getOwner()))).collect(Collectors.toList());
             followUps = followUps.stream().filter(f -> departmentIdentities.contains(normalized(f.getAuthor()))).collect(Collectors.toList());
+            quotes = quotes.stream().filter(qt -> departmentIdentities.contains(normalized(qt.getOwner()))).collect(Collectors.toList());
+            orders = orders.stream().filter(or -> departmentIdentities.contains(normalized(or.getOwner()))).collect(Collectors.toList());
+            payments = payments.stream().filter(pr -> departmentIdentities.contains(normalized(pr.getOwner()))).collect(Collectors.toList());
         }
 
         long totalRevenue = 0L;
@@ -137,6 +175,28 @@ public class ReportService {
         summary.put("winRate", winRate);
         summary.put("taskDoneRate", taskDoneRate);
         summary.put("followUps", followUps.size());
+        long quoteApproved = quotes.stream().filter(q -> "APPROVED".equalsIgnoreCase(q.getStatus()) || "ACCEPTED".equalsIgnoreCase(q.getStatus())).count();
+        long quoteAccepted = quotes.stream().filter(q -> "ACCEPTED".equalsIgnoreCase(q.getStatus())).count();
+        long orderCompleted = orders.stream().filter(o -> "COMPLETED".equalsIgnoreCase(o.getStatus())).count();
+        double quoteApproveRate = quotes.isEmpty() ? 0.0 : Math.round((quoteApproved * 1000.0 / quotes.size())) / 10.0;
+        double quoteToOrderRate = quoteAccepted == 0 ? 0.0 : Math.round((orders.size() * 1000.0 / quoteAccepted)) / 10.0;
+        double orderCompleteRate = orders.isEmpty() ? 0.0 : Math.round((orderCompleted * 1000.0 / orders.size())) / 10.0;
+        summary.put("quotes", quotes.size());
+        summary.put("orders", orders.size());
+        summary.put("quoteApproveRate", quoteApproveRate);
+        summary.put("quoteToOrderRate", quoteToOrderRate);
+        summary.put("orderCompleteRate", orderCompleteRate);
+        Set<String> orderIds = orders.stream().map(OrderRecord::getId).collect(Collectors.toSet());
+        long orderAmountTotal = orders.stream().mapToLong(o -> o.getAmount() == null ? 0L : o.getAmount()).sum();
+        long orderPaymentReceived = payments.stream()
+                .filter(p -> !isBlank(p.getOrderId()) && orderIds.contains(p.getOrderId()) && "RECEIVED".equalsIgnoreCase(p.getStatus()))
+                .mapToLong(p -> p.getAmount() == null ? 0L : p.getAmount())
+                .sum();
+        long orderPaymentOutstanding = Math.max(0L, orderAmountTotal - orderPaymentReceived);
+        double orderCollectionRate = orderAmountTotal <= 0 ? 0.0 : Math.round((orderPaymentReceived * 1000.0 / orderAmountTotal)) / 10.0;
+        summary.put("orderPaymentReceived", orderPaymentReceived);
+        summary.put("orderPaymentOutstanding", orderPaymentOutstanding);
+        summary.put("orderCollectionRate", orderCollectionRate);
 
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("summary", summary);
@@ -148,35 +208,104 @@ public class ReportService {
         taskStatus.put("pending", pendingTasks);
         body.put("taskStatus", taskStatus);
         body.put("followUpByChannel", followUpByChannel);
+        Map<String, Integer> quoteByStatus = new HashMap<String, Integer>();
+        for (Quote quote : quotes) {
+            String key = isBlank(quote.getStatus()) ? "Unknown" : quote.getStatus();
+            quoteByStatus.put(key, quoteByStatus.containsKey(key) ? quoteByStatus.get(key) + 1 : 1);
+        }
+        Map<String, Integer> orderByStatus = new HashMap<String, Integer>();
+        for (OrderRecord order : orders) {
+            String key = isBlank(order.getStatus()) ? "Unknown" : order.getStatus();
+            orderByStatus.put(key, orderByStatus.containsKey(key) ? orderByStatus.get(key) + 1 : 1);
+        }
+        body.put("quoteByStatus", quoteByStatus);
+        body.put("orderByStatus", orderByStatus);
         return body;
     }
 
     public String exportOverviewCsv(LocalDate fromDate, LocalDate toDate, String role) {
-        Map<String, Object> report = overviewByTenant("tenant_default", fromDate, toDate, role, "", "");
-        return toCsv(report, fromDate, toDate, role);
+        return exportOverviewCsvByTenant("tenant_default", fromDate, toDate, role, "", "", "en");
+    }
+
+    public Map<String, Object> funnelByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String owner) {
+        final String ownerFilter = owner == null ? "" : owner.trim().toLowerCase();
+        List<Lead> leads = leadRepository.findByTenantId(tenantId).stream()
+                .filter(l -> inDateRange(l.getCreatedAt(), fromDate, toDate))
+                .filter(l -> ownerFilter.isEmpty() || (!isBlank(l.getOwner()) && ownerFilter.equals(l.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
+        List<Opportunity> opportunities = opportunityRepository.findByTenantId(tenantId).stream()
+                .filter(o -> inDateRange(o.getCreatedAt(), fromDate, toDate))
+                .filter(o -> ownerFilter.isEmpty() || (!isBlank(o.getOwner()) && ownerFilter.equals(o.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
+        List<Quote> quotes = quoteRepository.findByTenantId(tenantId).stream()
+                .filter(q -> inDateRange(q.getCreatedAt(), fromDate, toDate))
+                .filter(q -> ownerFilter.isEmpty() || (!isBlank(q.getOwner()) && ownerFilter.equals(q.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
+        List<OrderRecord> orders = orderRecordRepository.findByTenantId(tenantId).stream()
+                .filter(o -> inDateRange(o.getCreatedAt(), fromDate, toDate))
+                .filter(o -> ownerFilter.isEmpty() || (!isBlank(o.getOwner()) && ownerFilter.equals(o.getOwner().trim().toLowerCase())))
+                .collect(Collectors.toList());
+
+        long leadsCount = leads.size();
+        long oppCount = opportunities.size();
+        long quoteCount = quotes.size();
+        long orderCount = orders.size();
+
+        double leadToOpp = leadsCount == 0 ? 0.0 : Math.round((oppCount * 1000.0 / leadsCount)) / 10.0;
+        double oppToQuote = oppCount == 0 ? 0.0 : Math.round((quoteCount * 1000.0 / oppCount)) / 10.0;
+        double quoteToOrder = quoteCount == 0 ? 0.0 : Math.round((orderCount * 1000.0 / quoteCount)) / 10.0;
+
+        Map<String, Object> out = new HashMap<String, Object>();
+        Map<String, Object> counts = new HashMap<String, Object>();
+        counts.put("leads", leadsCount);
+        counts.put("opportunities", oppCount);
+        counts.put("quotes", quoteCount);
+        counts.put("orders", orderCount);
+        out.put("counts", counts);
+
+        Map<String, Object> rates = new HashMap<String, Object>();
+        rates.put("leadToOpportunity", leadToOpp);
+        rates.put("opportunityToQuote", oppToQuote);
+        rates.put("quoteToOrder", quoteToOrder);
+        out.put("rates", rates);
+        return out;
     }
 
     public String exportOverviewCsvByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String role, String owner, String department) {
-        Map<String, Object> report = overviewByTenant(tenantId, fromDate, toDate, role, owner, department);
-        return toCsv(report, fromDate, toDate, role);
+        return exportOverviewCsvByTenant(tenantId, fromDate, toDate, role, owner, department, "en");
     }
 
-    private String toCsv(Map<String, Object> report, LocalDate fromDate, LocalDate toDate, String role) {
+    public String exportOverviewCsvByTenant(String tenantId,
+                                            LocalDate fromDate,
+                                            LocalDate toDate,
+                                            String role,
+                                            String owner,
+                                            String department,
+                                            String language) {
+        Map<String, Object> report = overviewByTenant(tenantId, fromDate, toDate, role, owner, department);
+        return toCsv(report, fromDate, toDate, role, language);
+    }
+
+    private String toCsv(Map<String, Object> report, LocalDate fromDate, LocalDate toDate, String role, String language) {
         Map<String, Object> summary = castMap(report.get("summary"));
         Map<String, Integer> taskStatus = castMap(report.get("taskStatus"));
+        boolean zh = language != null && language.trim().toLowerCase().startsWith("zh");
 
         StringBuilder sb = new StringBuilder();
-        sb.append("section,key,value\n");
-        sb.append(row("filter", "from", fromDate == null ? "" : fromDate.toString()));
-        sb.append(row("filter", "to", toDate == null ? "" : toDate.toString()));
-        sb.append(row("filter", "role", role == null ? "" : role.trim().toUpperCase()));
+        sb.append('\uFEFF');
+        sb.append(zh ? "分组,字段,值\n" : "section,key,value\n");
+        sb.append(row(zh ? "筛选" : "filter", zh ? "开始" : "from", fromDate == null ? "" : fromDate.toString()));
+        sb.append(row(zh ? "筛选" : "filter", zh ? "结束" : "to", toDate == null ? "" : toDate.toString()));
+        sb.append(row(zh ? "筛选" : "filter", zh ? "角色" : "role", role == null ? "" : role.trim().toUpperCase()));
 
-        appendMapRows(sb, "summary", summary);
-        appendMapRows(sb, "customerByOwner", castMap(report.get("customerByOwner")));
-        appendMapRows(sb, "revenueByStatus", castMap(report.get("revenueByStatus")));
-        appendMapRows(sb, "opportunityByStage", castMap(report.get("opportunityByStage")));
-        appendMapRows(sb, "taskStatus", taskStatus);
-        appendMapRows(sb, "followUpByChannel", castMap(report.get("followUpByChannel")));
+        appendMapRows(sb, zh ? "汇总" : "summary", summary);
+        appendMapRows(sb, zh ? "客户负责人分布" : "customerByOwner", castMap(report.get("customerByOwner")));
+        appendMapRows(sb, zh ? "客户状态营收" : "revenueByStatus", castMap(report.get("revenueByStatus")));
+        appendMapRows(sb, zh ? "商机阶段分布" : "opportunityByStage", castMap(report.get("opportunityByStage")));
+        appendMapRows(sb, zh ? "任务状态" : "taskStatus", taskStatus);
+        appendMapRows(sb, zh ? "跟进渠道分布" : "followUpByChannel", castMap(report.get("followUpByChannel")));
+        appendMapRows(sb, zh ? "报价状态分布" : "quoteByStatus", castMap(report.get("quoteByStatus")));
+        appendMapRows(sb, zh ? "订单状态分布" : "orderByStatus", castMap(report.get("orderByStatus")));
         return sb.toString();
     }
 
@@ -255,3 +384,4 @@ public class ReportService {
         return s == null || s.trim().isEmpty();
     }
 }
+

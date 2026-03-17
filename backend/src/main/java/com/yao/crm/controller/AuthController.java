@@ -180,6 +180,15 @@ public class AuthController extends BaseApiController {
         return ResponseEntity.ok(buildAuthBody(request, user, true));
     }
 
+    @PostMapping("/auth/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+        String username = String.valueOf(request.getAttribute("authUsername"));
+        String role = String.valueOf(request.getAttribute("authRole"));
+        String tenantId = String.valueOf(request.getAttribute("authTenantId"));
+        auditLogService.record(username, role, "LOGOUT", "AUTH", null, "User logged out", tenantId);
+        return ResponseEntity.ok(successByKey(request, "logout_success", null));
+    }
+
     private Map<String, Object> buildAuthBody(HttpServletRequest request, UserAccount user, boolean sso) {
         String ownerScope = isBlank(user.getOwnerScope()) ? user.getUsername() : user.getOwnerScope();
         String tenantId = isBlank(user.getTenantId()) ? "tenant_default" : user.getTenantId();

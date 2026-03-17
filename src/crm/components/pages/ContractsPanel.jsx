@@ -1,8 +1,29 @@
-import { useMemo, useState } from 'react'
-import { CONTRACT_STATUS_OPTIONS, formatMoney, translateStatus } from '../../shared'
+import { memo, useMemo, useState } from 'react'
+import { api, CONTRACT_STATUS_OPTIONS, formatMoney, translateStatus } from '../../shared'
 import ListState from '../ListState'
 import RowDetailDrawer from '../RowDetailDrawer'
 import ServerPager from '../ServerPager'
+import { useBatchActions } from '../useBatchActions'
+import BatchResultModal from '../BatchResultModal'
+import VirtualListTable from '../VirtualListTable'
+import { useSelectionSet } from '../../hooks/useSelectionSet'
+
+const ContractRow = memo(function ContractRow({ row, checked, onToggle, t, setDetail, editContract, canDeleteCustomer, removeContract }) {
+  return (
+    <div className="table-row table-row-6">
+      <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
+      <span>{row.contractNo}</span>
+      <span>{row.title}</span>
+      <span>{formatMoney(row.amount)}</span>
+      <span>{row.signDate || translateStatus(t, row.status)}</span>
+      <span>
+        <button className="mini-btn" onClick={() => setDetail(row)}>{t('detail')}</button>
+        <button className="mini-btn" onClick={() => editContract(row)}>{t('save')}</button>
+        {canDeleteCustomer ? <button className="danger-btn" onClick={() => removeContract(row.id)}>{t('delete')}</button> : null}
+      </span>
+    </div>
+  )
+})
 
 function ContractsPanel({
   activePage,
@@ -25,10 +46,17 @@ function ContractsPanel({
   pagination,
   onPageChange,
   onSizeChange,
-  reload,
+  onRefresh,
+  apiContext,
 }) {
   const [sortBy, setSortBy] = useState('amountDesc')
   const [detail, setDetail] = useState(null)
+  const [batchStatus, setBatchStatus] = useState('')
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const token = apiContext?.token
+  const lang = apiContext?.lang || 'en'
+  const { summary: batchSummary, toastMessage: batchMessage, runBatch, clearSummary } = useBatchActions({ t })
+  const refreshSelf = onRefresh
 
   const toggleSort = (key) => {
     setSortBy((prev) => {
@@ -48,6 +76,48 @@ function ContractsPanel({
 
   const page = pagination?.page || 1
   const totalPages = Math.max(1, pagination?.totalPages || 1)
+  const selection = useSelectionSet(rows, (row) => row.id)
+  const { selectedIds, selectedCount, allChecked, clearSelection, selectPage, toggleAll, toggleOne } = selection
+  const byId = useMemo(() => new Map((contracts || []).map((row) => [row.id, row])), [contracts])
+
+  const updateOne = async (id, patch) => {
+    const row = byId.get(id)
+    if (!row) return
+    const payload = {
+      customerId: String(row.customerId || '').trim(),
+      contractNo: String(row.contractNo || '').trim(),
+      title: String(row.title || '').trim(),
+      amount: Number(row.amount || 0),
+      status: String(patch.status ?? row.status ?? '').trim(),
+      signDate: String(row.signDate || '').trim(),
+    }
+    await api('/contracts/' + id, { method: 'PATCH', body: JSON.stringify(payload) }, token, lang)
+  }
+
+  const batchDelete = async () => {
+    if (!canDeleteCustomer) return
+    const result = await runBatch({
+      ids: [...selectedIds],
+      worker: (id) => api('/contracts/' + id, { method: 'DELETE' }, token, lang),
+      batch: { path: '/v1/contracts/batch-actions', action: 'DELETE', token, lang },
+      canRun: canDeleteCustomer,
+    })
+    if (result?.failed > 0) setBatchModalOpen(true)
+    clearSelection()
+    await refreshSelf()
+  }
+
+  const batchChangeStatus = async () => {
+    if (!batchStatus) return
+    const result = await runBatch({
+      ids: [...selectedIds],
+      worker: (id) => updateOne(id, { status: batchStatus }),
+      batch: { path: '/v1/contracts/batch-actions', action: 'UPDATE_STATUS', payload: { status: batchStatus }, token, lang },
+    })
+    if (result?.failed > 0) setBatchModalOpen(true)
+    clearSelection()
+    await refreshSelf()
+  }
 
   if (activePage !== 'contracts') return null
 
@@ -73,16 +143,32 @@ function ContractsPanel({
         </div>
       )}
       {formError && <div className="field-error" style={{ marginBottom: 8 }}>{formError}</div>}
-      <div className="inline-tools" style={{ marginBottom: 10 }}>
+      <div className="inline-tools filter-row" style={{ marginBottom: 8 }}>
         <input className="tool-input" placeholder={t('search')} value={contractQ} onChange={(e) => setContractQ(e.target.value)} />
         <select className="tool-input" value={contractStatus} onChange={(e) => setContractStatus(e.target.value)}>
           <option value="">{t('allStatuses')}</option>
           {CONTRACT_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{translateStatus(t, status)}</option>)}
         </select>
-        <button className="mini-btn" onClick={() => onPageChange(1)}>{t('search')}</button>
-        <button className="mini-btn" onClick={() => reload(page)}>{t('refresh')}</button>
       </div>
-      <div className="table-row table-head-row">
+      <div className="inline-tools filter-bar" style={{ marginBottom: 10 }}>
+        <button className="mini-btn" onClick={() => onPageChange(1)}>{t('search')}</button>
+        <button className="mini-btn" onClick={refreshSelf}>{t('refresh')}</button>
+      </div>
+      <div className="inline-tools filter-bar" style={{ marginBottom: 10 }}>
+        <span className="muted-filter">{t('batchSelectedCount')}: {selectedCount}</span>
+        <button className="mini-btn" onClick={selectPage}>{t('selectPage')}</button>
+        <button className="mini-btn" onClick={clearSelection}>{t('clearSelection')}</button>
+        <select className="tool-input" value={batchStatus} onChange={(e) => setBatchStatus(e.target.value)}>
+          <option value="">{t('batchSetStatus')}</option>
+          {CONTRACT_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{translateStatus(t, status)}</option>)}
+        </select>
+        <button className="mini-btn" disabled={!canWrite} onClick={batchChangeStatus}>{t('batchSetStatus')}</button>
+        {canDeleteCustomer && <button className="danger-btn" onClick={batchDelete}>{t('batchDelete')}</button>}
+        {batchSummary?.failed > 0 && <button className="mini-btn" onClick={() => setBatchModalOpen(true)}>{t('batchResultTitle')}</button>}
+      </div>
+      {batchMessage && <div className="info-banner" style={{ marginBottom: 8 }}>{batchMessage}</div>}
+      <div className="table-row table-head-row table-row-6">
+        <span><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></span>
         <span>{t('contractNo')}</span>
         <span>{t('title')}</span>
         <button className="table-head-btn" onClick={() => toggleSort('amount')}>{t('amount')}</button>
@@ -90,7 +176,26 @@ function ContractsPanel({
         <span>{t('action')}</span>
       </div>
       <ListState loading={loading} empty={!loading && rows.length === 0} emptyText={t('noData')} />
-      {!loading && rows.map((c) => <div key={c.id} className="table-row"><span>{c.contractNo}</span><span>{c.title}</span><span>{formatMoney(c.amount)}</span><span>{c.signDate || translateStatus(t, c.status)}</span><span><button className="mini-btn" onClick={() => setDetail(c)}>{t('detail')}</button><button className="mini-btn" onClick={() => editContract(c)}>{t('save')}</button>{canDeleteCustomer ? <button className="danger-btn" onClick={() => removeContract(c.id)}>{t('delete')}</button> : null}</span></div>)}
+      {!loading && rows.length > 0 && (
+        <VirtualListTable
+          rows={rows}
+          viewportHeight={460}
+          getRowKey={(row) => row.id}
+          renderRow={(row) => (
+            <ContractRow
+              key={row.id}
+              row={row}
+              checked={selectedIds.has(row.id)}
+              onToggle={(e) => toggleOne(row.id, e.target.checked)}
+              t={t}
+              setDetail={setDetail}
+              editContract={editContract}
+              canDeleteCustomer={canDeleteCustomer}
+              removeContract={removeContract}
+            />
+          )}
+        />
+      )}
       {!loading && rows.length > 0 && <ServerPager t={t} page={page} totalPages={totalPages} size={pagination?.size || 8} onPageChange={onPageChange} onSizeChange={onSizeChange} />}
       <RowDetailDrawer open={!!detail} title={t('contracts')} t={t} onClose={() => setDetail(null)} rows={[
         { label: t('idLabel'), value: detail?.id },
@@ -101,8 +206,9 @@ function ContractsPanel({
         { label: t('status'), value: translateStatus(t, detail?.status) },
         { label: t('signDate'), value: detail?.signDate },
       ]} />
+      <BatchResultModal t={t} open={batchModalOpen} summary={batchSummary} onClose={() => { setBatchModalOpen(false); clearSummary() }} />
     </section>
   )
 }
 
-export default ContractsPanel
+export default memo(ContractsPanel)

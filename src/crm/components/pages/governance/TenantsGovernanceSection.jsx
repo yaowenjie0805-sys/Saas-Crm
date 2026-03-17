@@ -66,8 +66,8 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
   }, [tenantQuery, tenantStatusFilter, tenantSize, setTenantPage])
 
   return (
-    <section className="panel">
-      <div className="panel-head"><h2>{t('tenantsAdmin')}</h2><button className="mini-btn" onClick={onRefresh}>{t('refresh')}</button></div>
+    <section className="panel" data-testid="tenants-page">
+      <div className="panel-head"><h2 data-testid="tenants-heading">{t('tenantsAdmin')}</h2><button className="mini-btn" data-testid="tenants-refresh" onClick={onRefresh}>{t('refresh')}</button></div>
       <div className="inline-tools filter-row" style={{ marginBottom: 8 }}>
         <input className="tool-input" placeholder={t('tenantName')} value={tenants.form.name} onChange={(e) => tenants.setForm((p) => ({ ...p, name: e.target.value }))} />
         <input className="tool-input" placeholder={t('tenantQuota')} value={tenants.form.quotaUsers} onChange={(e) => tenants.setForm((p) => ({ ...p, quotaUsers: e.target.value }))} />
@@ -132,7 +132,7 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
                 <select className="tool-input" value={row.approvalMode || 'STRICT'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, approvalMode: e.target.value } : x))}>
                   {TENANT_APPROVAL_MODE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
                 </select>
-                <input className="tool-input" placeholder={t('channelsLabel')} value={row.channels || '[\"WECOM\",\"DINGTALK\"]'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, channels: e.target.value } : x))} />
+                <input className="tool-input" placeholder={t('channelsLabel')} value={row.channels || '["WECOM","DINGTALK"]'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, channels: e.target.value } : x))} />
                 <input className="tool-input" placeholder={t('dataResidency')} value={row.dataResidency || 'CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, dataResidency: e.target.value } : x))} />
                 <input className="tool-input" placeholder={t('maskLevel')} value={row.maskLevel || 'STANDARD'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, maskLevel: e.target.value } : x))} />
                 <select className="tool-input" value={row.dateFormat || 'yyyy-MM-dd'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, dateFormat: e.target.value } : x))}>

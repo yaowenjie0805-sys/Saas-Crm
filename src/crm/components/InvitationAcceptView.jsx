@@ -4,7 +4,8 @@ import { api } from '../shared'
 function InvitationAcceptView({ lang, setLang, t, onBackToLogin }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), [])
   const tokenFromUrl = params.get('token') || ''
-  const [form, setForm] = useState({ token: tokenFromUrl, password: '', confirmPassword: '', displayName: '' })
+  const tenantFromUrl = params.get('tenantId') || localStorage.getItem('crm_last_tenant') || 'tenant_default'
+  const [form, setForm] = useState({ tenantId: tenantFromUrl, token: tokenFromUrl, password: '', confirmPassword: '', displayName: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -13,7 +14,7 @@ function InvitationAcceptView({ lang, setLang, t, onBackToLogin }) {
     e.preventDefault()
     setError('')
     setSuccess('')
-    if (!form.token.trim() || !form.password.trim() || !form.confirmPassword.trim()) {
+    if (!form.tenantId.trim() || !form.token.trim() || !form.password.trim() || !form.confirmPassword.trim()) {
       setError(t('fieldRequired'))
       return
     }
@@ -23,8 +24,9 @@ function InvitationAcceptView({ lang, setLang, t, onBackToLogin }) {
     }
     try {
       setLoading(true)
-      await api('/v1/auth/invitations/accept', {
+      const accepted = await api('/v1/auth/invitations/accept', {
         method: 'POST',
+        headers: { 'X-Tenant-Id': form.tenantId.trim() },
         body: JSON.stringify({
           token: form.token.trim(),
           password: form.password,
@@ -32,9 +34,11 @@ function InvitationAcceptView({ lang, setLang, t, onBackToLogin }) {
           displayName: form.displayName.trim(),
         }),
       }, null, lang)
-      setSuccess(t('inviteActivateSuccess'))
+      localStorage.setItem('crm_last_tenant', form.tenantId.trim())
+      const successMessage = accepted?.message || t('inviteActivateSuccess')
+      setSuccess(accepted?.requestId ? `${successMessage} [${accepted.requestId}]` : successMessage)
     } catch (err) {
-      setError(err.message)
+      setError(err.requestId ? `${err.message} [${err.requestId}]` : err.message)
     } finally {
       setLoading(false)
     }
@@ -50,6 +54,7 @@ function InvitationAcceptView({ lang, setLang, t, onBackToLogin }) {
         <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
           <h1>{t('inviteActivateTitle')}</h1>
           <p>{t('inviteActivateHint')}</p>
+          <input placeholder={t('tenantId')} value={form.tenantId} onChange={(e) => setForm((p) => ({ ...p, tenantId: e.target.value }))} />
           <input placeholder={t('inviteToken')} value={form.token} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} />
           <input type="password" placeholder={t('password')} value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} autoComplete="new-password" />
           <input type="password" placeholder={t('confirmPassword')} value={form.confirmPassword} onChange={(e) => setForm((p) => ({ ...p, confirmPassword: e.target.value }))} autoComplete="new-password" />

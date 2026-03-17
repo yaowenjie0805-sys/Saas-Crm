@@ -26,7 +26,9 @@ public class DashboardController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        return ResponseEntity.ok(dashboardService.load());
+        com.yao.crm.dto.DashboardResponse body = dashboardService.load();
+        body.setRequestId(traceId(request));
+        return ResponseEntity.ok(body);
     }
 }
 

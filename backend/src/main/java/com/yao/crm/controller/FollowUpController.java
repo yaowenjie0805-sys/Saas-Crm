@@ -121,7 +121,7 @@ public class FollowUpController extends BaseApiController {
         followUp.setChannel(isBlank(payload.getChannel()) ? "Phone" : valueNormalizerService.normalizeFollowUpChannel(payload.getChannel()));
         followUp.setResult(isBlank(payload.getResult()) ? "Pending" : payload.getResult());
         if (!isBlank(payload.getNextActionDate())) {
-            LocalDate nextDate = parseLocalDate(payload.getNextActionDate());
+            LocalDate nextDate = parseLocalDate(request, payload.getNextActionDate());
             followUp.setNextActionDate(nextDate);
         }
 
@@ -162,7 +162,7 @@ public class FollowUpController extends BaseApiController {
             if (isBlank(patch.getNextActionDate())) {
                 followUp.setNextActionDate(null);
             } else {
-                LocalDate nextDate = parseLocalDate(patch.getNextActionDate());
+                LocalDate nextDate = parseLocalDate(request, patch.getNextActionDate());
                 if (nextDate == null) {
                     return ResponseEntity.badRequest().body(legacyErrorByKey(request, "next_action_date_format", "BAD_REQUEST", null));
                 }
