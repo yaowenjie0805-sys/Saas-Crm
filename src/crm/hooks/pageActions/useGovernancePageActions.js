@@ -33,7 +33,7 @@ function withRequestIdMessage(err, fallback) {
 function normalizeTenantPayload(raw, normalizeDateFormat) {
   const marketProfile = String(raw?.marketProfile || 'CN').trim().toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'
   const currency = String(raw?.currency || '').trim().toUpperCase() || (marketProfile === 'GLOBAL' ? 'USD' : 'CNY')
-  const timezone = String(raw?.timezone || '').trim() || 'Asia/Shanghai'
+  const timezone = String(raw?.timezone || '').trim() || (marketProfile === 'GLOBAL' ? 'UTC' : 'Asia/Shanghai')
   const dateFormat = normalizeDateFormat(raw?.dateFormat)
   return {
     name: String(raw?.name || '').trim(),

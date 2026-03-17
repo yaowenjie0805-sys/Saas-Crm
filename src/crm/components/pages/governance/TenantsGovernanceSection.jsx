@@ -13,16 +13,26 @@ const MARKET_DEFAULTS = {
 }
 
 function applyMarketDefaults(base, nextMarketProfile) {
+  const prevMarketProfile = String(base?.marketProfile || 'CN').toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'
   const marketProfile = String(nextMarketProfile || 'CN').toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'
+  const prevDefaults = MARKET_DEFAULTS[prevMarketProfile]
   const defaults = MARKET_DEFAULTS[marketProfile]
+  const switched = prevMarketProfile !== marketProfile
+  const normalize = (value) => String(value || '').trim()
+  const pick = (field, fallback) => {
+    const current = normalize(base?.[field])
+    if (!switched) return current || fallback
+    const prevDefault = normalize(prevDefaults?.[field])
+    return !current || current === prevDefault ? fallback : current
+  }
   return {
     ...base,
     marketProfile,
-    currency: String(base?.currency || '').trim() || defaults.currency,
-    timezone: String(base?.timezone || '').trim() || defaults.timezone,
-    taxRule: String(base?.taxRule || '').trim() || defaults.taxRule,
-    channels: String(base?.channels || '').trim() || defaults.channels,
-    dataResidency: String(base?.dataResidency || '').trim() || defaults.dataResidency,
+    currency: pick('currency', defaults.currency),
+    timezone: pick('timezone', defaults.timezone),
+    taxRule: pick('taxRule', defaults.taxRule),
+    channels: pick('channels', defaults.channels),
+    dataResidency: pick('dataResidency', defaults.dataResidency),
   }
 }
 

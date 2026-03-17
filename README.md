@@ -27,6 +27,10 @@ Windows one-click init (create DB + Flyway migrate + seed data):
 npm run db:init
 ```
 
+`db:init` now also applies dual-market demo seed (`scripts/seed-dual-market-demo.sql`), including:
+- `tenant_cn_demo` (`CN/CNY/Asia-Shanghai/STRICT`)
+- `tenant_global_demo` (`GLOBAL/USD/UTC/STAGE_GATE`)
+
 Linux/macOS:
 ```bash
 bash scripts/init-db.sh root root crm_local

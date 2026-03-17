@@ -75,60 +75,90 @@ public class DataInitializer {
                 tenantRepository.save(tenant);
             }
 
-            if (customerRepository.count() == 0) {
+            if (!customerRepository.existsById("c_1001")) {
                 customerRepository.save(makeCustomer("c_1001", "HuaJing Manufacturing", "wang", "A", 320000L, "Active"));
+            }
+            if (!customerRepository.existsById("c_1002")) {
                 customerRepository.save(makeCustomer("c_1002", "LingFeng Medical", "zhao", "Renewal", 210000L, "Pending"));
+            }
+            if (!customerRepository.existsById("c_1003")) {
                 customerRepository.save(makeCustomer("c_1003", "QiGuang Tech", "chen", "New", 98000L, "Pending"));
+            }
+            if (!customerRepository.existsById("c_1004")) {
                 customerRepository.save(makeCustomer("c_1004", "BlueMap Logistics", "li", "HighPotential", 450000L, "Active"));
             }
 
-            if (opportunityRepository.count() == 0) {
+            if (!opportunityRepository.existsById("o_2001")) {
                 opportunityRepository.save(makeOpportunity("o_2001", "Lead", 76, 420000L, 80, "chen"));
+            }
+            if (!opportunityRepository.existsById("o_2002")) {
                 opportunityRepository.save(makeOpportunity("o_2002", "Qualified", 54, 360000L, 64, "zhao"));
+            }
+            if (!opportunityRepository.existsById("o_2003")) {
                 opportunityRepository.save(makeOpportunity("o_2003", "Proposal", 31, 530000L, 48, "chen"));
+            }
+            if (!opportunityRepository.existsById("o_2004")) {
                 opportunityRepository.save(makeOpportunity("o_2004", "Negotiation", 15, 290000L, 28, "li"));
+            }
+            if (!opportunityRepository.existsById("o_2005")) {
                 opportunityRepository.save(makeOpportunity("o_2005", "Closed Won", 9, 260000L, 20, "chen"));
             }
 
-            if (taskRepository.count() == 0) {
+            if (!taskRepository.existsById("t_3001")) {
                 taskRepository.save(makeTask("t_3001", "Prepare proposal review", "today 15:30", "High", false, "manager"));
+            }
+            if (!taskRepository.existsById("t_3002")) {
                 taskRepository.save(makeTask("t_3002", "Confirm budget with purchaser", "today 17:00", "Medium", false, "sales"));
+            }
+            if (!taskRepository.existsById("t_3003")) {
                 taskRepository.save(makeTask("t_3003", "Refresh quarterly sales analysis", "tomorrow 10:00", "High", false, "admin"));
             }
 
-            if (followUpRepository.count() == 0) {
+            if (!followUpRepository.existsById("f_4001")) {
                 followUpRepository.save(makeFollowUp("f_4001", "c_1001", "admin", "Confirm final contract clauses", "Phone", "Pending", null));
+            }
+            if (!followUpRepository.existsById("f_4002")) {
                 followUpRepository.save(makeFollowUp("f_4002", "c_1002", "sales", "Sent revised quotation and rollout plan", "Email", "Waiting Feedback", null));
             }
 
-            if (contactRepository.count() == 0) {
+            if (!contactRepository.existsById("ct_5001")) {
                 contactRepository.save(makeContact("ct_5001", "c_1001", "Zhou Kai", "Procurement Director", "13800138001", "zhoukai@huajing.com", "wang"));
+            }
+            if (!contactRepository.existsById("ct_5002")) {
                 contactRepository.save(makeContact("ct_5002", "c_1002", "Liu Min", "IT Manager", "13800138002", "liumin@lingfeng.com", "zhao"));
             }
 
-            if (contractRepository.count() == 0) {
+            if (!contractRepository.existsById("cr_6001")) {
                 contractRepository.save(makeContract("cr_6001", "c_1001", "CT-2026001", "Digital Upgrade Project", 180000L, "Draft", LocalDate.now().minusDays(12), "wang"));
+            }
+            if (!contractRepository.existsById("cr_6002")) {
                 contractRepository.save(makeContract("cr_6002", "c_1002", "CT-2026002", "Data Integration", 260000L, "Signed", LocalDate.now().minusDays(25), "zhao"));
             }
 
-            if (paymentRepository.count() == 0) {
+            if (!paymentRepository.existsById("pm_7001")) {
                 paymentRepository.save(makePayment("pm_7001", "c_1002", "cr_6002", 120000L, LocalDate.now().minusDays(5), "Bank", "Received", "Phase 1 payment", "zhao"));
+            }
+            if (!paymentRepository.existsById("pm_7002")) {
                 paymentRepository.save(makePayment("pm_7002", "c_1001", "cr_6001", 0L, null, "Bank", "Pending", "Pending after contract sign", "wang"));
             }
 
-            if (productRepository.count() == 0) {
+            if (!productRepository.existsById("prd_8001")) {
                 productRepository.save(makeProduct("prd_8001", "SKU-CRM-001", "CRM License", "Software", 120000L, 0.06, "CNY"));
+            }
+            if (!productRepository.existsById("prd_8002")) {
                 productRepository.save(makeProduct("prd_8002", "SKU-SRV-001", "Implementation Service", "Service", 80000L, 0.06, "CNY"));
             }
 
-            if (quoteRepository.count() == 0) {
+            if (!quoteRepository.existsById("qt_9001")) {
                 quoteRepository.save(makeQuote("qt_9001", "QT-2026001", "c_1001", "o_2001", "wang", "APPROVED", 200000L, 12000L, 212000L));
             }
-            if (quoteItemRepository.count() == 0) {
+            if (!quoteItemRepository.existsById("qti_9001")) {
                 quoteItemRepository.save(makeQuoteItem("qti_9001", "qt_9001", "prd_8001", "CRM License", 1, 120000L, 0.0, 0.06, 120000L, 7200L, 127200L));
+            }
+            if (!quoteItemRepository.existsById("qti_9002")) {
                 quoteItemRepository.save(makeQuoteItem("qti_9002", "qt_9001", "prd_8002", "Implementation Service", 1, 80000L, 0.0, 0.06, 80000L, 4800L, 84800L));
             }
-            if (orderRecordRepository.count() == 0) {
+            if (!orderRecordRepository.existsById("ord_9101")) {
                 orderRecordRepository.save(makeOrder("ord_9101", "ORD-2026001", "c_1001", "o_2001", "qt_9001", "wang", "FULFILLING", 212000L));
             }
 
@@ -443,7 +473,8 @@ public class DataInitializer {
                             String role,
                             String displayName,
                             String ownerScope) {
-        UserAccount user = repository.findByUsername(username).orElseGet(() -> makeUser(id, username, "", role, displayName, ownerScope));
+        UserAccount user = repository.findByUsernameAndTenantId(username, "tenant_default")
+                .orElseGet(() -> makeUser(id, username, "", role, displayName, ownerScope));
         user.setId(id);
         user.setUsername(username);
         user.setPassword(encoder.encode(rawPassword));

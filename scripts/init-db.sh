@@ -26,4 +26,8 @@ echo "[db:init] Running Flyway migrations + seed data ..."
 mvn -f backend/pom.xml -DskipTests spring-boot:run \
   "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.init-only=true"
 
+echo "[db:init] Applying dual-market demo SQL seed ..."
+mysql --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" \
+  < scripts/seed-dual-market-demo.sql
+
 echo "[db:init] Done (database + migration + seed)."

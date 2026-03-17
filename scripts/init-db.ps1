@@ -35,4 +35,10 @@ if ($LASTEXITCODE -ne 0) {
   throw "[db:init] backend init failed"
 }
 
+Write-Host "[db:init] Applying dual-market demo SQL seed ..."
+mysql --protocol=TCP -h$DbHost -P$DbPort -u$DbUser -p$DbPassword $DbName -e "source scripts/seed-dual-market-demo.sql"
+if ($LASTEXITCODE -ne 0) {
+  throw "[db:init] dual-market seed failed"
+}
+
 Write-Host "[db:init] Done (database + migration + seed)."
