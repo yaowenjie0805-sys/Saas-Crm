@@ -61,13 +61,61 @@ ON DUPLICATE KEY UPDATE
   data_scope = VALUES(data_scope);
 
 INSERT INTO customers (id, name, owner, tag, value, status, tenant_id, created_at, updated_at) VALUES
-  ('c_cn_01', '华京制造', 'sales', 'A', 260000, 'ACTIVE', 'tenant_cn_demo', NOW(), NOW()),
-  ('c_cn_02', '凌峰医疗', 'manager', 'NEW', 220000, 'PENDING', 'tenant_cn_demo', NOW(), NOW()),
+  ('c_cn_01', 'Huajing Manufacturing', 'sales', 'A', 260000, 'ACTIVE', 'tenant_cn_demo', NOW(), NOW()),
+  ('c_cn_02', 'Lingfeng Medical', 'manager', 'NEW', 220000, 'PENDING', 'tenant_cn_demo', NOW(), NOW()),
   ('c_gl_01', 'Northwind Labs', 'sales', 'A', 420000, 'ACTIVE', 'tenant_global_demo', NOW(), NOW()),
   ('c_gl_02', 'Borealis Retail', 'manager', 'NEW', 360000, 'PENDING', 'tenant_global_demo', NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), owner = VALUES(owner), tag = VALUES(tag), value = VALUES(value),
   status = VALUES(status), tenant_id = VALUES(tenant_id), updated_at = NOW();
+
+INSERT INTO leads (id, name, company, phone, email, status, owner, source, tenant_id, created_at, updated_at) VALUES
+  ('l_cn_01', 'CN Seed Lead 1', 'Huajing Manufacturing', '13900000001', 'cn.seed1@example.com', 'NEW', 'sales', 'WECOM', 'tenant_cn_demo', NOW(), NOW()),
+  ('l_cn_02', 'CN Seed Lead 2', 'Lingfeng Medical', '13900000002', 'cn.seed2@example.com', 'QUALIFIED', 'manager', 'REFERRAL', 'tenant_cn_demo', NOW(), NOW()),
+  ('l_gl_01', 'GLOBAL Seed Lead 1', 'Northwind Labs', '13900000011', 'gl.seed1@example.com', 'NEW', 'sales', 'WEBSITE', 'tenant_global_demo', NOW(), NOW()),
+  ('l_gl_02', 'GLOBAL Seed Lead 2', 'Borealis Retail', '13900000012', 'gl.seed2@example.com', 'NURTURING', 'manager', 'EMAIL', 'tenant_global_demo', NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name), company = VALUES(company), phone = VALUES(phone), email = VALUES(email),
+  status = VALUES(status), owner = VALUES(owner), source = VALUES(source), tenant_id = VALUES(tenant_id), updated_at = NOW();
+
+INSERT INTO lead_assignment_rules (id, tenant_id, name, enabled, members_json, rr_cursor, created_at, updated_at) VALUES
+  ('lar_cn_01', 'tenant_cn_demo', 'CN demo rule', 1, '[{"username":"sales","weight":2,"enabled":true},{"username":"manager","weight":1,"enabled":true}]', 0, NOW(), NOW()),
+  ('lar_gl_01', 'tenant_global_demo', 'GLOBAL demo rule', 1, '[{"username":"sales","weight":2,"enabled":true},{"username":"manager","weight":1,"enabled":true}]', 0, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name), enabled = VALUES(enabled), members_json = VALUES(members_json), rr_cursor = VALUES(rr_cursor), updated_at = NOW();
+
+INSERT INTO lead_import_jobs (
+  id, tenant_id, file_name, status, total_rows, success_count, fail_count, result_json,
+  created_by, created_at, updated_at, processed_rows, percent, last_heartbeat_at, cancel_requested, error_message
+) VALUES
+  ('lij_cn_demo', 'tenant_cn_demo', 'lead-import-cn.csv', 'PARTIAL_SUCCESS', 6, 4, 2, NULL, 'admin', NOW(), NOW(), 6, 100, NOW(), 0, 'lead_import_partial_failure'),
+  ('lij_gl_demo', 'tenant_global_demo', 'lead-import-global.csv', 'PARTIAL_SUCCESS', 6, 4, 2, NULL, 'admin', NOW(), NOW(), 6, 100, NOW(), 0, 'lead_import_partial_failure')
+ON DUPLICATE KEY UPDATE
+  file_name = VALUES(file_name), status = VALUES(status), total_rows = VALUES(total_rows), success_count = VALUES(success_count),
+  fail_count = VALUES(fail_count), processed_rows = VALUES(processed_rows), percent = VALUES(percent),
+  last_heartbeat_at = VALUES(last_heartbeat_at), cancel_requested = VALUES(cancel_requested), error_message = VALUES(error_message), updated_at = NOW();
+
+INSERT INTO lead_import_job_chunks (
+  id, tenant_id, job_id, chunk_no, status, payload_json, retry_count, last_error, created_at, updated_at
+) VALUES
+  ('ljc_cn_01', 'tenant_cn_demo', 'lij_cn_demo', 1, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_cn_02', 'tenant_cn_demo', 'lij_cn_demo', 2, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_gl_01', 'tenant_global_demo', 'lij_gl_demo', 1, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_gl_02', 'tenant_global_demo', 'lij_gl_demo', 2, 'PROCESSED', '[]', 0, NULL, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+  status = VALUES(status), payload_json = VALUES(payload_json), retry_count = VALUES(retry_count),
+  last_error = VALUES(last_error), updated_at = NOW();
+
+INSERT INTO lead_import_job_items (
+  id, tenant_id, job_id, line_no, status, raw_line, error_code, error_message, created_at
+) VALUES
+  ('lji_cn_01', 'tenant_cn_demo', 'lij_cn_demo', 3, 'FAILED', 'CN duplicate row', 'lead_import_duplicate', 'duplicate lead', NOW()),
+  ('lji_cn_02', 'tenant_cn_demo', 'lij_cn_demo', 5, 'FAILED', 'CN invalid phone', 'contact_phone_invalid', 'invalid phone', NOW()),
+  ('lji_gl_01', 'tenant_global_demo', 'lij_gl_demo', 4, 'FAILED', 'GLOBAL duplicate row', 'lead_import_duplicate', 'duplicate lead', NOW()),
+  ('lji_gl_02', 'tenant_global_demo', 'lij_gl_demo', 6, 'FAILED', 'GLOBAL invalid phone', 'contact_phone_invalid', 'invalid phone', NOW())
+ON DUPLICATE KEY UPDATE
+  line_no = VALUES(line_no), status = VALUES(status), raw_line = VALUES(raw_line),
+  error_code = VALUES(error_code), error_message = VALUES(error_message), created_at = VALUES(created_at);
 
 INSERT INTO opportunities (
   id, stage, count, amount, owner, progress, tenant_id, settlement_currency, exchange_rate_snapshot, tax_display_mode, compliance_tag, created_at, updated_at
@@ -84,8 +132,8 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO products (
   id, tenant_id, code, name, category, status, standard_price, tax_rate, currency, unit, sale_region, created_at, updated_at
 ) VALUES
-  ('prd_cn_01', 'tenant_cn_demo', 'SKU-CN-CRM', 'CRM 授权', 'SOFTWARE', 'ACTIVE', 180000, 0.0600, 'CNY', 'item', 'CN', NOW(), NOW()),
-  ('prd_cn_02', 'tenant_cn_demo', 'SKU-CN-PS', '实施服务', 'SERVICE', 'ACTIVE', 120000, 0.0600, 'CNY', 'item', 'CN', NOW(), NOW()),
+  ('prd_cn_01', 'tenant_cn_demo', 'SKU-CN-CRM', 'CRM License CN', 'SOFTWARE', 'ACTIVE', 180000, 0.0600, 'CNY', 'item', 'CN', NOW(), NOW()),
+  ('prd_cn_02', 'tenant_cn_demo', 'SKU-CN-PS', 'Implementation Service CN', 'SERVICE', 'ACTIVE', 120000, 0.0600, 'CNY', 'item', 'CN', NOW(), NOW()),
   ('prd_gl_01', 'tenant_global_demo', 'SKU-GL-CRM', 'CRM Subscription', 'SOFTWARE', 'ACTIVE', 260000, 0.0600, 'USD', 'item', 'GLOBAL', NOW(), NOW()),
   ('prd_gl_02', 'tenant_global_demo', 'SKU-GL-PS', 'Professional Service', 'SERVICE', 'ACTIVE', 140000, 0.0600, 'USD', 'item', 'GLOBAL', NOW(), NOW())
 ON DUPLICATE KEY UPDATE
@@ -111,8 +159,8 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO quote_items (
   id, tenant_id, quote_id, product_id, product_name, quantity, unit_price, discount_rate, tax_rate, subtotal_amount, tax_amount, total_amount, created_at, updated_at
 ) VALUES
-  ('qi_cn_01', 'tenant_cn_demo', 'q_cn_01', 'prd_cn_01', 'CRM 授权', 1, 180000, 0, 0.0600, 180000, 10800, 190800, NOW(), NOW()),
-  ('qi_cn_02', 'tenant_cn_demo', 'q_cn_01', 'prd_cn_02', '实施服务', 1, 120000, 0, 0.0600, 120000, 7200, 127200, NOW(), NOW()),
+  ('qi_cn_01', 'tenant_cn_demo', 'q_cn_01', 'prd_cn_01', 'CRM License CN', 1, 180000, 0, 0.0600, 180000, 10800, 190800, NOW(), NOW()),
+  ('qi_cn_02', 'tenant_cn_demo', 'q_cn_01', 'prd_cn_02', 'Implementation Service CN', 1, 120000, 0, 0.0600, 120000, 7200, 127200, NOW(), NOW()),
   ('qi_gl_01', 'tenant_global_demo', 'q_gl_01', 'prd_gl_01', 'CRM Subscription', 1, 260000, 0, 0.0600, 260000, 15600, 275600, NOW(), NOW()),
   ('qi_gl_02', 'tenant_global_demo', 'q_gl_01', 'prd_gl_02', 'Professional Service', 1, 140000, 0, 0.0600, 140000, 8400, 148400, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
@@ -139,7 +187,7 @@ INSERT INTO contracts (
   id, customer_id, contract_no, title, amount, status, sign_date, owner, tenant_id,
   settlement_currency, exchange_rate_snapshot, invoice_status, tax_display_mode, compliance_tag, created_at, updated_at
 ) VALUES
-  ('cr_cn_01', 'c_cn_01', 'CT-CN-001', 'CRM 年度主合同', 318000, 'SIGNED', DATE_SUB(CURDATE(), INTERVAL 8 DAY), 'manager', 'tenant_cn_demo',
+  ('cr_cn_01', 'c_cn_01', 'CT-CN-001', 'CN Annual CRM Contract', 318000, 'SIGNED', DATE_SUB(CURDATE(), INTERVAL 8 DAY), 'manager', 'tenant_cn_demo',
    'CNY', '1.000000@PBOC', 'NOT_REQUIRED', 'TAX_INCLUSIVE', 'CN_LOCAL', NOW(), NOW()),
   ('cr_gl_01', 'c_gl_01', 'CT-GL-001', 'Annual CRM Contract', 424000, 'SIGNED', DATE_SUB(CURDATE(), INTERVAL 8 DAY), 'manager', 'tenant_global_demo',
    'USD', '1.080000@ECB', 'PENDING', 'TAX_EXCLUSIVE', 'GDPR_SAFE', NOW(), NOW())
@@ -167,7 +215,7 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO approval_templates (
   id, tenant_id, biz_type, name, amount_min, amount_max, role, department, approver_roles, flow_definition, version, status, enabled, created_at, updated_at
 ) VALUES
-  ('apt_cn_01', 'tenant_cn_demo', 'QUOTE', '报价审批流', 200000, NULL, 'SALES', 'DEFAULT', '["MANAGER","ADMIN"]',
+  ('apt_cn_01', 'tenant_cn_demo', 'QUOTE', 'CN quote approval flow', 200000, NULL, 'SALES', 'DEFAULT', '["MANAGER","ADMIN"]',
    '{"nodes":[{"key":"n1","role":"MANAGER"},{"key":"n2","role":"ADMIN"}]}', 1, 'PUBLISHED', 1, NOW(), NOW()),
   ('apt_gl_01', 'tenant_global_demo', 'QUOTE', 'Quote approval flow', 200000, NULL, 'SALES', 'DEFAULT', '["MANAGER","ADMIN"]',
    '{"nodes":[{"key":"n1","role":"MANAGER"},{"key":"n2","role":"ADMIN"}]}', 1, 'PUBLISHED', 1, NOW(), NOW())

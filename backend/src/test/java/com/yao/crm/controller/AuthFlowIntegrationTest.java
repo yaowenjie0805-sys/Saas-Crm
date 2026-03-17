@@ -1282,6 +1282,32 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void v1LeadImportJobResponseShouldExposeTaskStatsAndFailureSummary() throws Exception {
+        String token = login("admin", "admin123");
+        String csv = "name,company,phone,email,source,owner,status\n" +
+                "Lead B,Acme,13900000000,b@example.com,WEB,sales,NEW\n";
+
+        String created = mockMvc.perform(multipart("/api/v1/leads/import-jobs")
+                        .file("file", csv.getBytes("UTF-8"))
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.taskStats").isMap())
+                .andExpect(jsonPath("$.taskStats.totalChunks").isNumber())
+                .andExpect(jsonPath("$.taskStats.pendingChunks").isNumber())
+                .andExpect(jsonPath("$.failureSummary").isMap())
+                .andExpect(jsonPath("$.failureSummary.failedRows").isNumber())
+                .andExpect(jsonPath("$.requestId").isString())
+                .andReturn().getResponse().getContentAsString();
+        String jobId = objectMapper.readTree(created).path("id").asText();
+        mockMvc.perform(post("/api/v1/leads/import-jobs/" + jobId + "/cancel")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void legacyAuthInvalidCredentialsShouldContainCompatibilityErrorFields() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1518,6 +1544,32 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.orderStatus").value("DRAFT"))
                 .andExpect(jsonPath("$.sourceQuoteId").value(quoteId))
                 .andExpect(jsonPath("$.sourceQuoteStatus").value("ACCEPTED"));
+    }
+
+    @Test
+    void v1LeadStatusTransitionShouldRejectDisqualifiedToConverted() throws Exception {
+        String token = login("admin", "admin123");
+
+        String leadBody = mockMvc.perform(post("/api/v1/leads")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Disqualified Lead\",\"company\":\"Demo Co\",\"status\":\"DISQUALIFIED\",\"owner\":\"admin\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String leadId = objectMapper.readTree(leadBody).path("id").asText();
+
+        mockMvc.perform(post("/api/v1/leads/" + leadId + "/convert")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("lead_status_transition_invalid"))
+                .andExpect(jsonPath("$.requestId").isString())
+                .andExpect(jsonPath("$.details.from").value("DISQUALIFIED"))
+                .andExpect(jsonPath("$.details.to").value("CONVERTED"))
+                .andExpect(jsonPath("$.details.allowed").isArray());
     }
 
     @Test

@@ -6,6 +6,10 @@ import com.yao.crm.entity.ContractRecord;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.entity.FollowUp;
 import com.yao.crm.entity.Lead;
+import com.yao.crm.entity.LeadAssignmentRule;
+import com.yao.crm.entity.LeadImportJob;
+import com.yao.crm.entity.LeadImportJobChunk;
+import com.yao.crm.entity.LeadImportJobItem;
 import com.yao.crm.entity.Opportunity;
 import com.yao.crm.entity.OrderRecord;
 import com.yao.crm.entity.PaymentRecord;
@@ -20,6 +24,10 @@ import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.ContractRecordRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.FollowUpRepository;
+import com.yao.crm.repository.LeadAssignmentRuleRepository;
+import com.yao.crm.repository.LeadImportJobChunkRepository;
+import com.yao.crm.repository.LeadImportJobItemRepository;
+import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.OpportunityRepository;
 import com.yao.crm.repository.OrderRecordRepository;
@@ -37,6 +45,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Configuration
 public class DualMarketDemoDataInitializer {
@@ -58,6 +67,10 @@ public class DualMarketDemoDataInitializer {
                                                     ContractRecordRepository contractRecordRepository,
                                                     PaymentRecordRepository paymentRecordRepository,
                                                     ApprovalTemplateRepository approvalTemplateRepository,
+                                                    LeadAssignmentRuleRepository leadAssignmentRuleRepository,
+                                                    LeadImportJobRepository leadImportJobRepository,
+                                                    LeadImportJobChunkRepository leadImportJobChunkRepository,
+                                                    LeadImportJobItemRepository leadImportJobItemRepository,
                                                     PasswordEncoder passwordEncoder) {
         return args -> {
             seedTenantDemo("tenant_cn_demo", "China Demo Tenant", "CN", "CNY", "Asia/Shanghai", "VAT_CN", "STRICT",
@@ -65,14 +78,16 @@ public class DualMarketDemoDataInitializer {
                     tenantRepository, userAccountRepository, customerRepository, opportunityRepository, leadRepository,
                     contactRepository, followUpRepository, taskRepository, productRepository, quoteRepository,
                     quoteItemRepository, orderRecordRepository, contractRecordRepository, paymentRecordRepository,
-                    approvalTemplateRepository, passwordEncoder);
+                    approvalTemplateRepository, leadAssignmentRuleRepository, leadImportJobRepository, leadImportJobChunkRepository,
+                    leadImportJobItemRepository, passwordEncoder);
 
             seedTenantDemo("tenant_global_demo", "Global Demo Tenant", "GLOBAL", "USD", "UTC", "VAT_GLOBAL", "STAGE_GATE",
                     "[\"EMAIL\",\"SLACK\"]", "GLOBAL", "STRICT", "gl",
                     tenantRepository, userAccountRepository, customerRepository, opportunityRepository, leadRepository,
                     contactRepository, followUpRepository, taskRepository, productRepository, quoteRepository,
                     quoteItemRepository, orderRecordRepository, contractRecordRepository, paymentRecordRepository,
-                    approvalTemplateRepository, passwordEncoder);
+                    approvalTemplateRepository, leadAssignmentRuleRepository, leadImportJobRepository, leadImportJobChunkRepository,
+                    leadImportJobItemRepository, passwordEncoder);
         };
     }
 
@@ -102,6 +117,10 @@ public class DualMarketDemoDataInitializer {
                                 ContractRecordRepository contractRecordRepository,
                                 PaymentRecordRepository paymentRecordRepository,
                                 ApprovalTemplateRepository approvalTemplateRepository,
+                                LeadAssignmentRuleRepository leadAssignmentRuleRepository,
+                                LeadImportJobRepository leadImportJobRepository,
+                                LeadImportJobChunkRepository leadImportJobChunkRepository,
+                                LeadImportJobItemRepository leadImportJobItemRepository,
                                 PasswordEncoder passwordEncoder) {
         upsertTenant(tenantRepository, tenantId, tenantName, marketProfile, currency, timezone, taxRule, approvalMode,
                 channelsJson, dataResidency, maskLevel);
@@ -205,6 +224,23 @@ public class DualMarketDemoDataInitializer {
                 tenantId, "QUOTE", "GLOBAL".equals(marketProfile) ? "Quote approval flow" : "报价审批流",
                 200000L, null, "SALES", "DEFAULT", "[\"MANAGER\",\"ADMIN\"]",
                 "{\"nodes\":[{\"key\":\"n1\",\"role\":\"MANAGER\"},{\"key\":\"n2\",\"role\":\"ADMIN\"}]}", 1, "PUBLISHED", true);
+
+        upsertLeadAssignmentRule(
+                leadAssignmentRuleRepository,
+                "lar_" + idPrefix + "_01",
+                tenantId,
+                "Demo round robin",
+                true,
+                "[{\"username\":\"sales\",\"weight\":2,\"enabled\":true},{\"username\":\"manager\",\"weight\":1,\"enabled\":true}]",
+                0
+        );
+        upsertLeadImportDemoData(
+                leadImportJobRepository,
+                leadImportJobChunkRepository,
+                leadImportJobItemRepository,
+                tenantId,
+                idPrefix
+        );
     }
 
     private void upsertTenant(TenantRepository repository, String id, String name, String marketProfile, String currency,
@@ -483,6 +519,97 @@ public class DualMarketDemoDataInitializer {
         row.setVersion(version);
         row.setStatus(status);
         row.setEnabled(enabled);
+        repository.save(row);
+    }
+
+    private void upsertLeadAssignmentRule(LeadAssignmentRuleRepository repository,
+                                          String id,
+                                          String tenantId,
+                                          String name,
+                                          boolean enabled,
+                                          String membersJson,
+                                          int rrCursor) {
+        LeadAssignmentRule row = repository.findById(id).orElseGet(LeadAssignmentRule::new);
+        row.setId(id);
+        row.setTenantId(tenantId);
+        row.setName(name);
+        row.setEnabled(enabled);
+        row.setMembersJson(membersJson);
+        row.setRrCursor(rrCursor);
+        repository.save(row);
+    }
+
+    private void upsertLeadImportDemoData(LeadImportJobRepository jobRepository,
+                                          LeadImportJobChunkRepository chunkRepository,
+                                          LeadImportJobItemRepository itemRepository,
+                                          String tenantId,
+                                          String idPrefix) {
+        String jobId = "lij_" + idPrefix + "_demo";
+        LeadImportJob job = jobRepository.findById(jobId).orElseGet(LeadImportJob::new);
+        job.setId(jobId);
+        job.setTenantId(tenantId);
+        job.setFileName("lead-import-" + idPrefix + ".csv");
+        job.setStatus("PARTIAL_SUCCESS");
+        job.setTotalRows(6);
+        job.setProcessedRows(6);
+        job.setSuccessCount(4);
+        job.setFailCount(2);
+        job.setPercent(100);
+        job.setCreatedBy("admin");
+        job.setCancelRequested(false);
+        job.setErrorMessage("lead_import_partial_failure");
+        job.setLastHeartbeatAt(LocalDateTime.now().minusMinutes(8));
+        jobRepository.save(job);
+
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_01", tenantId, jobId, 1, "PROCESSED", 0, null);
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_02", tenantId, jobId, 2, "PROCESSED", 0, null);
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_03", tenantId, jobId, 3, "PROCESSED", 0, null);
+
+        upsertLeadImportItem(itemRepository, "lji_" + idPrefix + "_01", tenantId, jobId, 3,
+                "FAILED", "Duplicate lead row", "lead_import_duplicate", "duplicate lead");
+        upsertLeadImportItem(itemRepository, "lji_" + idPrefix + "_02", tenantId, jobId, 5,
+                "FAILED", "Invalid phone", "contact_phone_invalid", "invalid phone");
+    }
+
+    private void upsertLeadImportChunk(LeadImportJobChunkRepository repository,
+                                       String id,
+                                       String tenantId,
+                                       String jobId,
+                                       int chunkNo,
+                                       String status,
+                                       int retryCount,
+                                       String lastError) {
+        LeadImportJobChunk row = repository.findById(id).orElseGet(LeadImportJobChunk::new);
+        row.setId(id);
+        row.setTenantId(tenantId);
+        row.setJobId(jobId);
+        row.setChunkNo(chunkNo);
+        row.setStatus(status);
+        row.setRetryCount(retryCount);
+        row.setPayloadJson("[]");
+        row.setLastError(lastError);
+        repository.save(row);
+    }
+
+    private void upsertLeadImportItem(LeadImportJobItemRepository repository,
+                                      String id,
+                                      String tenantId,
+                                      String jobId,
+                                      int lineNo,
+                                      String status,
+                                      String rawLine,
+                                      String errorCode,
+                                      String errorMessage) {
+        LeadImportJobItem row = repository.findById(id).orElseGet(LeadImportJobItem::new);
+        row.setId(id);
+        row.setTenantId(tenantId);
+        row.setJobId(jobId);
+        row.setLineNo(lineNo);
+        row.setStatus(status);
+        row.setRawLine(rawLine);
+        row.setErrorCode(errorCode);
+        row.setErrorMessage(errorMessage);
+        row.setCreatedAt(LocalDateTime.now().minusMinutes(5));
         repository.save(row);
     }
 
