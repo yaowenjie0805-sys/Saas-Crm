@@ -7,6 +7,24 @@ import { useGovernanceTableState } from '../../../hooks/useGovernanceTableState'
 
 const PAGE_SIZES = [5, 8, 12, 20]
 const DATE_FORMAT_OPTIONS = ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM-dd-yyyy']
+const MARKET_DEFAULTS = {
+  CN: { currency: 'CNY', timezone: 'Asia/Shanghai', taxRule: 'VAT_CN', channels: '["WECOM","DINGTALK"]', dataResidency: 'CN' },
+  GLOBAL: { currency: 'USD', timezone: 'UTC', taxRule: 'VAT_GLOBAL', channels: '["EMAIL","SLACK"]', dataResidency: 'GLOBAL' },
+}
+
+function applyMarketDefaults(base, nextMarketProfile) {
+  const marketProfile = String(nextMarketProfile || 'CN').toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'
+  const defaults = MARKET_DEFAULTS[marketProfile]
+  return {
+    ...base,
+    marketProfile,
+    currency: String(base?.currency || '').trim() || defaults.currency,
+    timezone: String(base?.timezone || '').trim() || defaults.timezone,
+    taxRule: String(base?.taxRule || '').trim() || defaults.taxRule,
+    channels: String(base?.channels || '').trim() || defaults.channels,
+    dataResidency: String(base?.dataResidency || '').trim() || defaults.dataResidency,
+  }
+}
 
 function TenantsGovernanceSection({ t, tenants, onRefresh }) {
   const tableState = useGovernanceTableState({ page: 1, size: 8 })
@@ -45,7 +63,7 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
         <input className="tool-input" placeholder={t('tenantQuota')} value={tenants.form.quotaUsers} onChange={(e) => tenants.setForm((p) => ({ ...p, quotaUsers: e.target.value }))} />
         <input className="tool-input" placeholder={t('reportTimezone')} value={tenants.form.timezone} onChange={(e) => tenants.setForm((p) => ({ ...p, timezone: e.target.value }))} />
         <input className="tool-input" placeholder={t('reportCurrency')} value={tenants.form.currency} onChange={(e) => tenants.setForm((p) => ({ ...p, currency: e.target.value }))} />
-        <select className="tool-input" value={tenants.form.marketProfile || 'CN'} onChange={(e) => tenants.setForm((p) => ({ ...p, marketProfile: e.target.value }))}>
+        <select className="tool-input" value={tenants.form.marketProfile || 'CN'} onChange={(e) => tenants.setForm((p) => applyMarketDefaults(p, e.target.value))}>
           {MARKET_PROFILE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
         </select>
         <input className="tool-input" placeholder={t('taxRule')} value={tenants.form.taxRule || 'VAT_CN'} onChange={(e) => tenants.setForm((p) => ({ ...p, taxRule: e.target.value }))} />
@@ -97,7 +115,7 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
               <div className="inline-tools">
                 <input className="tool-input" placeholder={t('reportTimezone')} value={row.timezone || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, timezone: e.target.value } : x))} />
                 <input className="tool-input" placeholder={t('reportCurrency')} value={row.currency || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, currency: e.target.value.toUpperCase() } : x))} />
-                <select className="tool-input" value={row.marketProfile || 'CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, marketProfile: e.target.value } : x))}>
+                <select className="tool-input" value={row.marketProfile || 'CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? applyMarketDefaults(x, e.target.value) : x))}>
                   {MARKET_PROFILE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
                 </select>
                 <input className="tool-input" placeholder={t('taxRule')} value={row.taxRule || 'VAT_CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, taxRule: e.target.value } : x))} />

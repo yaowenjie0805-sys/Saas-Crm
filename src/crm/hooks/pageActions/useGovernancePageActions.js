@@ -10,6 +10,38 @@ function parseRuleMembers(text) {
   }).filter((row) => row.username)
 }
 
+const DEFAULT_CHANNELS_BY_MARKET = {
+  CN: '["WECOM","DINGTALK"]',
+  GLOBAL: '["EMAIL","SLACK"]',
+}
+
+function withRequestIdMessage(err, fallback) {
+  const message = String(err?.message || fallback || '').trim()
+  const requestId = String(err?.requestId || '').trim()
+  return requestId ? `${message} [${requestId}]` : message
+}
+
+function normalizeTenantPayload(raw, normalizeDateFormat) {
+  const marketProfile = String(raw?.marketProfile || 'CN').trim().toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'
+  const currency = String(raw?.currency || '').trim().toUpperCase() || (marketProfile === 'GLOBAL' ? 'USD' : 'CNY')
+  const timezone = String(raw?.timezone || '').trim() || 'Asia/Shanghai'
+  const dateFormat = normalizeDateFormat(raw?.dateFormat)
+  return {
+    name: String(raw?.name || '').trim(),
+    status: String(raw?.status || 'ACTIVE').trim().toUpperCase() || 'ACTIVE',
+    quotaUsers: Number(raw?.quotaUsers || 100),
+    timezone,
+    currency,
+    dateFormat,
+    marketProfile,
+    taxRule: String(raw?.taxRule || (marketProfile === 'GLOBAL' ? 'VAT_GLOBAL' : 'VAT_CN')).trim(),
+    approvalMode: String(raw?.approvalMode || 'STRICT').trim().toUpperCase() === 'STAGE_GATE' ? 'STAGE_GATE' : 'STRICT',
+    channels: String(raw?.channels || DEFAULT_CHANNELS_BY_MARKET[marketProfile]).trim() || DEFAULT_CHANNELS_BY_MARKET[marketProfile],
+    dataResidency: String(raw?.dataResidency || marketProfile).trim().toUpperCase() || marketProfile,
+    maskLevel: String(raw?.maskLevel || 'STANDARD').trim().toUpperCase() || 'STANDARD',
+  }
+}
+
 export function useGovernancePageActions(params) {
   const {
     auth,
@@ -162,74 +194,64 @@ export function useGovernancePageActions(params) {
 
   const createTenant = async () => {
     try {
+      const payload = normalizeTenantPayload(tenantForm, normalizeDateFormat)
+      if (!payload.name) { setError(t('fieldRequired')); return }
       const created = await api('/v1/tenants', {
         method: 'POST',
-        body: JSON.stringify({
-          name: tenantForm.name,
-          status: tenantForm.status,
-          quotaUsers: Number(tenantForm.quotaUsers || 100),
-          timezone: tenantForm.timezone,
-          currency: tenantForm.currency,
-          dateFormat: normalizeDateFormat(tenantForm.dateFormat),
-          marketProfile: tenantForm.marketProfile || 'CN',
-          taxRule: tenantForm.taxRule || 'VAT_CN',
-          approvalMode: tenantForm.approvalMode || 'STRICT',
-          channels: tenantForm.channels || '[\"WECOM\",\"DINGTALK\"]',
-          dataResidency: tenantForm.dataResidency || 'CN',
-          maskLevel: tenantForm.maskLevel || 'STANDARD',
-        }),
+        body: JSON.stringify(payload),
       }, auth.token, lang)
       setLastCreatedTenant(created)
       setTenantForm((p) => ({ ...p, name: '' }))
       await loadTenants()
-    } catch (err) { handleError(err) }
+      setError('')
+    } catch (err) {
+      setError(withRequestIdMessage(err, t('loadFailed')))
+      handleError(err)
+    }
   }
 
   const updateTenant = async (row) => {
     try {
-      const normalizedDateFormat = normalizeDateFormat(row.dateFormat)
+      const payload = normalizeTenantPayload(row, normalizeDateFormat)
+      if (!payload.name) { setError(t('fieldRequired')); return }
       const updated = await api('/v1/tenants/' + row.id, {
         method: 'PATCH',
-        body: JSON.stringify({
-          name: row.name,
-          status: row.status,
-          quotaUsers: Number(row.quotaUsers || 0),
-          timezone: row.timezone,
-          currency: row.currency,
-          dateFormat: normalizedDateFormat,
-          marketProfile: row.marketProfile || 'CN',
-          taxRule: row.taxRule || 'VAT_CN',
-          approvalMode: row.approvalMode || 'STRICT',
-          channels: row.channels || '[\"WECOM\",\"DINGTALK\"]',
-          dataResidency: row.dataResidency || 'CN',
-          maskLevel: row.maskLevel || 'STANDARD',
-        }),
+        body: JSON.stringify(payload),
       }, auth.token, lang)
       if (row.id === auth?.tenantId) {
         await api('/v2/tenant-config', {
           method: 'PATCH',
           body: JSON.stringify({
-            marketProfile: row.marketProfile || 'CN',
-            taxRule: row.taxRule || 'VAT_CN',
-            approvalMode: row.approvalMode || 'STRICT',
-            channels: row.channels || '[\"WECOM\",\"DINGTALK\"]',
-            dataResidency: row.dataResidency || 'CN',
-            maskLevel: row.maskLevel || 'STANDARD',
+            marketProfile: payload.marketProfile,
+            taxRule: payload.taxRule,
+            approvalMode: payload.approvalMode,
+            channels: payload.channels,
+            dataResidency: payload.dataResidency,
+            maskLevel: payload.maskLevel,
+            currency: payload.currency,
+            timezone: payload.timezone,
+            dateFormat: payload.dateFormat,
           }),
         }, auth.token, lang)
       }
       setTenantRows((prev) => prev.map((x) => (x.id === updated.id ? {
         ...x,
         ...updated,
-        dateFormat: normalizeDateFormat(updated.dateFormat || normalizedDateFormat),
-        marketProfile: row.marketProfile || x.marketProfile || 'CN',
-        taxRule: row.taxRule || x.taxRule || 'VAT_CN',
-        approvalMode: row.approvalMode || x.approvalMode || 'STRICT',
-        channels: row.channels || x.channels || '[\"WECOM\",\"DINGTALK\"]',
-        dataResidency: row.dataResidency || x.dataResidency || 'CN',
-        maskLevel: row.maskLevel || x.maskLevel || 'STANDARD',
+        dateFormat: normalizeDateFormat(updated.dateFormat || payload.dateFormat),
+        marketProfile: payload.marketProfile || x.marketProfile || 'CN',
+        taxRule: payload.taxRule || x.taxRule || 'VAT_CN',
+        approvalMode: payload.approvalMode || x.approvalMode || 'STRICT',
+        channels: payload.channels || x.channels || DEFAULT_CHANNELS_BY_MARKET[payload.marketProfile] || DEFAULT_CHANNELS_BY_MARKET.CN,
+        dataResidency: payload.dataResidency || x.dataResidency || 'CN',
+        maskLevel: payload.maskLevel || x.maskLevel || 'STANDARD',
+        currency: payload.currency || x.currency || 'CNY',
+        timezone: payload.timezone || x.timezone || 'Asia/Shanghai',
       } : x)))
-    } catch (err) { handleError(err) }
+      setError('')
+    } catch (err) {
+      setError(withRequestIdMessage(err, t('loadFailed')))
+      handleError(err)
+    }
   }
 
   return {

@@ -1,5 +1,5 @@
 ﻿import BarChartRow from '../BarChartRow'
-import { formatDateTime, formatMoney, formatMoneyByCurrency, formatStatValue, mapToBars, translateChannel, translateRole, translateStage, translateStatLabel, translateStatus } from '../../shared'
+import { formatDateTime, formatMoneyByCurrency, formatStatValue, mapToBars, translateChannel, translateRole, translateStage, translateStatLabel, translateStatus } from '../../shared'
 import ServerPager from '../ServerPager'
 import VirtualListTable from '../VirtualListTable'
 
@@ -46,8 +46,12 @@ function DashboardPanel({
   const localizedMetrics = reports?.localizedMetrics || null
   const marketProfile = marketContext?.marketProfile || 'CN'
   const marketCurrency = marketContext?.currency || reportCurrency || 'CNY'
+  const marketTimezone = marketContext?.timezone || reportTimezone || 'Asia/Shanghai'
+  const approvalMode = marketContext?.approvalMode || 'STRICT'
   const pipelineHealth = Number(localizedMetrics?.pipelineHealth || 0)
   const arrLike = Number(localizedMetrics?.arrLike || 0)
+  const localizedFallback = !!reports?.localizedFallback
+  const tenantConfigSynced = !!reports?.tenantConfigSynced
   const ownerAlias = {
     'Li Jun': t('ownerLiJun'),
     'Wang Ling': t('ownerWangLing'),
@@ -191,14 +195,19 @@ function DashboardPanel({
             <div className="report-summary">
               <div><b>{t('reportsSummary')}</b></div>
               <div>{t('marketProfile')}: {marketProfile === 'GLOBAL' ? t('marketGlobal') : t('marketCN')}</div>
+              <div>{t('approvalModeLabel')}: {approvalMode === 'STAGE_GATE' ? t('approvalModeStageGate') : t('approvalModeStrict')}</div>
+              <div>{t('reportTimezone')}: {marketTimezone}</div>
+              <div>{t('reportCurrency')}: {marketCurrency}</div>
               <div>{t('customers')}: {reportSummary.customers || 0}</div>
-              <div>{t('amount')}: {formatMoney(reportSummary.revenue || 0)}</div>
+              <div>{t('amount')}: {formatMoneyByCurrency(reportSummary.revenue || 0, marketCurrency)}</div>
               <div>{t('pipeline')}: {reportSummary.opportunities || 0}</div>
               <div>{t('taskDoneRate')}: {reportSummary.taskDoneRate || 0}%</div>
               <div>{t('winRate')}: {reportSummary.winRate || 0}%</div>
               <div>{t('pipelineHealth')}: {pipelineHealth}%</div>
               <div>{t('arrLike')}: {formatMoneyByCurrency(arrLike, marketCurrency)}</div>
             </div>
+            {!tenantConfigSynced && <div className="info-banner">{t('tenantConfigNotSyncedHint')}</div>}
+            {localizedFallback && <div className="info-banner">{t('reportsLocalizedFallbackHint')}</div>}
             <div className="report-grid">
               <div className="report-card"><h4>{t('customerByOwner')}</h4>{ownerBars.map((b) => <BarChartRow key={b.label} label={b.label} value={b.value} />)}</div>
               <div className="report-card"><h4>{t('revenueByStatus')}</h4>{statusBars.map((b) => <BarChartRow key={b.label} label={b.label} value={b.value} money />)}</div>

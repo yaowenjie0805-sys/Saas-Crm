@@ -65,17 +65,17 @@ export function useReportingAuditDomainLoaders({
       timezone: reportTimezone,
       currency: reportCurrency,
     })
-    const [v1Overview, v2Commerce] = await Promise.all([
+    const [v1Overview, v2Commerce, v2TenantConfig] = await Promise.all([
       api('/v1/reports/overview?' + q, {}, authToken, lang),
       api('/v2/commerce/overview', {}, authToken, lang).catch(() => null),
+      api('/v2/tenant-config', {}, authToken, lang).catch(() => null),
     ])
-    const marketContext = v2Commerce?.marketContext
-      ? {
-          ...v2Commerce.marketContext,
-          currency: v2Commerce.marketContext.currency || reportCurrency || 'CNY',
-          marketProfile: v2Commerce.marketContext.marketProfile || 'CN',
-        }
-      : null
+    const marketContext = {
+      marketProfile: v2TenantConfig?.marketProfile || v2Commerce?.marketContext?.marketProfile || 'CN',
+      currency: v2TenantConfig?.currency || v2Commerce?.marketContext?.currency || reportCurrency || 'CNY',
+      timezone: v2TenantConfig?.timezone || v2Commerce?.marketContext?.timezone || reportTimezone || 'Asia/Shanghai',
+      approvalMode: v2TenantConfig?.approvalMode || v2Commerce?.marketContext?.approvalMode || 'STRICT',
+    }
     const localizedMetrics = v2Commerce?.localizedMetrics
       ? {
           ...v2Commerce.localizedMetrics,
@@ -87,6 +87,9 @@ export function useReportingAuditDomainLoaders({
       ...(v1Overview || {}),
       marketContext,
       localizedMetrics,
+      localizedFallback: !v2Commerce?.localizedMetrics,
+      localizedFallbackReason: v2Commerce ? '' : 'v2_commerce_unavailable',
+      tenantConfigSynced: !!v2TenantConfig,
     })
   }, [canViewReports, auditFrom, auditTo, auditRole, reportOwner, reportDepartment, reportTimezone, reportCurrency, authToken, lang, setReports])
 

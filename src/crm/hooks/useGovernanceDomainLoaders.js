@@ -1,6 +1,27 @@
 import { useCallback } from 'react'
 import { api } from '../shared'
 
+const CHANNELS_DEFAULT = {
+  CN: '["WECOM","DINGTALK"]',
+  GLOBAL: '["EMAIL","SLACK"]',
+}
+
+function normalizeTenantRow(row, normalizeDateFormat) {
+  const marketProfile = String(row?.marketProfile || 'CN').trim().toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'
+  return {
+    ...row,
+    dateFormat: normalizeDateFormat(row?.dateFormat),
+    marketProfile,
+    currency: String(row?.currency || '').trim() || (marketProfile === 'GLOBAL' ? 'USD' : 'CNY'),
+    timezone: String(row?.timezone || '').trim() || (marketProfile === 'GLOBAL' ? 'UTC' : 'Asia/Shanghai'),
+    taxRule: String(row?.taxRule || '').trim() || (marketProfile === 'GLOBAL' ? 'VAT_GLOBAL' : 'VAT_CN'),
+    approvalMode: String(row?.approvalMode || '').trim().toUpperCase() === 'STAGE_GATE' ? 'STAGE_GATE' : 'STRICT',
+    channels: String(row?.channels || '').trim() || CHANNELS_DEFAULT[marketProfile],
+    dataResidency: String(row?.dataResidency || '').trim() || marketProfile,
+    maskLevel: String(row?.maskLevel || '').trim() || 'STANDARD',
+  }
+}
+
 export function useGovernanceDomainLoaders({
   canManageUsers,
   canManageSalesAutomation,
@@ -52,17 +73,20 @@ export function useGovernanceDomainLoaders({
       currentTenantConfig = null
     }
     setTenantRows((d.items || []).map((row) => {
-      const normalized = { ...row, dateFormat: normalizeDateFormat(row.dateFormat) }
+      const normalized = normalizeTenantRow(row, normalizeDateFormat)
       if (currentTenantConfig && currentTenantConfig.tenantId === row.id) {
-        return {
+        return normalizeTenantRow({
           ...normalized,
           marketProfile: currentTenantConfig.marketProfile || row.marketProfile || 'CN',
           taxRule: currentTenantConfig.taxRule || row.taxRule || 'VAT_CN',
           approvalMode: currentTenantConfig.approvalMode || row.approvalMode || 'STRICT',
-          channels: currentTenantConfig.channels || row.channels || '["WECOM","DINGTALK"]',
+          channels: currentTenantConfig.channels || row.channels || CHANNELS_DEFAULT[String(row.marketProfile || 'CN').toUpperCase() === 'GLOBAL' ? 'GLOBAL' : 'CN'],
           dataResidency: currentTenantConfig.dataResidency || row.dataResidency || 'CN',
           maskLevel: currentTenantConfig.maskLevel || row.maskLevel || 'STANDARD',
-        }
+          currency: currentTenantConfig.currency || row.currency || normalized.currency,
+          timezone: currentTenantConfig.timezone || row.timezone || normalized.timezone,
+          dateFormat: currentTenantConfig.dateFormat || row.dateFormat || normalized.dateFormat,
+        }, normalizeDateFormat)
       }
       return normalized
     }))
