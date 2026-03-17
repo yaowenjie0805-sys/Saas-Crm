@@ -25,10 +25,11 @@
     "test:backend": "mvn -f backend/pom.xml test",
     "test:full": "node scripts/local-e2e.mjs",
     "sre:daily-check": "node scripts/sre-daily-check.mjs",
+    "sre:alert-check": "node scripts/sre-alert-check.mjs",
     "drill:backup-restore": "node scripts/drill-backup-restore.mjs",
     "drill:rollback": "node scripts/drill-rollback.mjs",
     "preflight:prod": "node scripts/preflight-prod.mjs",
-    "ci:gate": "npm run lint && npm run build && npm run test:e2e && npm run test:backend && npm run test:full && npm run perf:baseline && npm run perf:gate && npm run sre:daily-check && npm run security:scan && npm run preflight:prod",
+    "ci:gate": "npm run lint && npm run build && npm run test:e2e && npm run test:backend && npm run test:full && npm run perf:baseline && npm run perf:gate && npm run sre:daily-check && npm run sre:alert-check && npm run security:scan && npm run preflight:prod",
     "release:snapshot": "node scripts/release-snapshot.mjs"
   },
   "dependencies": {

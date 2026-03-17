@@ -67,6 +67,9 @@ jobs:
       - name: SRE Daily Check
         run: npm run sre:daily-check
 
+      - name: SRE Alert Check
+        run: npm run sre:alert-check
+
       - name: Security Scan
         run: npm run security:scan
 

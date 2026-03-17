@@ -49,6 +49,16 @@ public class V1OpsController extends BaseApiController {
     private final long sloKeyRouteP95MaxMs;
     private final double auditFailedRatioMax;
     private final double auditRetryRatioMax;
+    private final double errorBudgetDailyMax;
+    private final double errorBudgetWeeklyMax;
+    private final double alertP1ErrorRate;
+    private final double alertP2ErrorRate;
+    private final double alertP3ErrorRate;
+    private final double alertP1SlowRate;
+    private final double alertP2SlowRate;
+    private final double alertP3SlowRate;
+    private final String oncallPrimary;
+    private final String oncallEscalation;
 
     public V1OpsController(DataSource dataSource,
                            NotificationJobScheduler notificationJobScheduler,
@@ -65,6 +75,16 @@ public class V1OpsController extends BaseApiController {
                            @Value("${ops.slo.key-route-p95-ms:1500}") long sloKeyRouteP95MaxMs,
                            @Value("${ops.audit-export.failed-ratio-max:0.10}") double auditFailedRatioMax,
                            @Value("${ops.audit-export.retry-ratio-max:0.30}") double auditRetryRatioMax,
+                           @Value("${ops.error-budget.daily-max:0.02}") double errorBudgetDailyMax,
+                           @Value("${ops.error-budget.weekly-max:0.05}") double errorBudgetWeeklyMax,
+                           @Value("${ops.alert.p1.error-rate:0.05}") double alertP1ErrorRate,
+                           @Value("${ops.alert.p2.error-rate:0.03}") double alertP2ErrorRate,
+                           @Value("${ops.alert.p3.error-rate:0.02}") double alertP3ErrorRate,
+                           @Value("${ops.alert.p1.slow-rate:0.50}") double alertP1SlowRate,
+                           @Value("${ops.alert.p2.slow-rate:0.35}") double alertP2SlowRate,
+                           @Value("${ops.alert.p3.slow-rate:0.20}") double alertP3SlowRate,
+                           @Value("${ops.oncall.primary:SRE Primary}") String oncallPrimary,
+                           @Value("${ops.oncall.escalation:SRE Lead -> Eng Manager}") String oncallEscalation,
                            I18nService i18nService) {
         super(i18nService);
         this.dataSource = dataSource;
@@ -82,6 +102,16 @@ public class V1OpsController extends BaseApiController {
         this.sloKeyRouteP95MaxMs = Math.max(100L, sloKeyRouteP95MaxMs);
         this.auditFailedRatioMax = Math.max(0d, auditFailedRatioMax);
         this.auditRetryRatioMax = Math.max(0d, auditRetryRatioMax);
+        this.errorBudgetDailyMax = Math.max(0.001d, errorBudgetDailyMax);
+        this.errorBudgetWeeklyMax = Math.max(this.errorBudgetDailyMax, errorBudgetWeeklyMax);
+        this.alertP1ErrorRate = Math.max(0.001d, alertP1ErrorRate);
+        this.alertP2ErrorRate = Math.max(0.001d, alertP2ErrorRate);
+        this.alertP3ErrorRate = Math.max(0.001d, alertP3ErrorRate);
+        this.alertP1SlowRate = Math.max(0.01d, alertP1SlowRate);
+        this.alertP2SlowRate = Math.max(0.01d, alertP2SlowRate);
+        this.alertP3SlowRate = Math.max(0.01d, alertP3SlowRate);
+        this.oncallPrimary = oncallPrimary == null ? "" : oncallPrimary.trim();
+        this.oncallEscalation = oncallEscalation == null ? "" : oncallEscalation.trim();
     }
 
     @GetMapping("/health")
@@ -163,16 +193,23 @@ public class V1OpsController extends BaseApiController {
         double auditFailedRatio = completed <= 0 ? 0.0d : ((double) totalFailed / (double) completed);
         double auditRetryRatio = completed <= 0 ? 0.0d : ((double) totalRetried / (double) completed);
 
-        List<String> alerts = new ArrayList<String>();
+        List<String> legacyAlerts = new ArrayList<String>();
         boolean readinessOk = Boolean.TRUE.equals(readiness.get("ok"));
-        if (!readinessOk) alerts.add("readiness_degraded");
-        if (errorRate > sloErrorRateMax) alerts.add("api_error_rate_high");
-        if (slowRate > sloSlowRateMax) alerts.add("api_slow_rate_high");
-        if (dashboardP95 > sloKeyRouteP95MaxMs) alerts.add("dashboard_p95_high");
-        if (customersP95 > sloKeyRouteP95MaxMs) alerts.add("customers_p95_high");
-        if (reportsP95 > sloKeyRouteP95MaxMs) alerts.add("reports_p95_high");
-        if (auditFailedRatio > auditFailedRatioMax) alerts.add("audit_export_failed_ratio_high");
-        if (auditRetryRatio > auditRetryRatioMax) alerts.add("audit_export_retry_ratio_high");
+        if (!readinessOk) legacyAlerts.add("readiness_degraded");
+        if (errorRate > sloErrorRateMax) legacyAlerts.add("api_error_rate_high");
+        if (slowRate > sloSlowRateMax) legacyAlerts.add("api_slow_rate_high");
+        if (dashboardP95 > sloKeyRouteP95MaxMs) legacyAlerts.add("dashboard_p95_high");
+        if (customersP95 > sloKeyRouteP95MaxMs) legacyAlerts.add("customers_p95_high");
+        if (reportsP95 > sloKeyRouteP95MaxMs) legacyAlerts.add("reports_p95_high");
+        if (auditFailedRatio > auditFailedRatioMax) legacyAlerts.add("audit_export_failed_ratio_high");
+        if (auditRetryRatio > auditRetryRatioMax) legacyAlerts.add("audit_export_retry_ratio_high");
+
+        List<Map<String, Object>> leveledAlerts = buildLeveledAlerts(readinessOk, errorRate, slowRate, auditFailedRatio);
+        String highestLevel = detectHighestAlertLevel(leveledAlerts);
+        double errorBudgetConsumedDaily = errorRate;
+        double errorBudgetConsumedWeekly = Math.min(1.0d, errorRate * 7.0d);
+        Map<String, Object> errorBudget = buildErrorBudget(errorBudgetConsumedDaily, errorBudgetConsumedWeekly);
+        Map<String, Object> oncall = buildOncall();
 
         Map<String, Object> thresholds = new LinkedHashMap<String, Object>();
         thresholds.put("errorRateMax", sloErrorRateMax);
@@ -180,6 +217,9 @@ public class V1OpsController extends BaseApiController {
         thresholds.put("keyRouteP95MaxMs", sloKeyRouteP95MaxMs);
         thresholds.put("auditFailedRatioMax", auditFailedRatioMax);
         thresholds.put("auditRetryRatioMax", auditRetryRatioMax);
+        thresholds.put("alertP1ErrorRate", alertP1ErrorRate);
+        thresholds.put("alertP2ErrorRate", alertP2ErrorRate);
+        thresholds.put("alertP3ErrorRate", alertP3ErrorRate);
 
         Map<String, Object> summary = new LinkedHashMap<String, Object>();
         summary.put("errorRate", errorRate);
@@ -205,8 +245,12 @@ public class V1OpsController extends BaseApiController {
         out.put("requestId", traceId(request));
         out.put("tenantId", tenantId);
         out.put("generatedAt", LocalDateTime.now());
-        out.put("overallStatus", alerts.isEmpty() ? "PASS" : "FAIL");
-        out.put("alerts", alerts);
+        out.put("overallStatus", legacyAlerts.isEmpty() ? "PASS" : "FAIL");
+        out.put("alerts", legacyAlerts);
+        out.put("alertsLevel", highestLevel);
+        out.put("alertsDetailed", leveledAlerts);
+        out.put("errorBudget", errorBudget);
+        out.put("oncall", oncall);
         out.put("thresholds", thresholds);
         out.put("summary", summary);
         out.put("performanceWindow", performanceWindow);
@@ -363,5 +407,71 @@ public class V1OpsController extends BaseApiController {
     private long readRouteP99(Map<String, Object> keyRoutes, String route) {
         Map<String, Object> routeValue = asMap(keyRoutes.get(route));
         return asLong(routeValue.get("p99Ms"));
+    }
+
+    private List<Map<String, Object>> buildLeveledAlerts(boolean readinessOk, double errorRate, double slowRate, double auditFailedRatio) {
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        if (!readinessOk) {
+            out.add(alert("P1", "readiness_degraded", "readiness endpoint not healthy"));
+        }
+        if (errorRate >= alertP1ErrorRate || slowRate >= alertP1SlowRate) {
+            out.add(alert("P1", "api_critical", "error/slow rate reached p1 threshold"));
+        } else if (errorRate >= alertP2ErrorRate || slowRate >= alertP2SlowRate) {
+            out.add(alert("P2", "api_degraded", "error/slow rate reached p2 threshold"));
+        } else if (errorRate >= alertP3ErrorRate || slowRate >= alertP3SlowRate) {
+            out.add(alert("P3", "api_warning", "error/slow rate reached p3 threshold"));
+        }
+        if (auditFailedRatio > auditFailedRatioMax) {
+            out.add(alert("P2", "audit_export_failed_ratio_high", "audit export failure ratio is high"));
+        }
+        return out;
+    }
+
+    private String detectHighestAlertLevel(List<Map<String, Object>> alerts) {
+        if (alerts == null || alerts.isEmpty()) return "NONE";
+        for (Map<String, Object> alert : alerts) {
+            if ("P1".equals(String.valueOf(alert.get("level")))) return "P1";
+        }
+        for (Map<String, Object> alert : alerts) {
+            if ("P2".equals(String.valueOf(alert.get("level")))) return "P2";
+        }
+        return "P3";
+    }
+
+    private Map<String, Object> buildErrorBudget(double consumedDaily, double consumedWeekly) {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("daily", budgetWindow(errorBudgetDailyMax, consumedDaily));
+        out.put("weekly", budgetWindow(errorBudgetWeeklyMax, consumedWeekly));
+        return out;
+    }
+
+    private Map<String, Object> budgetWindow(double budgetMax, double consumed) {
+        double safeConsumed = Math.max(0.0d, consumed);
+        double remaining = Math.max(0.0d, budgetMax - safeConsumed);
+        double burnRate = budgetMax <= 0 ? 0.0d : (safeConsumed / budgetMax);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("budget", budgetMax);
+        out.put("consumed", safeConsumed);
+        out.put("remaining", remaining);
+        out.put("burnRate", burnRate);
+        out.put("pass", safeConsumed <= budgetMax);
+        return out;
+    }
+
+    private Map<String, Object> buildOncall() {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("primary", oncallPrimary.isEmpty() ? "UNASSIGNED" : oncallPrimary);
+        out.put("escalation", oncallEscalation.isEmpty() ? "UNDEFINED" : oncallEscalation);
+        out.put("lastRotationAt", LocalDateTime.now().minusDays(1));
+        return out;
+    }
+
+    private Map<String, Object> alert(String level, String reason, String message) {
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("level", level);
+        out.put("reason", reason);
+        out.put("message", message);
+        out.put("triggeredAt", LocalDateTime.now());
+        return out;
     }
 }

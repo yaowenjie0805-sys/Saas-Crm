@@ -63,6 +63,9 @@ jobs:
       - name: Backend Tests
         run: npm run test:backend
 
+      - name: Backend Package
+        run: mvn -f backend/pom.xml -DskipTests package
+
       - name: Performance Baseline
         run: npm run perf:baseline
         env:
@@ -73,6 +76,9 @@ jobs:
 
       - name: SRE Daily Check
         run: npm run sre:daily-check
+
+      - name: SRE Alert Check
+        run: npm run sre:alert-check
 
       - name: Security Scan
         run: npm run security:scan
