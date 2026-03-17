@@ -170,6 +170,7 @@ public class I18nService {
         en.put("approval_sla_scan_completed", "approval SLA scan completed");
         en.put("approval_task_updated", "approval task updated");
         en.put("invalid_lead_status", "invalid lead status");
+        en.put("lead_status_transition_invalid", "lead status transition is invalid");
         en.put("lead_not_found", "lead not found");
         en.put("lead_already_converted", "lead already converted");
         en.put("leads_listed", "leads loaded");
@@ -414,6 +415,7 @@ public class I18nService {
         zh.put("approval_sla_scan_completed", "SLA \u626b\u63cf\u6267\u884c\u6210\u529f");
         zh.put("approval_task_updated", "\u5ba1\u6279\u4efb\u52a1\u66f4\u65b0\u6210\u529f");
         zh.put("invalid_lead_status", "\u7ebf\u7d22\u72b6\u6001\u4e0d\u5408\u6cd5");
+        zh.put("lead_status_transition_invalid", "\u7ebf\u7d22\u72b6\u6001\u6d41\u8f6c\u4e0d\u5408\u6cd5");
         zh.put("lead_not_found", "\u7ebf\u7d22\u4e0d\u5b58\u5728");
         zh.put("lead_already_converted", "\u7ebf\u7d22\u5df2\u8f6c\u5316");
         zh.put("leads_listed", "\u7ebf\u7d22\u5217\u8868\u52a0\u8f7d\u6210\u529f");
