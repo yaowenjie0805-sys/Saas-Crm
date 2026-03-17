@@ -15,6 +15,15 @@ const DEFAULT_CHANNELS_BY_MARKET = {
   GLOBAL: '["EMAIL","SLACK"]',
 }
 
+function emitTenantConfigUpdated(payload) {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+  try {
+    window.dispatchEvent(new CustomEvent('crm:tenant-config-updated', { detail: payload || {} }))
+  } catch {
+    // keep save flow resilient even if event construction fails
+  }
+}
+
 function withRequestIdMessage(err, fallback) {
   const message = String(err?.message || fallback || '').trim()
   const requestId = String(err?.requestId || '').trim()
@@ -203,6 +212,7 @@ export function useGovernancePageActions(params) {
       setLastCreatedTenant(created)
       setTenantForm((p) => ({ ...p, name: '' }))
       await loadTenants()
+      emitTenantConfigUpdated({ tenantId: created?.id || '', source: 'create_tenant' })
       setError('')
     } catch (err) {
       setError(withRequestIdMessage(err, t('loadFailed')))
@@ -233,6 +243,14 @@ export function useGovernancePageActions(params) {
             dateFormat: payload.dateFormat,
           }),
         }, auth.token, lang)
+        emitTenantConfigUpdated({
+          tenantId: row.id,
+          source: 'update_current_tenant_config',
+          marketProfile: payload.marketProfile,
+          currency: payload.currency,
+          timezone: payload.timezone,
+          approvalMode: payload.approvalMode,
+        })
       }
       setTenantRows((prev) => prev.map((x) => (x.id === updated.id ? {
         ...x,
@@ -247,6 +265,9 @@ export function useGovernancePageActions(params) {
         currency: payload.currency || x.currency || 'CNY',
         timezone: payload.timezone || x.timezone || 'Asia/Shanghai',
       } : x)))
+      if (row.id !== auth?.tenantId) {
+        emitTenantConfigUpdated({ tenantId: row.id, source: 'update_tenant_row' })
+      }
       setError('')
     } catch (err) {
       setError(withRequestIdMessage(err, t('loadFailed')))
