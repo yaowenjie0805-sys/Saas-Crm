@@ -229,8 +229,8 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
         </div>
       </div>
       <div className="filter-row" style={{ marginBottom: 8 }}>
-        <input className="tool-input" placeholder={t('owner')} value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} />
-        <select className="tool-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <input data-testid="quotes-owner-filter" className="tool-input" placeholder={t('owner')} value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} />
+        <select data-testid="quotes-status-filter" className="tool-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">{t('allStatuses')}</option>
           <option value="DRAFT">{translateStatus(t, 'DRAFT')}</option>
           <option value="SUBMITTED">{translateStatus(t, 'SUBMITTED')}</option>
@@ -239,7 +239,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
         </select>
       </div>
       <div className="filter-bar">
-        <button className="mini-btn" onClick={refreshSelf}>{t('query')}</button>
+        <button data-testid="quotes-query" className="mini-btn" onClick={refreshSelf}>{t('query')}</button>
         <button className="mini-btn" onClick={resetFilters}>{t('clearFilters')}</button>
       </div>
       <div className="filter-bar" style={{ marginBottom: 8 }}>
@@ -276,7 +276,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
       {!loading && opportunityFilter && filteredItems.length === 0 && (
         <div className="empty-tip" style={{ marginBottom: 8 }}>{t('filteredResultEmpty')}</div>
       )}
-      <div className="table-row table-head-row table-row-6"><span><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></span><span>{t('idLabel')}</span><span>{t('owner')}</span><span>{t('status')}</span><span>{t('amount')}</span><span>{t('action')}</span></div>
+      <div className="table-row table-head-row table-row-6"><span><input data-testid="quotes-select-all" type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></span><span>{t('idLabel')}</span><span>{t('owner')}</span><span>{t('status')}</span><span>{t('amount')}</span><span>{t('action')}</span></div>
       <ListState loading={loading} empty={!loading && filteredItems.length === 0} emptyText={t('noData')} />
       {!loading && filteredItems.length > 0 && (
         <VirtualListTable
