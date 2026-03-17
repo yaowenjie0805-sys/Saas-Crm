@@ -1,0 +1,59 @@
+name: PR Gate
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  gate:
+    runs-on: windows-latest
+    env:
+      AUTH_TOKEN_SECRET: ci-secret-not-default
+      SECURITY_MFA_STATIC_CODE: 918273
+      SECURITY_SSO_MODE: oidc
+      AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ci-strong-password
+      DB_URL: jdbc:mysql://127.0.0.1:3306/crm_local
+      DB_USER: root
+      DB_PASSWORD: root
+      LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
+      PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
+      PREFLIGHT_SKIP_SLO_EVIDENCE: "true"
+      PREFLIGHT_SKIP_PERF_EVIDENCE: "true"
+      PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
+      PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "8"
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Backend Tests
+        run: npm run test:backend
+
+      - name: Security Scan
+        run: npm run security:scan
+
+      - name: Release Snapshot
+        run: npm run release:snapshot
+
+      - name: Production Preflight
+        run: npm run preflight:prod

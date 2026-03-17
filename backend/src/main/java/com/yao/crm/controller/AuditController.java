@@ -189,6 +189,14 @@ public class AuditController extends BaseApiController {
         return ResponseEntity.ok(body);
     }
 
+    @GetMapping("/audit-logs/export-metrics")
+    public ResponseEntity<?> exportMetrics(HttpServletRequest request) {
+        if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
+            return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
+        }
+        return ResponseEntity.ok(auditExportJobService.metricsSnapshot(currentTenant(request)));
+    }
+
     @PostMapping("/audit-logs/export-jobs/{jobId}/retry")
     public ResponseEntity<?> retryExportJob(HttpServletRequest request, @PathVariable String jobId) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {

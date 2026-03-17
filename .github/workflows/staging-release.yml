@@ -1,0 +1,112 @@
+name: Staging Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to release to staging"
+        required: false
+        default: "master"
+
+jobs:
+  staging-release:
+    runs-on: windows-latest
+    environment: staging
+    env:
+      AUTH_TOKEN_SECRET: ci-secret-not-default
+      SECURITY_MFA_STATIC_CODE: 918273
+      SECURITY_SSO_MODE: oidc
+      AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ci-strong-password
+      DB_URL: jdbc:mysql://127.0.0.1:3306/crm_local
+      DB_USER: root
+      DB_PASSWORD: root
+      LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
+      PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
+      PREFLIGHT_SKIP_SLO_EVIDENCE: "false"
+      PREFLIGHT_SKIP_PERF_EVIDENCE: "false"
+      PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
+      PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "true"
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      STAGING_SSH_PORT: ${{ secrets.STAGING_SSH_PORT }}
+      STAGING_BASE_DIR: ${{ secrets.STAGING_BASE_DIR }}
+      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      COMPOSE_PROJECT_NAME: crm-staging
+      STAGING_APPROVAL_STATUS: approved
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'master' }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "8"
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Install k6
+        run: choco install k6 -y
+
+      - name: Build
+        run: npm run build
+
+      - name: Backend Tests
+        run: npm run test:backend
+
+      - name: Performance Baseline
+        run: npm run perf:baseline
+        env:
+          PERF_REQUIRE_K6: "true"
+
+      - name: Performance Gate
+        run: npm run perf:gate
+
+      - name: SRE Daily Check
+        run: npm run sre:daily-check
+
+      - name: Security Scan
+        run: npm run security:scan
+
+      - name: Release Snapshot
+        run: npm run release:snapshot
+
+      - name: Deploy to Staging
+        run: npm run staging:deploy -- --artifactVersion ${{ github.sha }}
+
+      - name: Staging Verify
+        run: npm run staging:verify
+
+      - name: Staging Release Summary
+        run: npm run staging:release:summary
+
+      - name: Production Preflight
+        run: npm run preflight:prod
+
+      - name: Rollback Recommendation
+        if: failure()
+        run: |
+          echo "One or more staging gates failed. Rollback is recommended."
+          if (Test-Path logs\staging\staging-verify-latest.json) { Get-Content logs\staging\staging-verify-latest.json }
+          if (Test-Path logs\staging\staging-deploy-latest.json) { Get-Content logs\staging\staging-deploy-latest.json }
+
+      - name: Upload Staging Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-evidence-${{ github.run_number }}
+          path: |
+            logs/release/**
+            logs/sre/**
+            logs/perf/**
+            logs/preflight/**
+            logs/security/**
+            logs/staging/**

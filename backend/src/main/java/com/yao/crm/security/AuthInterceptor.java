@@ -2,6 +2,7 @@ package com.yao.crm.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.repository.TenantRepository;
+import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -19,17 +20,20 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final I18nService i18nService;
     private final ObjectMapper objectMapper;
     private final TenantRepository tenantRepository;
+    private final AuditLogService auditLogService;
     private final String sessionCookieName;
 
     public AuthInterceptor(TokenService tokenService,
                            I18nService i18nService,
                            ObjectMapper objectMapper,
                            TenantRepository tenantRepository,
+                           AuditLogService auditLogService,
                            SessionCookieService sessionCookieService) {
         this.tokenService = tokenService;
         this.i18nService = i18nService;
         this.objectMapper = objectMapper;
         this.tenantRepository = tenantRepository;
+        this.auditLogService = auditLogService;
         this.sessionCookieName = sessionCookieService.cookieName();
     }
 
@@ -40,7 +44,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String path = request.getRequestURI();
-        if (path.equals("/api/health")
+        if (path.startsWith("/api/health")
                 || path.equals("/api/auth/login")
                 || path.equals("/api/auth/register")
                 || path.equals("/api/auth/sso/config")
@@ -79,14 +83,17 @@ public class AuthInterceptor implements HandlerInterceptor {
         String headerTenant = request.getHeader("X-Tenant-Id");
         if (path.startsWith("/api/v1/") || path.startsWith("/api/v2/")) {
             if (headerTenant == null || headerTenant.trim().isEmpty()) {
+                markCrossTenantForbidden(request, principal, "tenant_header_missing");
                 writeForbidden(request, response, i18nService.msg(request, "tenant_header_required"));
                 return false;
             }
             if (!headerTenant.trim().equals(principal.getTenantId())) {
+                markCrossTenantForbidden(request, principal, "tenant_mismatch");
                 writeForbidden(request, response, i18nService.msg(request, "tenant_mismatch"));
                 return false;
             }
         } else if (headerTenant != null && !headerTenant.trim().isEmpty() && !headerTenant.trim().equals(principal.getTenantId())) {
+            markCrossTenantForbidden(request, principal, "tenant_mismatch");
             writeForbidden(request, response, i18nService.msg(request, "tenant_mismatch"));
             return false;
         }
@@ -119,13 +126,33 @@ public class AuthInterceptor implements HandlerInterceptor {
     private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response, String message) throws Exception {
         String path = request.getRequestURI() == null ? "" : request.getRequestURI();
         String code = path.startsWith("/api/v1/") ? "unauthorized" : "UNAUTHORIZED";
+        request.setAttribute("apiErrorCode", code);
         writeError(response, request, 401, code, message);
     }
 
     private void writeForbidden(HttpServletRequest request, HttpServletResponse response, String message) throws Exception {
         String path = request.getRequestURI() == null ? "" : request.getRequestURI();
         String code = path.startsWith("/api/v1/") ? "forbidden" : "FORBIDDEN";
+        request.setAttribute("apiErrorCode", code);
         writeError(response, request, 403, code, message);
+    }
+
+    private void markCrossTenantForbidden(HttpServletRequest request, AuthPrincipal principal, String reason) {
+        String traceId = String.valueOf(request.getAttribute(TraceIdInterceptor.TRACE_ID_ATTR) == null
+                ? ""
+                : request.getAttribute(TraceIdInterceptor.TRACE_ID_ATTR));
+        String details = "reason=" + reason
+                + ";route=" + request.getRequestURI()
+                + ";requestId=" + traceId;
+        auditLogService.record(
+                principal == null ? "unknown" : principal.getUsername(),
+                principal == null ? "UNKNOWN" : principal.getRole(),
+                "TENANT_FORBIDDEN",
+                "AUTHZ",
+                request.getRequestURI(),
+                details,
+                principal == null ? "tenant_default" : principal.getTenantId()
+        );
     }
 
     private void writeError(HttpServletResponse response, HttpServletRequest request, int status, String code, String message) throws Exception {

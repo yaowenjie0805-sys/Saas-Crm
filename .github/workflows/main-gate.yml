@@ -1,0 +1,88 @@
+name: Mainline Gate
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  full-gate:
+    runs-on: windows-latest
+    env:
+      AUTH_TOKEN_SECRET: ci-secret-not-default
+      SECURITY_MFA_STATIC_CODE: 918273
+      SECURITY_SSO_MODE: oidc
+      AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ci-strong-password
+      DB_URL: jdbc:mysql://127.0.0.1:3306/crm_local
+      DB_USER: root
+      DB_PASSWORD: root
+      LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
+      PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
+      PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
+      PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "8"
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Install k6
+        run: choco install k6 -y
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Browser E2E
+        run: npm run test:e2e
+
+      - name: Backend Tests
+        run: npm run test:backend
+
+      - name: Full Gate
+        run: npm run test:full
+
+      - name: Performance Baseline
+        run: npm run perf:baseline
+        env:
+          PERF_REQUIRE_K6: "true"
+
+      - name: Performance Gate
+        run: npm run perf:gate
+
+      - name: SRE Daily Check
+        run: npm run sre:daily-check
+
+      - name: Security Scan
+        run: npm run security:scan
+
+      - name: Release Snapshot
+        run: npm run release:snapshot
+
+      - name: Production Preflight
+        run: npm run preflight:prod
+
+      - name: Upload Ops Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-evidence
+          path: |
+            logs/release/**
+            logs/sre/**
+            logs/perf/**
+            logs/security/**
+            logs/preflight/**

@@ -7,9 +7,12 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PreDestroy;
 import javax.persistence.criteria.Predicate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class AuditExportJobService {
@@ -17,6 +20,11 @@ public class AuditExportJobService {
     private final AuditLogRepository auditLogRepository;
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final Map<String, JobRecord> jobs = new ConcurrentHashMap<String, JobRecord>();
+    private final AtomicLong totalSubmitted = new AtomicLong(0L);
+    private final AtomicLong totalRetried = new AtomicLong(0L);
+    private final AtomicLong totalDone = new AtomicLong(0L);
+    private final AtomicLong totalFailed = new AtomicLong(0L);
+    private final ConcurrentLinkedQueue<Long> durationHistoryMs = new ConcurrentLinkedQueue<Long>();
 
     public AuditExportJobService(AuditLogRepository auditLogRepository) {
         this.auditLogRepository = auditLogRepository;
@@ -33,6 +41,7 @@ public class AuditExportJobService {
         cleanupOldFinishedJobs();
         JobRecord record = createRecord(requestedBy, tenantId, role, username, action, fromTime, toTime, null, language);
         jobs.put(record.jobId, record);
+        totalSubmitted.incrementAndGet();
         start(record);
         return toStatus(record);
     }
@@ -116,6 +125,8 @@ public class AuditExportJobService {
                 source.language
         );
         jobs.put(retried.jobId, retried);
+        totalSubmitted.incrementAndGet();
+        totalRetried.incrementAndGet();
         start(retried);
         return toStatus(retried);
     }
@@ -151,6 +162,38 @@ public class AuditExportJobService {
             throw new IllegalStateException("export_job_not_ready");
         }
         return record.csv;
+    }
+
+    public Map<String, Object> metricsSnapshot(String tenantId) {
+        cleanupOldFinishedJobs();
+        int pending = 0;
+        int running = 0;
+        int done = 0;
+        int failed = 0;
+        for (JobRecord row : jobs.values()) {
+            if (!Objects.equals(row.tenantId, tenantId)) continue;
+            if ("PENDING".equals(row.status)) pending++;
+            else if ("RUNNING".equals(row.status)) running++;
+            else if ("DONE".equals(row.status)) done++;
+            else if ("FAILED".equals(row.status)) failed++;
+        }
+        List<Long> durations = new ArrayList<Long>(durationHistoryMs);
+        Collections.sort(durations);
+
+        Map<String, Object> out = new HashMap<String, Object>();
+        out.put("tenantId", tenantId);
+        out.put("queuePending", pending);
+        out.put("queueRunning", running);
+        out.put("finishedDone", done);
+        out.put("finishedFailed", failed);
+        out.put("totalSubmitted", totalSubmitted.get());
+        out.put("totalRetried", totalRetried.get());
+        out.put("totalDone", totalDone.get());
+        out.put("totalFailed", totalFailed.get());
+        out.put("latencyP50Ms", percentile(durations, 50));
+        out.put("latencyP95Ms", percentile(durations, 95));
+        out.put("latencySamples", durations.size());
+        return out;
     }
 
     private void start(final JobRecord record) {
@@ -242,11 +285,15 @@ public class AuditExportJobService {
             record.progress = 100;
             record.status = "DONE";
             record.finishedAt = LocalDateTime.now();
+            totalDone.incrementAndGet();
+            addDuration(record);
         } catch (Exception ex) {
             record.status = "FAILED";
             record.progress = 100;
             record.error = ex.getMessage();
             record.finishedAt = LocalDateTime.now();
+            totalFailed.incrementAndGet();
+            addDuration(record);
         }
     }
 
@@ -306,6 +353,22 @@ public class AuditExportJobService {
 
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
+    }
+
+    private long percentile(List<Long> values, int p) {
+        if (values == null || values.isEmpty()) return 0L;
+        int index = (int) Math.ceil((p / 100.0d) * values.size()) - 1;
+        int safe = Math.max(0, Math.min(values.size() - 1, index));
+        return values.get(safe);
+    }
+
+    private void addDuration(JobRecord record) {
+        if (record == null || record.createdAt == null || record.finishedAt == null) return;
+        long ms = Duration.between(record.createdAt, record.finishedAt).toMillis();
+        durationHistoryMs.add(Math.max(0L, ms));
+        while (durationHistoryMs.size() > 200) {
+            durationHistoryMs.poll();
+        }
     }
 
     @PreDestroy

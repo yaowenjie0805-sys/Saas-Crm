@@ -2220,6 +2220,29 @@ class AuthFlowIntegrationTest {
         }
     }
 
+    @Test
+    void v1OpsSloSnapshotShouldReturnOperationalSummary() throws Exception {
+        String token = login("admin", "admin123");
+
+        mockMvc.perform(get("/api/v1/ops/slo-snapshot")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Tenant-Id", "tenant_default"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.overallStatus").isString())
+                .andExpect(jsonPath("$.alerts").isArray())
+                .andExpect(jsonPath("$.thresholds.errorRateMax").exists())
+                .andExpect(jsonPath("$.summary.errorRate").exists())
+                .andExpect(jsonPath("$.summary.dashboardP95Ms").exists())
+                .andExpect(jsonPath("$.summary.dashboardP99Ms").exists())
+                .andExpect(jsonPath("$.performanceWindow.requestCount").exists())
+                .andExpect(jsonPath("$.performanceWindow.keyRoutes.dashboard.p99Ms").exists())
+                .andExpect(jsonPath("$.performanceWindow.keyRoutes.dashboard.errorRate5xx").exists())
+                .andExpect(jsonPath("$.readiness.ok").exists())
+                .andExpect(jsonPath("$.dependencies.database").exists())
+                .andExpect(jsonPath("$.api.keyRoutes.dashboard.p95Ms").exists())
+                .andExpect(jsonPath("$.auditExport.totalSubmitted").exists());
+    }
+
     private void createQuoteApprovalTemplate(String token) throws Exception {
         mockMvc.perform(post("/api/v1/approval/templates")
                         .header("Authorization", "Bearer " + token)
