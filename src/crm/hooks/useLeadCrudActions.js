@@ -18,6 +18,12 @@ export function useLeadCrudActions({
   setQuotePrefill,
   onLeadConvertedToQuote,
 }) {
+  const withRequestId = useCallback((err, fallback = t('loadFailed')) => {
+    const message = String(err?.message || fallback || '').trim()
+    const requestId = String(err?.requestId || '').trim()
+    return requestId ? `${message} [${requestId}]` : message
+  }, [t])
+
   const saveLead = useCallback(async () => {
     if (!canWrite) return
     setCrudError('lead', '')
@@ -43,11 +49,11 @@ export function useLeadCrudActions({
       setLeadForm({ id: '', name: '', company: '', phone: '', email: '', status: 'NEW', owner: '', source: '' })
       await refreshPage('leads', 'panel_action')
     } catch (err) {
-      setCrudError('lead', formatValidation(err))
+      setCrudError('lead', withRequestId(err, formatValidation(err)))
       setCrudFieldError('lead', pickFieldErrors(err, ['name', 'company', 'phone', 'email', 'owner', 'source', 'status']))
       handleError(err)
     }
-  }, [authToken, canWrite, formatValidation, handleError, lang, leadForm, pickFieldErrors, refreshPage, setCrudError, setCrudFieldError, setLeadForm, t])
+  }, [authToken, canWrite, formatValidation, handleError, lang, leadForm, pickFieldErrors, refreshPage, setCrudError, setCrudFieldError, setLeadForm, t, withRequestId])
 
   const editLead = useCallback((row) => {
     setLeadForm({
@@ -64,6 +70,7 @@ export function useLeadCrudActions({
 
   const convertLead = useCallback(async (id) => {
     if (!canWrite) return
+    setCrudError('lead', '')
     try {
       const converted = await api('/v1/leads/' + id + '/convert', { method: 'POST', body: JSON.stringify({}) }, authToken, lang)
       const owner = String(converted?.lead?.owner || '').trim()
@@ -84,8 +91,11 @@ export function useLeadCrudActions({
         setQuotePrefill?.(nextPrefill)
         onLeadConvertedToQuote?.(nextPrefill)
       }
-    } catch (err) { handleError(err) }
-  }, [authToken, canWrite, handleError, lang, onLeadConvertedToQuote, refreshPage, setQuotePrefill])
+    } catch (err) {
+      setCrudError('lead', withRequestId(err, t('leadConvert')))
+      handleError(err)
+    }
+  }, [authToken, canWrite, handleError, lang, onLeadConvertedToQuote, refreshPage, setCrudError, setQuotePrefill, t, withRequestId])
 
   const bulkAssignLeadsByRule = useCallback(async (idsInput) => {
     const ids = Array.isArray(idsInput) ? idsInput : []
@@ -93,8 +103,11 @@ export function useLeadCrudActions({
     try {
       await Promise.all(ids.map((id) => api('/v1/leads/' + id + '/assign', { method: 'POST', body: JSON.stringify({ useRule: true }) }, authToken, lang)))
       await refreshPage('leads', 'panel_action')
-    } catch (err) { handleError(err) }
-  }, [authToken, handleError, lang, refreshPage])
+    } catch (err) {
+      setCrudError('lead', withRequestId(err, t('leadBulkAssign')))
+      handleError(err)
+    }
+  }, [authToken, handleError, lang, refreshPage, setCrudError, t, withRequestId])
 
   const bulkUpdateLeadStatus = useCallback(async (statusValue, idsInput) => {
     const ids = Array.isArray(idsInput) ? idsInput : []
@@ -117,8 +130,11 @@ export function useLeadCrudActions({
         }, authToken, lang)
       }))
       await refreshPage('leads', 'panel_action')
-    } catch (err) { handleError(err) }
-  }, [authToken, handleError, lang, leads, refreshPage])
+    } catch (err) {
+      setCrudError('lead', withRequestId(err, t('leadBulkStatus')))
+      handleError(err)
+    }
+  }, [authToken, handleError, lang, leads, refreshPage, setCrudError, t, withRequestId])
 
   return {
     saveLead,
