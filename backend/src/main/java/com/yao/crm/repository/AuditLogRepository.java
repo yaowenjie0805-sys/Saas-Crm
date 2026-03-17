@@ -8,5 +8,6 @@ import java.util.List;
 
 public interface AuditLogRepository extends JpaRepository<AuditLog, String>, JpaSpecificationExecutor<AuditLog> {
     List<AuditLog> findTop100ByOrderByCreatedAtDesc();
+    List<AuditLog> findTop100ByTenantIdOrderByCreatedAtDesc(String tenantId);
     List<AuditLog> findByTenantIdOrderByCreatedAtDesc(String tenantId);
 }

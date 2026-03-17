@@ -27,10 +27,10 @@ public class DashboardService {
         this.taskRepository = taskRepository;
     }
 
-    public DashboardResponse load() {
-        List<Customer> customers = customerRepository.findAll();
-        List<Opportunity> opportunities = opportunityRepository.findAll();
-        List<TaskItem> tasks = taskRepository.findAll();
+    public DashboardResponse loadByTenant(String tenantId) {
+        List<Customer> customers = customerRepository.findByTenantId(tenantId);
+        List<Opportunity> opportunities = opportunityRepository.findByTenantId(tenantId);
+        List<TaskItem> tasks = taskRepository.findByTenantId(tenantId);
 
         long customerCount = customers.size();
         long totalSales = 0L;

@@ -48,7 +48,7 @@ public class ReportController extends BaseApiController {
             return range.errorBody;
         }
 
-        return ResponseEntity.ok(reportService.overview(range.from, range.to, role));
+        return ResponseEntity.ok(reportService.overviewByTenant(currentTenant(request), range.from, range.to, role, "", ""));
     }
 
     @GetMapping("/reports/overview/export")
@@ -67,7 +67,7 @@ public class ReportController extends BaseApiController {
 
         boolean zh = request.getHeader("Accept-Language") != null
                 && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
-        String csv = reportService.exportOverviewCsvByTenant("tenant_default", range.from, range.to, role, "", "", zh ? "zh" : "en");
+        String csv = reportService.exportOverviewCsvByTenant(currentTenant(request), range.from, range.to, role, "", "", zh ? "zh" : "en");
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         String fileName = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + date + ".csv";
 
@@ -89,7 +89,7 @@ public class ReportController extends BaseApiController {
         if (range.errorBody != null) {
             return range.errorBody;
         }
-        return ResponseEntity.status(202).body(reportExportJobService.submit(currentUser(request), role, range.from, range.to));
+        return ResponseEntity.status(202).body(reportExportJobService.submitByTenant(currentUser(request), currentTenant(request), role, range.from, range.to));
     }
 
     @GetMapping("/reports/export-jobs")
@@ -108,7 +108,7 @@ public class ReportController extends BaseApiController {
         }
         Map<String, Object> body = reportExportJobService.listByTenantPaged(
                 currentUser(request),
-                "tenant_default",
+                currentTenant(request),
                 hasAnyRole(request, "ADMIN", "MANAGER"),
                 safePage,
                 safeSize,

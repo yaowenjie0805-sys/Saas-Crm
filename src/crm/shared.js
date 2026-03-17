@@ -168,7 +168,7 @@ export async function api(path, options = {}, token, lang = 'en') {
   const headers = { 'Accept-Language': lang, ...(options.headers || {}) }
   if (!isFormData && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
   if (isFormData && headers['Content-Type']) delete headers['Content-Type']
-  if (token) headers.Authorization = `Bearer ${token}`
+  if (token && token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${token}`
   if (!headers['X-Tenant-Id']) {
     try {
       const auth = JSON.parse(localStorage.getItem('crm_auth') || 'null')
@@ -176,8 +176,12 @@ export async function api(path, options = {}, token, lang = 'en') {
     } catch {
       // ignore localStorage parse errors
     }
+    if (!headers['X-Tenant-Id']) {
+      const lastTenant = localStorage.getItem('crm_last_tenant')
+      if (lastTenant) headers['X-Tenant-Id'] = lastTenant
+    }
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers, body })
+  const res = await fetch(`${API_BASE}${path}`, { ...options, credentials: 'include', headers, body })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const fallback = lang === 'zh' ? '\u8bf7\u6c42\u5931\u8d25' : 'Request failed'

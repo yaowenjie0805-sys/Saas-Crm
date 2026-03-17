@@ -42,7 +42,7 @@ public class AuditController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        return ResponseEntity.ok(auditLogService.latest());
+        return ResponseEntity.ok(auditLogService.latestByTenant(currentTenant(request)));
     }
 
     @GetMapping("/audit-logs/search")
@@ -76,7 +76,8 @@ public class AuditController extends BaseApiController {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
         }
 
-        Page<AuditLog> result = auditLogRepository.findAll(buildAuditSpec(username, role, action, fromTime, toTime), pageable);
+        String tenantId = currentTenant(request);
+        Page<AuditLog> result = auditLogRepository.findAll(buildAuditSpec(tenantId, username, role, action, fromTime, toTime), pageable);
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
@@ -105,7 +106,8 @@ public class AuditController extends BaseApiController {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
         }
 
-        List<AuditLog> logs = auditLogRepository.findAll(buildAuditSpec(username, role, action, fromTime, toTime));
+        String tenantId = currentTenant(request);
+        List<AuditLog> logs = auditLogRepository.findAll(buildAuditSpec(tenantId, username, role, action, fromTime, toTime));
         boolean zh = request.getHeader("Accept-Language") != null
                 && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
         StringBuilder csv = new StringBuilder();
@@ -152,6 +154,7 @@ public class AuditController extends BaseApiController {
         }
         return ResponseEntity.status(202).body(auditExportJobService.submit(
                 currentUser(request),
+                currentTenant(request),
                 role,
                 username,
                 action,
@@ -177,6 +180,7 @@ public class AuditController extends BaseApiController {
         }
         Map<String, Object> body = auditExportJobService.listPaged(
                 currentUser(request),
+                currentTenant(request),
                 hasAnyRole(request, "ADMIN", "MANAGER"),
                 safePage,
                 safeSize,
@@ -191,7 +195,7 @@ public class AuditController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         try {
-            Map<String, Object> job = auditExportJobService.retry(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            Map<String, Object> job = auditExportJobService.retry(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
             return ResponseEntity.status(202).body(job);
         } catch (IllegalArgumentException ex) {
             if ("forbidden".equals(ex.getMessage())) {
@@ -214,7 +218,7 @@ public class AuditController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         try {
-            return ResponseEntity.ok(auditExportJobService.status(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER")));
+            return ResponseEntity.ok(auditExportJobService.status(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER")));
         } catch (IllegalArgumentException ex) {
             if ("forbidden".equals(ex.getMessage())) {
                 return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
@@ -236,7 +240,7 @@ public class AuditController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         try {
-            String csv = auditExportJobService.download(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            String csv = auditExportJobService.download(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
             boolean zh = request.getHeader("Accept-Language") != null
                     && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
             String filename = (zh ? "审计日志-" : "audit-logs-") + jobId + ".csv";
@@ -268,9 +272,10 @@ public class AuditController extends BaseApiController {
         }
     }
 
-    private Specification<AuditLog> buildAuditSpec(String username, String role, String action, LocalDateTime fromTime, LocalDateTime toTime) {
+    private Specification<AuditLog> buildAuditSpec(String tenantId, String username, String role, String action, LocalDateTime fromTime, LocalDateTime toTime) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(username)) predicates.add(cb.equal(root.get("username"), username));
             if (!isBlank(role)) predicates.add(cb.equal(root.get("role"), role));
             if (!isBlank(action)) predicates.add(cb.equal(root.get("action"), action));

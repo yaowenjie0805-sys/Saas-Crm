@@ -69,8 +69,10 @@ public class FollowUpController extends BaseApiController {
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
+        final String tenantId = currentTenant(request);
         Specification<FollowUp> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(customerId)) {
                 predicates.add(cb.equal(root.get("customerId"), customerId));
             }
@@ -105,7 +107,8 @@ public class FollowUpController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<Customer> customerOpt = customerRepository.findById(payload.getCustomerId());
+        String tenantId = currentTenant(request);
+        Optional<Customer> customerOpt = customerRepository.findByIdAndTenantId(payload.getCustomerId(), tenantId);
         if (!customerOpt.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -115,6 +118,7 @@ public class FollowUpController extends BaseApiController {
 
         FollowUp followUp = new FollowUp();
         followUp.setId(newId("f"));
+        followUp.setTenantId(tenantId);
         followUp.setCustomerId(payload.getCustomerId());
         followUp.setAuthor(isSalesScoped(request) ? currentUser(request) : (isBlank(payload.getAuthor()) ? currentUser(request) : payload.getAuthor()));
         followUp.setSummary(payload.getSummary());
@@ -135,7 +139,8 @@ public class FollowUpController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<FollowUp> optional = followUpRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<FollowUp> optional = followUpRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "follow_up_not_found", "NOT_FOUND", null));
         }
@@ -145,7 +150,7 @@ public class FollowUpController extends BaseApiController {
         }
 
         if (patch.getCustomerId() != null) {
-            Optional<Customer> customer = customerRepository.findById(patch.getCustomerId());
+            Optional<Customer> customer = customerRepository.findByIdAndTenantId(patch.getCustomerId(), tenantId);
             if (!customer.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
@@ -180,7 +185,8 @@ public class FollowUpController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<FollowUp> followUp = followUpRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<FollowUp> followUp = followUpRepository.findByIdAndTenantId(id, tenantId);
         if (!followUp.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "follow_up_not_found", "NOT_FOUND", null));
         }
@@ -193,7 +199,7 @@ public class FollowUpController extends BaseApiController {
     }
 
     private boolean ownerMatchesScopeByCustomerId(HttpServletRequest request, String customerId) {
-        Optional<Customer> customer = customerRepository.findById(customerId);
+        Optional<Customer> customer = customerRepository.findByIdAndTenantId(customerId, currentTenant(request));
         return customer.isPresent() && ownerMatchesScope(request, customer.get().getOwner());
     }
 

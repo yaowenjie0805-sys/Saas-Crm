@@ -36,6 +36,12 @@ public class AuditLogService {
         return auditLogRepository.findTop100ByOrderByCreatedAtDesc();
     }
 
+    public List<AuditLog> latestByTenant(String tenantId) {
+        return auditLogRepository.findTop100ByTenantIdOrderByCreatedAtDesc(
+                (tenantId == null || tenantId.trim().isEmpty()) ? "tenant_default" : tenantId.trim()
+        );
+    }
+
     private String newId(String prefix) {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }

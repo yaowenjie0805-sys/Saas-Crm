@@ -7,6 +7,7 @@ import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -28,17 +29,20 @@ public class V1TenantController extends BaseApiController {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService;
+    private final String bootstrapDefaultPassword;
 
     public V1TenantController(TenantRepository tenantRepository,
                               UserAccountRepository userAccountRepository,
                               PasswordEncoder passwordEncoder,
                               AuditLogService auditLogService,
+                              @Value("${auth.bootstrap.default-password:admin123}") String bootstrapDefaultPassword,
                               I18nService i18nService) {
         super(i18nService);
         this.tenantRepository = tenantRepository;
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditLogService = auditLogService;
+        this.bootstrapDefaultPassword = bootstrapDefaultPassword;
     }
 
     @GetMapping("/tenants")
@@ -91,7 +95,7 @@ public class V1TenantController extends BaseApiController {
         UserAccount admin = new UserAccount();
         admin.setId("u_admin_" + tenant.getId());
         admin.setUsername("admin@" + tenant.getId());
-        admin.setPassword(passwordEncoder.encode("admin123"));
+        admin.setPassword(passwordEncoder.encode(bootstrapDefaultPassword));
         admin.setRole("ADMIN");
         admin.setDisplayName("Tenant Admin");
         admin.setOwnerScope("");

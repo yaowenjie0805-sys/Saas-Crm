@@ -23,6 +23,7 @@ public class AuditExportJobService {
     }
 
     public Map<String, Object> submit(String requestedBy,
+                                      String tenantId,
                                       String role,
                                       String username,
                                       String action,
@@ -30,20 +31,20 @@ public class AuditExportJobService {
                                       LocalDateTime toTime,
                                       String language) {
         cleanupOldFinishedJobs();
-        JobRecord record = createRecord(requestedBy, role, username, action, fromTime, toTime, null, language);
+        JobRecord record = createRecord(requestedBy, tenantId, role, username, action, fromTime, toTime, null, language);
         jobs.put(record.jobId, record);
         start(record);
         return toStatus(record);
     }
 
-    public List<Map<String, Object>> list(String requester, boolean canViewAll, int limit, String status) {
-        Map<String, Object> paged = listPaged(requester, canViewAll, 1, Math.max(1, limit), status);
+    public List<Map<String, Object>> list(String requester, String tenantId, boolean canViewAll, int limit, String status) {
+        Map<String, Object> paged = listPaged(requester, tenantId, canViewAll, 1, Math.max(1, limit), status);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) paged.get("items");
         return items;
     }
 
-    public Map<String, Object> listPaged(String requester, boolean canViewAll, int page, int size, String status) {
+    public Map<String, Object> listPaged(String requester, String tenantId, boolean canViewAll, int page, int size, String status) {
         cleanupOldFinishedJobs();
         List<JobRecord> rows = new ArrayList<JobRecord>(jobs.values());
         rows.sort(new Comparator<JobRecord>() {
@@ -58,6 +59,9 @@ public class AuditExportJobService {
         String statusFilter = normalizeStatus(status);
         List<Map<String, Object>> filtered = new ArrayList<Map<String, Object>>();
         for (JobRecord row : rows) {
+            if (!Objects.equals(row.tenantId, tenantId)) {
+                continue;
+            }
             if (!canViewAll && !Objects.equals(row.requestedBy, requester)) {
                 continue;
             }
@@ -87,11 +91,14 @@ public class AuditExportJobService {
         return body;
     }
 
-    public Map<String, Object> retry(String jobId, String requester, boolean canViewAll) {
+    public Map<String, Object> retry(String jobId, String requester, String tenantId, boolean canViewAll) {
         cleanupOldFinishedJobs();
         JobRecord source = jobs.get(jobId);
         if (source == null) {
             throw new IllegalArgumentException("export_job_not_found");
+        }
+        if (!Objects.equals(source.tenantId, tenantId)) {
+            throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(source.requestedBy, requester)) {
             throw new IllegalArgumentException("forbidden");
@@ -99,6 +106,7 @@ public class AuditExportJobService {
 
         JobRecord retried = createRecord(
                 source.requestedBy,
+                source.tenantId,
                 source.filterRole,
                 source.filterUsername,
                 source.filterAction,
@@ -112,11 +120,14 @@ public class AuditExportJobService {
         return toStatus(retried);
     }
 
-    public Map<String, Object> status(String jobId, String requester, boolean canViewAll) {
+    public Map<String, Object> status(String jobId, String requester, String tenantId, boolean canViewAll) {
         cleanupOldFinishedJobs();
         JobRecord record = jobs.get(jobId);
         if (record == null) {
             throw new IllegalArgumentException("export_job_not_found");
+        }
+        if (!Objects.equals(record.tenantId, tenantId)) {
+            throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(record.requestedBy, requester)) {
             throw new IllegalArgumentException("forbidden");
@@ -124,11 +135,14 @@ public class AuditExportJobService {
         return toStatus(record);
     }
 
-    public String download(String jobId, String requester, boolean canViewAll) {
+    public String download(String jobId, String requester, String tenantId, boolean canViewAll) {
         cleanupOldFinishedJobs();
         JobRecord record = jobs.get(jobId);
         if (record == null) {
             throw new IllegalArgumentException("export_job_not_found");
+        }
+        if (!Objects.equals(record.tenantId, tenantId)) {
+            throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(record.requestedBy, requester)) {
             throw new IllegalArgumentException("forbidden");
@@ -149,6 +163,7 @@ public class AuditExportJobService {
     }
 
     private JobRecord createRecord(String requestedBy,
+                                   String tenantId,
                                    String role,
                                    String username,
                                    String action,
@@ -162,6 +177,7 @@ public class AuditExportJobService {
         record.status = "PENDING";
         record.progress = 5;
         record.createdAt = LocalDateTime.now();
+        record.tenantId = tenantId == null || tenantId.trim().isEmpty() ? "tenant_default" : tenantId.trim();
         record.filterRole = role == null ? "" : role;
         record.filterUsername = username == null ? "" : username;
         record.filterAction = action == null ? "" : action;
@@ -188,6 +204,7 @@ public class AuditExportJobService {
                 if (!isBlank(record.filterAction)) {
                     predicates.add(cb.equal(root.get("action"), record.filterAction));
                 }
+                predicates.add(cb.equal(root.get("tenantId"), record.tenantId));
                 if (record.from != null) {
                     predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), record.from));
                 }
@@ -244,6 +261,7 @@ public class AuditExportJobService {
         body.put("createdAt", record.createdAt == null ? null : record.createdAt.toString());
         body.put("finishedAt", record.finishedAt == null ? null : record.finishedAt.toString());
         body.put("downloadReady", "DONE".equals(record.status));
+        body.put("tenantId", record.tenantId);
         body.put("filters", toFilters(record));
         return body;
     }
@@ -255,6 +273,7 @@ public class AuditExportJobService {
         filters.put("action", record.filterAction);
         filters.put("from", record.from == null ? "" : record.from.toLocalDate().toString());
         filters.put("to", record.to == null ? "" : record.to.toLocalDate().toString());
+        filters.put("tenantId", record.tenantId == null ? "" : record.tenantId);
         return filters;
     }
 
@@ -300,6 +319,7 @@ public class AuditExportJobService {
         private String status;
         private int progress;
         private String requestedBy;
+        private String tenantId;
         private String filterUsername;
         private String filterRole;
         private String filterAction;

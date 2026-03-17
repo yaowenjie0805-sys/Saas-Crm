@@ -57,8 +57,13 @@ export function useReportingPageActions(params) {
 
   const downloadExportJob = async (jobId) => {
     try {
+      const headers = { 'Accept-Language': lang }
+      if (auth?.token && auth.token !== 'COOKIE_SESSION') {
+        headers.Authorization = `Bearer ${auth.token}`
+      }
       const res = await fetch(`${API_BASE}/audit-logs/export-jobs/${jobId}/download`, {
-        headers: { Authorization: `Bearer ${auth.token}`, 'Accept-Language': lang },
+        credentials: 'include',
+        headers,
       })
       if (!res.ok) throw new Error(t('downloadFailed'))
       const blob = await res.blob()
@@ -110,8 +115,13 @@ export function useReportingPageActions(params) {
 
   const downloadReportExportJob = async (jobId) => {
     try {
+      const headers = { 'Accept-Language': lang }
+      if (auth?.token && auth.token !== 'COOKIE_SESSION') {
+        headers.Authorization = `Bearer ${auth.token}`
+      }
       const res = await fetch(`${API_BASE}/v1/reports/export-jobs/${jobId}/download`, {
-        headers: { Authorization: `Bearer ${auth.token}`, 'Accept-Language': lang },
+        credentials: 'include',
+        headers,
       })
       if (!res.ok) throw new Error(t('downloadFailed'))
       const blob = await res.blob()

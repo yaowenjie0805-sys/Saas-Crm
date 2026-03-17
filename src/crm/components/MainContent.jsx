@@ -111,30 +111,38 @@ function MainContent({ base, permissions, users, salesAutomation, commerce, cust
   return (
     <main className="content">
       <header className="topbar" data-testid="topbar">
-        <div><h1 data-testid="page-title">{currentPageLabel}</h1></div>
+        <div className="topbar-title-wrap">
+          <h1 data-testid="page-title">{currentPageLabel}</h1>
+        </div>
         <div className="top-actions">
-          <input className="tool-input top-search-input" placeholder={t('globalSearch')} />
-          <button className="mini-btn">{t('notifications')}</button>
-          <div className="language-switch">
-            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>ZH</button>
-            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
+          <div className="topbar-search-zone">
+            <input className="tool-input top-search-input topbar-search-input" placeholder={t('globalSearch')} />
           </div>
-          <button className="primary-btn" data-testid="topbar-refresh" onClick={() => refreshPage(activePage, 'topbar_refresh')}>{t('refresh')}</button>
-          <button className="danger-btn top-logout-btn" onClick={onLogout}>{t('logout')}</button>
-          <div className="user-menu-wrap" ref={userMenuRef}>
-            <button className="mini-btn account-btn" onClick={() => setUserMenuOpen((v) => !v)}>
-              {accountLabel}
-            </button>
-            {userMenuOpen && (
-              <div className="user-menu">
-                <div className="user-menu-meta">
-                  <strong>{t('logoutMenu')}</strong>
-                  <span>{accountLabel}</span>
-                  <span>{auth?.tenantId || '-'}</span>
+          <div className="topbar-secondary-actions">
+            <button className="mini-btn topbar-quiet-btn">{t('notifications')}</button>
+            <div className="language-switch topbar-lang-switch">
+              <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')}>ZH</button>
+              <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
+            </div>
+            <div className="user-menu-wrap" ref={userMenuRef}>
+              <button className="mini-btn account-btn topbar-account-btn" onClick={() => setUserMenuOpen((v) => !v)}>
+                {accountLabel}
+              </button>
+              {userMenuOpen && (
+                <div className="user-menu">
+                  <div className="user-menu-meta">
+                    <strong>{t('logoutMenu')}</strong>
+                    <span>{accountLabel}</span>
+                    <span>{auth?.tenantId || '-'}</span>
+                  </div>
+                  <button className="danger-btn" onClick={onLogout}>{t('logout')}</button>
                 </div>
-                <button className="danger-btn" onClick={onLogout}>{t('logout')}</button>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+          <div className="topbar-primary-actions">
+            <button className="primary-btn topbar-refresh-btn" data-testid="topbar-refresh" onClick={() => refreshPage(activePage, 'topbar_refresh')}>{t('refresh')}</button>
+            <button className="danger-btn top-logout-btn topbar-danger-btn" onClick={onLogout}>{t('logout')}</button>
           </div>
         </div>
       </header>

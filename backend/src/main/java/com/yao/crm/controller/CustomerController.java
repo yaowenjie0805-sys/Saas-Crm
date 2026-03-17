@@ -37,8 +37,8 @@ public class CustomerController extends BaseApiController {
     }
 
     @GetMapping("/customers")
-    public List<Customer> customers() {
-        return customerRepository.findAll();
+    public List<Customer> customers(HttpServletRequest request) {
+        return customerRepository.findByTenantId(currentTenant(request));
     }
 
     @GetMapping("/customers/search")
@@ -68,8 +68,10 @@ public class CustomerController extends BaseApiController {
 
         final String ownerScope = currentOwnerScope(request);
         final boolean salesScoped = isSalesScoped(request);
+        final String tenantId = currentTenant(request);
         Specification<Customer> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(q)) {
                 String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.or(
@@ -106,6 +108,7 @@ public class CustomerController extends BaseApiController {
 
         Customer customer = new Customer();
         customer.setId(newId("c"));
+        customer.setTenantId(currentTenant(request));
         customer.setName(payload.getName());
         if (isSalesScoped(request)) {
             customer.setOwner(currentOwnerScope(request));
@@ -129,7 +132,8 @@ public class CustomerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<Customer> optional = customerRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<Customer> optional = customerRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "customer_not_found", "NOT_FOUND", null));
         }
@@ -159,7 +163,8 @@ public class CustomerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        if (!customerRepository.existsById(id)) {
+        String tenantId = currentTenant(request);
+        if (!customerRepository.existsByIdAndTenantId(id, tenantId)) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "customer_not_found", "NOT_FOUND", null));
         }
         customerRepository.deleteById(id);

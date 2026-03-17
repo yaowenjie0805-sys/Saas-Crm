@@ -12,6 +12,7 @@ import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.security.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +39,7 @@ public class V1AuthController extends BaseApiController {
     private final MfaChallengeService mfaChallengeService;
     private final SsoAuthService ssoAuthService;
     private final AuditLogService auditLogService;
+    private final SessionCookieService sessionCookieService;
 
     public V1AuthController(UserAccountRepository userAccountRepository,
                             UserInvitationRepository userInvitationRepository,
@@ -49,6 +51,7 @@ public class V1AuthController extends BaseApiController {
                             MfaChallengeService mfaChallengeService,
                             SsoAuthService ssoAuthService,
                             AuditLogService auditLogService,
+                            SessionCookieService sessionCookieService,
                             I18nService i18nService) {
         super(i18nService);
         this.userAccountRepository = userAccountRepository;
@@ -61,6 +64,7 @@ public class V1AuthController extends BaseApiController {
         this.mfaChallengeService = mfaChallengeService;
         this.ssoAuthService = ssoAuthService;
         this.auditLogService = auditLogService;
+        this.sessionCookieService = sessionCookieService;
     }
 
     @PostMapping("/invitations/accept")
@@ -137,7 +141,10 @@ public class V1AuthController extends BaseApiController {
                     return ResponseEntity.status(401).body(errorBody(request, "mfa_invalid", msg(request, "mfa_invalid"), null));
                 }
                 loginRiskService.clear(username, ip);
-                return ResponseEntity.ok(buildAuthBody(request, user, true));
+                Map<String, Object> body = buildAuthBody(request, user, true);
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                        .body(body);
             }
             String challengeId = mfaChallengeService.issue(user.getUsername(), user.getRole(), safeOwner(user), user.getTenantId());
             Map<String, Object> body = new HashMap<String, Object>();
@@ -151,7 +158,10 @@ public class V1AuthController extends BaseApiController {
         }
 
         loginRiskService.clear(username, ip);
-        return ResponseEntity.ok(buildAuthBody(request, user, true));
+        Map<String, Object> body = buildAuthBody(request, user, true);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                .body(body);
     }
 
     @PostMapping("/mfa/verify")
@@ -168,7 +178,10 @@ public class V1AuthController extends BaseApiController {
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "user_not_found", msg(request, "user_not_found"), null));
         }
-        return ResponseEntity.ok(buildAuthBody(request, optional.get(), true));
+        Map<String, Object> body = buildAuthBody(request, optional.get(), true);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                .body(body);
     }
 
     @PostMapping("/oidc/callback")
@@ -200,7 +213,10 @@ public class V1AuthController extends BaseApiController {
             user.setDataScope("SELF");
             user = userAccountRepository.save(user);
         }
-        return ResponseEntity.ok(buildAuthBody(request, user, true));
+        Map<String, Object> body = buildAuthBody(request, user, true);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                .body(body);
     }
 
     @PostMapping("/logout")
@@ -209,7 +225,37 @@ public class V1AuthController extends BaseApiController {
         String role = String.valueOf(request.getAttribute("authRole"));
         String tenantId = String.valueOf(request.getAttribute("authTenantId"));
         auditLogService.record(username, role, "LOGOUT_V1", "AUTH", null, "User logged out via v1 auth", tenantId);
-        return ResponseEntity.ok(successByKey(request, "logout_success", null));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildClearCookie())
+                .body(successByKey(request, "logout_success", null));
+    }
+
+    @GetMapping("/session")
+    public ResponseEntity<?> session(HttpServletRequest request) {
+        String tenantId = currentTenant(request);
+        String username = currentUser(request);
+        Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId);
+        if (!optional.isPresent()) {
+            return ResponseEntity.status(401).body(errorBody(request, "unauthorized", msg(request, "invalid_or_expired"), null));
+        }
+        UserAccount user = optional.get();
+        Map<String, Object> body = successByKey(request, "auth_success", null);
+        body.put("token", "");
+        body.put("username", user.getUsername());
+        body.put("displayName", user.getDisplayName());
+        body.put("role", user.getRole());
+        body.put("ownerScope", safeOwner(user));
+        body.put("tenantId", user.getTenantId());
+        body.put("dateFormat", tenantRepository.findById(user.getTenantId()).map(t -> {
+            String format = t.getDateFormat();
+            if ("YYYY-MM-DD".equalsIgnoreCase(format)) return "yyyy-MM-dd";
+            return isBlank(format) ? "yyyy-MM-dd" : format;
+        }).orElse("yyyy-MM-dd"));
+        body.put("department", user.getDepartment());
+        body.put("dataScope", user.getDataScope());
+        body.put("mfaVerified", true);
+        body.put("requestId", traceId(request));
+        return ResponseEntity.ok(body);
     }
 
     private Map<String, Object> buildAuthBody(HttpServletRequest request, UserAccount user, boolean mfaVerified) {

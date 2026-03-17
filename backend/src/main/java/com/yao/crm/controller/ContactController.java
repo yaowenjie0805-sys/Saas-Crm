@@ -64,8 +64,10 @@ public class ContactController extends BaseApiController {
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
+        final String tenantId = currentTenant(request);
         Specification<Contact> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(customerId)) {
                 predicates.add(cb.equal(root.get("customerId"), customerId));
             }
@@ -102,7 +104,8 @@ public class ContactController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        Optional<Customer> customer = customerRepository.findById(payload.getCustomerId());
+        String tenantId = currentTenant(request);
+        Optional<Customer> customer = customerRepository.findByIdAndTenantId(payload.getCustomerId(), tenantId);
         if (!customer.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -112,6 +115,7 @@ public class ContactController extends BaseApiController {
 
         Contact contact = new Contact();
         contact.setId(newId("ct"));
+        contact.setTenantId(tenantId);
         contact.setCustomerId(payload.getCustomerId());
         contact.setName(payload.getName());
         contact.setTitle(payload.getTitle());
@@ -134,7 +138,8 @@ public class ContactController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        Optional<Contact> optional = contactRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<Contact> optional = contactRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contact_not_found", "NOT_FOUND", null));
         }
@@ -144,7 +149,7 @@ public class ContactController extends BaseApiController {
         }
 
         if (patch.getCustomerId() != null) {
-            Optional<Customer> customer = customerRepository.findById(patch.getCustomerId());
+            Optional<Customer> customer = customerRepository.findByIdAndTenantId(patch.getCustomerId(), tenantId);
             if (!customer.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
@@ -174,7 +179,8 @@ public class ContactController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        Optional<Contact> optional = contactRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<Contact> optional = contactRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contact_not_found", "NOT_FOUND", null));
         }

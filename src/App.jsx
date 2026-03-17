@@ -220,6 +220,7 @@ function App() {
   const [ssoForm, setSsoForm] = useState({ username: 'sso_user', code: 'SSO-ACCESS', displayName: '' })
   const [adminUsers, setAdminUsers] = useState([])
   const [oidcAuthorizing, setOidcAuthorizing] = useState(false)
+  const [sessionBootstrapping, setSessionBootstrapping] = useState(true)
   const [formErrors, setFormErrors] = useState({ login: {}, register: {}, sso: {} })
   const [auditRangeError, setAuditRangeError] = useState('')
   const [activePage, setActivePage] = useState('dashboard')
@@ -660,6 +661,43 @@ function App() {
   useEffect(() => localStorage.setItem(LANG_KEY, lang), [lang])
   useEffect(() => () => abortAll(), [abortAll])
   useEffect(() => {
+    let disposed = false
+    const run = async () => {
+      if (auth?.token) {
+        if (!disposed) setSessionBootstrapping(false)
+        return
+      }
+      if (location.pathname === '/activate') {
+        if (!disposed) setSessionBootstrapping(false)
+        return
+      }
+      try {
+        const restored = await api('/v1/auth/session', {}, null, lang)
+        if (!disposed) {
+          saveAuth(restored)
+        }
+      } catch {
+        try {
+          const restored = await api('/auth/session', {}, null, lang)
+          if (!disposed) {
+            saveAuth(restored)
+          }
+        } catch {
+          if (!disposed) {
+            saveAuth(null)
+          }
+        }
+      } finally {
+        if (!disposed) setSessionBootstrapping(false)
+      }
+    }
+    run()
+    return () => {
+      disposed = true
+    }
+  }, [auth?.token, location.pathname, lang, saveAuth])
+  useEffect(() => {
+    if (sessionBootstrapping) return
     const isAuthRoute = location.pathname === '/login' || location.pathname === '/activate'
     if (!auth?.token && !isAuthRoute) {
       navigate('/login', { replace: true })
@@ -668,7 +706,7 @@ function App() {
     if (auth?.token && location.pathname === '/') {
       navigate(PAGE_TO_PATH.dashboard, { replace: true })
     }
-  }, [auth?.token, location.pathname, navigate])
+  }, [auth?.token, location.pathname, navigate, sessionBootstrapping])
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => { if (!auth?.token) loadSsoConfig() }, [lang, auth?.token])
   useEffect(() => {
@@ -1652,6 +1690,9 @@ function App() {
       loginError={loginError}
     />
   )
+  if (sessionBootstrapping && !hasAuthToken && !isAuthRoute) {
+    return <div className="app-bootstrapping">Loading session...</div>
+  }
   if (!hasAuthToken || isAuthRoute) return <AppProviders apiContext={apiContext}>{authShell}</AppProviders>
 
   return (

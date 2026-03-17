@@ -30,6 +30,7 @@ import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.service.ValueNormalizerService;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -38,6 +39,9 @@ import java.time.LocalDate;
 
 @Configuration
 public class DataInitializer {
+
+    @Value("${app.seed.enabled:true}")
+    private boolean seedEnabled;
 
     @Bean
     public CommandLineRunner seedData(CustomerRepository customerRepository,
@@ -57,6 +61,9 @@ public class DataInitializer {
                                       PasswordEncoder passwordEncoder,
                                       ValueNormalizerService valueNormalizerService) {
         return args -> {
+            if (!seedEnabled) {
+                return;
+            }
             if (!tenantRepository.existsById("tenant_default")) {
                 Tenant tenant = new Tenant();
                 tenant.setId("tenant_default");

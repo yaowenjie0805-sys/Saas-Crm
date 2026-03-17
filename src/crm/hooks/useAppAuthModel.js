@@ -27,13 +27,28 @@ export function useAppAuthModel({
   formatErrorMessage,
 }) {
   const saveAuth = useCallback((next) => {
-    if (!next || !String(next.token || '').trim()) {
+    if (!next) {
       localStorage.removeItem('crm_auth')
       setAuth(null)
       return
     }
-    localStorage.setItem('crm_auth', JSON.stringify(next))
-    setAuth(next)
+    const tenantId = String(next.tenantId || '').trim()
+    if (tenantId) {
+      localStorage.setItem('crm_last_tenant', tenantId)
+    }
+    const safePersisted = {
+      username: next.username || '',
+      displayName: next.displayName || '',
+      role: next.role || '',
+      ownerScope: next.ownerScope || '',
+      tenantId,
+      department: next.department || '',
+      dataScope: next.dataScope || '',
+      dateFormat: next.dateFormat || 'yyyy-MM-dd',
+      sessionActive: true,
+    }
+    localStorage.setItem('crm_auth', JSON.stringify(safePersisted))
+    setAuth({ ...safePersisted, token: 'COOKIE_SESSION' })
   }, [setAuth])
 
   const handleLoginError = useCallback((err) => {
@@ -109,4 +124,3 @@ export function useAppAuthModel({
     performLogout,
   }
 }
-

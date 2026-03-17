@@ -7,11 +7,13 @@ import com.yao.crm.entity.UserAccount;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.security.LoginRiskService;
 import com.yao.crm.security.MfaService;
+import com.yao.crm.security.SessionCookieService;
 import com.yao.crm.security.SsoAuthService;
 import com.yao.crm.security.SsoIdentity;
 import com.yao.crm.security.TokenService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +40,7 @@ public class AuthController extends BaseApiController {
     private final LoginRiskService loginRiskService;
     private final MfaService mfaService;
     private final SsoAuthService ssoAuthService;
+    private final SessionCookieService sessionCookieService;
 
     public AuthController(UserAccountRepository userAccountRepository,
                           PasswordEncoder passwordEncoder,
@@ -46,6 +49,7 @@ public class AuthController extends BaseApiController {
                           LoginRiskService loginRiskService,
                           MfaService mfaService,
                           SsoAuthService ssoAuthService,
+                          SessionCookieService sessionCookieService,
                           I18nService i18nService) {
         super(i18nService);
         this.userAccountRepository = userAccountRepository;
@@ -55,6 +59,7 @@ public class AuthController extends BaseApiController {
         this.loginRiskService = loginRiskService;
         this.mfaService = mfaService;
         this.ssoAuthService = ssoAuthService;
+        this.sessionCookieService = sessionCookieService;
     }
 
     @GetMapping("/auth/sso/config")
@@ -131,7 +136,10 @@ public class AuthController extends BaseApiController {
         }
 
         loginRiskService.clear(username, ip);
-        return ResponseEntity.ok(buildAuthBody(request, user, false));
+        Map<String, Object> body = buildAuthBody(request, user, false);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                .body(body);
     }
 
     @PostMapping("/auth/sso/login")
@@ -177,7 +185,10 @@ public class AuthController extends BaseApiController {
         }
 
         auditLogService.record(user.getUsername(), user.getRole(), "LOGIN_SSO", "AUTH", null, "User logged in via " + ssoAuthService.providerName(), user.getTenantId());
-        return ResponseEntity.ok(buildAuthBody(request, user, true));
+        Map<String, Object> body = buildAuthBody(request, user, true);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                .body(body);
     }
 
     @PostMapping("/auth/logout")
@@ -186,7 +197,20 @@ public class AuthController extends BaseApiController {
         String role = String.valueOf(request.getAttribute("authRole"));
         String tenantId = String.valueOf(request.getAttribute("authTenantId"));
         auditLogService.record(username, role, "LOGOUT", "AUTH", null, "User logged out", tenantId);
-        return ResponseEntity.ok(successByKey(request, "logout_success", null));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildClearCookie())
+                .body(successByKey(request, "logout_success", null));
+    }
+
+    @GetMapping("/auth/session")
+    public ResponseEntity<?> session(HttpServletRequest request) {
+        String username = currentUser(request);
+        String tenantId = currentTenant(request);
+        Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId);
+        if (!optional.isPresent()) {
+            return ResponseEntity.status(401).body(singleMessage(request, "invalid_or_expired", "UNAUTHORIZED", null));
+        }
+        return ResponseEntity.ok(buildAuthBody(request, optional.get(), true));
     }
 
     private Map<String, Object> buildAuthBody(HttpServletRequest request, UserAccount user, boolean sso) {

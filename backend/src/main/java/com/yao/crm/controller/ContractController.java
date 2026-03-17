@@ -70,8 +70,10 @@ public class ContractController extends BaseApiController {
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
+        final String tenantId = currentTenant(request);
         Specification<ContractRecord> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(customerId)) {
                 predicates.add(cb.equal(root.get("customerId"), customerId));
             }
@@ -109,7 +111,8 @@ public class ContractController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        Optional<Customer> customer = customerRepository.findById(payload.getCustomerId());
+        String tenantId = currentTenant(request);
+        Optional<Customer> customer = customerRepository.findByIdAndTenantId(payload.getCustomerId(), tenantId);
         if (!customer.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -119,6 +122,7 @@ public class ContractController extends BaseApiController {
 
         ContractRecord contract = new ContractRecord();
         contract.setId(newId("cr"));
+        contract.setTenantId(tenantId);
         contract.setCustomerId(payload.getCustomerId());
         contract.setContractNo(isBlank(payload.getContractNo()) ? newContractNo() : payload.getContractNo().trim());
         contract.setTitle(payload.getTitle());
@@ -153,7 +157,8 @@ public class ContractController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        Optional<ContractRecord> optional = contractRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<ContractRecord> optional = contractRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contract_not_found", "NOT_FOUND", null));
         }
@@ -163,7 +168,7 @@ public class ContractController extends BaseApiController {
         }
 
         if (patch.getCustomerId() != null) {
-            Optional<Customer> customer = customerRepository.findById(patch.getCustomerId());
+            Optional<Customer> customer = customerRepository.findByIdAndTenantId(patch.getCustomerId(), tenantId);
             if (!customer.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
@@ -209,7 +214,8 @@ public class ContractController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        if (!contractRepository.existsById(id)) {
+        String tenantId = currentTenant(request);
+        if (!contractRepository.existsByIdAndTenantId(id, tenantId)) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contract_not_found", "NOT_FOUND", null));
         }
 

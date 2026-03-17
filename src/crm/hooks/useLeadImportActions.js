@@ -92,9 +92,9 @@ export function useLeadImportActions({
   const downloadLeadImportFailedRowsExportJob = useCallback(async (jobId, exportJobId) => {
     try {
       const headers = { 'Accept-Language': lang }
-      if (auth?.token) headers.Authorization = `Bearer ${auth.token}`
+      if (auth?.token && auth.token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${auth.token}`
       if (auth?.tenantId) headers['X-Tenant-Id'] = auth.tenantId
-      const res = await fetch(`${API_BASE}/v1/leads/import-jobs/${jobId}/failed-rows/export-jobs/${exportJobId}/download`, { headers })
+      const res = await fetch(`${API_BASE}/v1/leads/import-jobs/${jobId}/failed-rows/export-jobs/${exportJobId}/download`, { credentials: 'include', headers })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         const message = body.message || t('downloadFailed')
@@ -131,9 +131,9 @@ export function useLeadImportActions({
   const downloadLeadImportTemplate = useCallback(async () => {
     try {
       const headers = { 'Accept-Language': lang }
-      if (auth?.token) headers.Authorization = `Bearer ${auth.token}`
+      if (auth?.token && auth.token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${auth.token}`
       if (auth?.tenantId) headers['X-Tenant-Id'] = auth.tenantId
-      const res = await fetch(`${API_BASE}/v1/leads/import-template`, { headers })
+      const res = await fetch(`${API_BASE}/v1/leads/import-template`, { credentials: 'include', headers })
       if (!res.ok) throw new Error(t('downloadFailed'))
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)

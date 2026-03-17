@@ -5,8 +5,8 @@ const readStoredAuth = () => {
   try {
     const parsed = JSON.parse(localStorage.getItem('crm_auth') || 'null')
     if (!parsed || typeof parsed !== 'object') return null
-    if (!String(parsed.token || '').trim()) return null
-    return parsed
+    if (!parsed.sessionActive) return null
+    return { ...parsed, token: 'COOKIE_SESSION' }
   } catch {
     return null
   }

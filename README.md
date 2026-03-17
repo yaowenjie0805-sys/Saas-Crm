@@ -62,6 +62,7 @@ Frontend URL:
 
 Frontend calls backend via:
 - `VITE_API_BASE_URL` (default: `http://localhost:8080/api`)
+- browser session cookie (`HttpOnly`) with `credentials: include`
 
 ## 5. Build
 Frontend:
@@ -95,6 +96,7 @@ npm run test:full
 
 ## 6. API
 - `POST /api/auth/login` (public)
+- `GET /api/auth/session` (requires valid session)
 - `GET /api/health`
 - `GET /api/dashboard`
 - `GET /api/reports/overview` (ADMIN/MANAGER/ANALYST)
@@ -136,6 +138,7 @@ npm run test:full
   - `POST /api/v1/tenants`
   - `PATCH /api/v1/tenants/{id}`
   - `POST /api/v1/auth/login`
+  - `GET /api/v1/auth/session`
   - `POST /api/v1/auth/mfa/verify`
   - `POST /api/v1/auth/invitations/accept`
   - `POST /api/v1/auth/oidc/callback`
@@ -194,13 +197,15 @@ npm run test:full
 - `dev/test/prod` are split by Spring profiles; `test/prod` do not allow schema drift by Hibernate DDL.
 - Backend startup includes Flyway state guard and will fail fast on invalid migration states.
 - Backend startup also performs datasource precheck and fails with readable error if DB is unreachable.
-- Backend auto seeds initial data when tables are empty.
-- Backend also seeds users:
+- Backend auto seeds initial data when tables are empty (`APP_SEED_ENABLED`, `APP_SEED_DEMO_ENABLED`).
+- Backend also seeds users (dev/test seed by default):
   - `admin / admin123` (role: `ADMIN`)
   - `manager / manager123` (role: `MANAGER`)
   - `sales / sales123` (role: `SALES`)
   - `analyst / analyst123` (role: `ANALYST`)
-- All `/api/**` endpoints require `Authorization: Bearer <token>` except:
+- All `/api/**` endpoints accept either `HttpOnly` session cookie or `Authorization: Bearer <token>` (transition mode).
+- Frontend no longer persists bearer token in `localStorage`.
+- All `/api/**` endpoints require authenticated session except:
   - `/api/health`
   - `/api/auth/login`
 - Permission rule:
@@ -219,6 +224,7 @@ npm run test:full
 - Legacy `/api/**` compatibility error example:
   - `403`: `{ "message": "...", "code": "FORBIDDEN", "requestId": "...", "details": {} }`
 - Robustness baseline:
+  - Production profile includes security fail-fast checks for weak defaults (`AUTH_TOKEN_SECRET`, `SECURITY_MFA_STATIC_CODE`, `SECURITY_SSO_MODE`, `AUTH_BOOTSTRAP_DEFAULT_PASSWORD`).
   - Global exception handling returns normalized JSON error bodies.
   - Rate limiting is enabled on `/api/**` (except `OPTIONS`) and returns localized 429 errors.
   - Endpoint-specific rate limits are applied for login/approval/batch-retry/export paths.

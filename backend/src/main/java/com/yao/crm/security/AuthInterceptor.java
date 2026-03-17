@@ -8,6 +8,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Cookie;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -18,12 +19,18 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final I18nService i18nService;
     private final ObjectMapper objectMapper;
     private final TenantRepository tenantRepository;
+    private final String sessionCookieName;
 
-    public AuthInterceptor(TokenService tokenService, I18nService i18nService, ObjectMapper objectMapper, TenantRepository tenantRepository) {
+    public AuthInterceptor(TokenService tokenService,
+                           I18nService i18nService,
+                           ObjectMapper objectMapper,
+                           TenantRepository tenantRepository,
+                           SessionCookieService sessionCookieService) {
         this.tokenService = tokenService;
         this.i18nService = i18nService;
         this.objectMapper = objectMapper;
         this.tenantRepository = tenantRepository;
+        this.sessionCookieName = sessionCookieService.cookieName();
     }
 
     @Override
@@ -45,13 +52,11 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = resolveToken(request);
+        if (token == null || token.trim().isEmpty()) {
             writeUnauthorized(request, response, i18nService.msg(request, "missing_bearer"));
             return false;
         }
-
-        String token = authHeader.substring(7);
         AuthPrincipal principal = tokenService.verify(token);
         if (principal == null) {
             writeUnauthorized(request, response, i18nService.msg(request, "invalid_or_expired"));
@@ -86,6 +91,29 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
         return true;
+    }
+
+    private String resolveToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7).trim();
+            if (!token.isEmpty()) {
+                return token;
+            }
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null || cookies.length == 0) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (cookie != null && sessionCookieName.equals(cookie.getName())) {
+                String value = cookie.getValue();
+                if (value != null && !value.trim().isEmpty()) {
+                    return value.trim();
+                }
+            }
+        }
+        return null;
     }
 
     private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response, String message) throws Exception {

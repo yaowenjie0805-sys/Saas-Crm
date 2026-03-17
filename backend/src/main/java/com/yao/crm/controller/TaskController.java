@@ -31,8 +31,8 @@ public class TaskController extends BaseApiController {
     }
 
     @GetMapping("/tasks")
-    public List<TaskItem> tasks() {
-        return taskRepository.findAll();
+    public List<TaskItem> tasks(HttpServletRequest request) {
+        return taskRepository.findByTenantId(currentTenant(request));
     }
 
     @GetMapping("/tasks/search")
@@ -60,8 +60,10 @@ public class TaskController extends BaseApiController {
                 "updatedAt"
         );
 
+        final String tenantId = currentTenant(request);
         Specification<TaskItem> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(q)) {
                 String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.or(
@@ -98,6 +100,7 @@ public class TaskController extends BaseApiController {
 
         TaskItem task = new TaskItem();
         task.setId(newId("t"));
+        task.setTenantId(currentTenant(request));
         task.setTitle(payload.getTitle());
         task.setTime(payload.getTime());
         task.setLevel(isBlank(payload.getLevel()) ? "Medium" : payload.getLevel());
@@ -114,7 +117,8 @@ public class TaskController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<TaskItem> optional = taskRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<TaskItem> optional = taskRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "task_not_found", "NOT_FOUND", null));
         }

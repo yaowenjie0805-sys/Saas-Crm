@@ -82,9 +82,11 @@ function SidebarNav({ auth, navGroups, activePage, onNavigate, onPrefetch, onLog
         })}
       </nav>
 
-      <button className="logout-btn" onClick={onLogout}>
-        {t('logout')}
-      </button>
+      <div className="sidebar-foot sidebar-foot-quiet">
+        <button className="logout-btn sidebar-logout-btn" onClick={onLogout}>
+          {t('logout')}
+        </button>
+      </div>
     </aside>
   )
 }

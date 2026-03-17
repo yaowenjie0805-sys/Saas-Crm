@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 public interface FollowUpRepository extends JpaRepository<FollowUp, String>, JpaSpecificationExecutor<FollowUp> {
     java.util.List<FollowUp> findByTenantId(String tenantId);
+    java.util.Optional<FollowUp> findByIdAndTenantId(String id, String tenantId);
+    boolean existsByIdAndTenantId(String id, String tenantId);
 }

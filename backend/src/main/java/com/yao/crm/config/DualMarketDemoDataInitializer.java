@@ -39,6 +39,7 @@ import com.yao.crm.repository.TaskRepository;
 import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -49,6 +50,9 @@ import java.time.LocalDateTime;
 
 @Configuration
 public class DualMarketDemoDataInitializer {
+
+    @Value("${app.seed.demo.enabled:true}")
+    private boolean demoSeedEnabled;
 
     @Bean
     @Order(200)
@@ -73,6 +77,9 @@ public class DualMarketDemoDataInitializer {
                                                     LeadImportJobItemRepository leadImportJobItemRepository,
                                                     PasswordEncoder passwordEncoder) {
         return args -> {
+            if (!demoSeedEnabled) {
+                return;
+            }
             seedTenantDemo("tenant_cn_demo", "China Demo Tenant", "CN", "CNY", "Asia/Shanghai", "VAT_CN", "STRICT",
                     "[\"WECOM\",\"DINGTALK\"]", "CN", "STANDARD", "cn",
                     tenantRepository, userAccountRepository, customerRepository, opportunityRepository, leadRepository,

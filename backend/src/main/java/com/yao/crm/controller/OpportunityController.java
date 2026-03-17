@@ -37,8 +37,8 @@ public class OpportunityController extends BaseApiController {
     }
 
     @GetMapping("/opportunities")
-    public List<Opportunity> opportunities() {
-        return opportunityRepository.findAll();
+    public List<Opportunity> opportunities(HttpServletRequest request) {
+        return opportunityRepository.findByTenantId(currentTenant(request));
     }
 
     @GetMapping("/opportunities/search")
@@ -67,8 +67,10 @@ public class OpportunityController extends BaseApiController {
 
         final String ownerScope = currentOwnerScope(request);
         final boolean salesScoped = isSalesScoped(request);
+        final String tenantId = currentTenant(request);
         Specification<Opportunity> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(stage)) {
                 String normalizedStage = valueNormalizerService.normalizeOpportunityStage(stage);
                 predicates.add(cb.equal(cb.lower(root.get("stage")), normalizedStage.toLowerCase(Locale.ROOT)));
@@ -97,6 +99,7 @@ public class OpportunityController extends BaseApiController {
 
         Opportunity opportunity = new Opportunity();
         opportunity.setId(newId("o"));
+        opportunity.setTenantId(currentTenant(request));
         if (!valueNormalizerService.isValidOpportunityStage(payload.getStage())) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_opportunity_stage", "BAD_REQUEST", null));
         }
@@ -124,7 +127,8 @@ public class OpportunityController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<Opportunity> optional = opportunityRepository.findById(id);
+        String tenantId = currentTenant(request);
+        Optional<Opportunity> optional = opportunityRepository.findByIdAndTenantId(id, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "opportunity_not_found", "NOT_FOUND", null));
         }
@@ -163,7 +167,8 @@ public class OpportunityController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
-        if (!opportunityRepository.existsById(id)) {
+        String tenantId = currentTenant(request);
+        if (!opportunityRepository.existsByIdAndTenantId(id, tenantId)) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "opportunity_not_found", "NOT_FOUND", null));
         }
 
