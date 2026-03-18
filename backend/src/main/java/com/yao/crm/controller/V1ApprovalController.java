@@ -306,7 +306,7 @@ public class V1ApprovalController extends BaseApiController {
         if (affected <= 0) {
             recordConflictEvent(request, tenantId, task, "TRANSFER");
             auditLogService.record(currentUser(request), currentRole(request), "TRANSFER_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), buildTaskConflictDetails(task, "task_closed")));
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), buildTaskConflictDetails(task, "task_closed", "TRANSFER")));
         }
         task.setApproverUser(currentUser(request));
         task.setStatus("TRANSFERRED");
@@ -394,7 +394,7 @@ public class V1ApprovalController extends BaseApiController {
     private ResponseEntity<?> urgeConflict(HttpServletRequest request, String tenantId, ApprovalTask task, String reason, LocalDateTime cooldownUntil, long dailyCount) {
         recordConflictEvent(request, tenantId, task, "URGE");
         auditLogService.record(currentUser(request), currentRole(request), "URGE_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task urge blocked: " + reason, tenantId);
-        Map<String, Object> details = buildTaskConflictDetails(task, reason);
+        Map<String, Object> details = buildTaskConflictDetails(task, reason, "URGE");
         details.put("dailyLimit", URGE_DAILY_LIMIT);
         details.put("dailyCount", dailyCount);
         if (cooldownUntil != null) {
@@ -584,7 +584,7 @@ public class V1ApprovalController extends BaseApiController {
         if (affected <= 0) {
             recordConflictEvent(request, tenantId, task, actionStatus);
             auditLogService.record(currentUser(request), currentRole(request), actionStatus + "_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), buildTaskConflictDetails(task, "task_closed")));
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), buildTaskConflictDetails(task, "task_closed", actionStatus)));
         }
 
         task.setStatus(actionStatus);
@@ -660,10 +660,12 @@ public class V1ApprovalController extends BaseApiController {
         return ResponseEntity.ok(successWithFields(request, "approval_task_updated", body));
     }
 
-    private Map<String, Object> buildTaskConflictDetails(ApprovalTask task, String reason) {
+    private Map<String, Object> buildTaskConflictDetails(ApprovalTask task, String reason, String action) {
         Map<String, Object> details = new LinkedHashMap<String, Object>();
         details.put("taskId", task == null ? null : task.getId());
+        details.put("instanceId", task == null ? null : task.getInstanceId());
         details.put("status", task == null ? null : task.getStatus());
+        details.put("action", isBlank(action) ? null : action.trim().toUpperCase(Locale.ROOT));
         details.put("reason", isBlank(reason) ? "task_closed" : reason);
         return details;
     }

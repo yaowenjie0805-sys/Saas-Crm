@@ -81,13 +81,15 @@ export function useApprovalPageActions(params) {
   const setActionResultFromError = (taskId, action, err) => {
     const requestId = String(err?.requestId || err?.requestIdRef || '').trim()
     const code = String(err?.code || '').trim().toLowerCase()
+    const reason = String(err?.details?.reason || '').trim().toLowerCase()
     setApprovalActionResult({
       action: String(action || '').toUpperCase(),
-      taskId,
+      taskId: taskId || String(err?.details?.taskId || '').trim(),
       result: code === 'approval_task_closed' ? 'CONFLICT' : 'FAILED',
-      instanceId: String(approvalDetail?.id || '').trim(),
+      instanceId: String(approvalDetail?.id || err?.details?.instanceId || '').trim(),
       requestId,
       errorCode: code || '',
+      reason,
     })
   }
 
