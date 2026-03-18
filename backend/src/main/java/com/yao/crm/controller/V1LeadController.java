@@ -41,6 +41,8 @@ public class V1LeadController extends BaseApiController {
 
     private static final Set<String> LEAD_STATUSES = new HashSet<String>(Arrays.asList("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED"));
     private static final Set<String> CONVERT_ALLOWED_STATUSES = new HashSet<String>(Arrays.asList("NEW", "QUALIFIED", "NURTURING"));
+    private static final Set<String> IMPORT_CANCEL_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("PENDING", "RUNNING"));
+    private static final Set<String> IMPORT_RETRY_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("FAILED", "CANCELED"));
 
     private final LeadRepository leadRepository;
     private final CustomerRepository customerRepository;
@@ -304,7 +306,7 @@ public class V1LeadController extends BaseApiController {
         }
         boolean zh = request.getHeader("Accept-Language") != null && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
         String csv = "\uFEFFname,company,phone,email,source,owner,status\n";
-        String filename = zh ? "线索导入模板.csv" : "lead_import_template.csv";
+        String filename = zh ? "\u7ebf\u7d22\u5bfc\u5165\u6a21\u677f.csv" : "lead_import_template.csv";
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_PLAIN)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -325,7 +327,11 @@ public class V1LeadController extends BaseApiController {
             return ResponseEntity.status(201).body(successWithFields(request, "lead_import_job_created", leadImportService.toView(job)));
         } catch (IllegalStateException ex) {
             String code = isBlank(ex.getMessage()) ? "lead_import_concurrent_limit_exceeded" : ex.getMessage().trim();
-            return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), null));
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("action", "create");
+            details.put("tenantId", tenantId);
+            details.put("allowedConcurrentStatuses", new ArrayList<String>(Arrays.asList("PENDING", "RUNNING")));
+            return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
 
@@ -369,9 +375,7 @@ public class V1LeadController extends BaseApiController {
             return ResponseEntity.ok(successWithFields(request, "lead_import_job_canceled", leadImportService.toView(job)));
         } catch (IllegalStateException ex) {
             String code = isBlank(ex.getMessage()) ? "lead_import_status_transition_invalid" : ex.getMessage().trim();
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
-            details.put("jobId", jobId);
-            details.put("action", "cancel");
+            Map<String, Object> details = buildImportConflictDetails(tenantId, jobId, "cancel", code);
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -390,9 +394,7 @@ public class V1LeadController extends BaseApiController {
             return ResponseEntity.ok(successWithFields(request, "lead_import_job_retried", leadImportService.toView(job)));
         } catch (IllegalStateException ex) {
             String code = isBlank(ex.getMessage()) ? "lead_import_status_transition_invalid" : ex.getMessage().trim();
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
-            details.put("jobId", jobId);
-            details.put("action", "retry");
+            Map<String, Object> details = buildImportConflictDetails(tenantId, jobId, "retry", code);
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -506,7 +508,7 @@ public class V1LeadController extends BaseApiController {
                     traceId(request)
             );
             boolean zh = request.getHeader("Accept-Language") != null && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
-            String filename = (zh ? "线索导入失败明细-" : "lead-import-failed-rows-") + exportJobId + ".csv";
+            String filename = (zh ? "\u7ebf\u7d22\u5bfc\u5165\u5931\u8d25\u660e\u7ec6-" : "lead-import-failed-rows-") + exportJobId + ".csv";
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -559,6 +561,29 @@ public class V1LeadController extends BaseApiController {
         details.put("to", target);
         details.put("allowed", new ArrayList<String>(allowedLeadTransitions(current)));
         return ResponseEntity.status(409).body(errorBody(request, "lead_status_transition_invalid", msg(request, "lead_status_transition_invalid"), details));
+    }
+
+    private Map<String, Object> buildImportConflictDetails(String tenantId, String jobId, String action, String code) {
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("jobId", jobId);
+        details.put("action", action);
+        details.put("tenantId", tenantId);
+        if ("cancel".equals(action)) {
+            details.put("allowedFrom", new ArrayList<String>(IMPORT_CANCEL_ALLOWED_STATUSES));
+        } else if ("retry".equals(action)) {
+            details.put("allowedFrom", new ArrayList<String>(IMPORT_RETRY_ALLOWED_STATUSES));
+        }
+        if ("lead_import_retry_no_pending_chunks".equals(normalizeCode(code, ""))) {
+            details.put("reason", "no_pending_chunks");
+        }
+        leadImportJobRepository.findByIdAndTenantId(jobId, tenantId).ifPresent(job -> {
+            details.put("currentStatus", normalizeStatusValue(job.getStatus()));
+            details.put("cancelRequested", Boolean.TRUE.equals(job.getCancelRequested()));
+            Map<String, Object> view = leadImportService.toView(job);
+            details.put("taskStats", view.get("taskStats"));
+            details.put("failureSummary", view.get("failureSummary"));
+        });
+        return details;
     }
 
     private boolean canTransitLeadStatus(String currentStatus, String targetStatus) {
