@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { translateStatus } from '../../shared'
+import { translateOwnerAlias, translateStatus } from '../../shared'
 import ListState from '../ListState'
 import ServerPager from '../ServerPager'
 import VirtualListTable from '../VirtualListTable'
@@ -25,7 +25,7 @@ const LeadRow = memo(function LeadRow({ row, checked, onToggle, canWrite, t, edi
       <span>{row.name}</span>
       <span>{row.company || '-'}</span>
       <span>{row.statusLabel || '-'}</span>
-      <span>{row.owner || '-'}</span>
+      <span>{translateOwnerAlias(t, row.owner || '-')}</span>
       <span>
         <div className="inline-tools">
           <button className="mini-btn" onClick={() => editLead(row)}>{t('detail')}</button>
@@ -44,7 +44,9 @@ const LeadRow = memo(function LeadRow({ row, checked, onToggle, canWrite, t, edi
   )
 })
 
-const LeadImportJobRow = memo(function LeadImportJobRow({ row, t, selectImportJob, cancelImportJob, retryImportJob }) {
+const LeadImportJobRow = memo(function LeadImportJobRow({ row, t, selectImportJob, cancelImportJob, retryImportJob, isImportActionPending }) {
+  const cancelPending = Boolean(isImportActionPending?.('cancel', row.id))
+  const retryPending = Boolean(isImportActionPending?.('retry', row.id))
   return (
     <div className="table-row">
       <span>{row.id}</span>
@@ -54,15 +56,16 @@ const LeadImportJobRow = memo(function LeadImportJobRow({ row, t, selectImportJo
       <span>
         <div className="inline-tools">
           <button className="mini-btn" onClick={() => selectImportJob(row)}>{t('detail')}</button>
-          <button className="mini-btn" disabled={!['PENDING', 'RUNNING'].includes(String(row.status || '').toUpperCase())} onClick={() => cancelImportJob(row.id)}>{t('close')}</button>
-          <button className="mini-btn" disabled={!['FAILED', 'CANCELED'].includes(String(row.status || '').toUpperCase())} onClick={() => retryImportJob(row.id)}>{t('retry')}</button>
+          <button className="mini-btn" disabled={cancelPending || !['PENDING', 'RUNNING'].includes(String(row.status || '').toUpperCase())} onClick={() => cancelImportJob(row.id)}>{t('close')}</button>
+          <button className="mini-btn" disabled={retryPending || !['FAILED', 'CANCELED'].includes(String(row.status || '').toUpperCase())} onClick={() => retryImportJob(row.id)}>{t('retry')}</button>
         </div>
       </span>
     </div>
   )
 })
 
-const LeadImportExportJobRow = memo(function LeadImportExportJobRow({ row, importJobId, t, downloadImportFailedRowsExportJob }) {
+const LeadImportExportJobRow = memo(function LeadImportExportJobRow({ row, importJobId, t, downloadImportFailedRowsExportJob, isImportActionPending }) {
+  const downloadPending = Boolean(isImportActionPending?.('export-download', row.jobId))
   return (
     <div className="table-row">
       <span>{row.jobId}</span>
@@ -70,7 +73,7 @@ const LeadImportExportJobRow = memo(function LeadImportExportJobRow({ row, impor
       <span>{row.progress || 0}%</span>
       <span>{row.rowCount || 0}</span>
       <span>
-        <button className="mini-btn" disabled={!row.downloadReady} onClick={() => downloadImportFailedRowsExportJob(importJobId, row.jobId)}>{t('exportDownload')}</button>
+        <button className="mini-btn" disabled={downloadPending || !row.downloadReady} onClick={() => downloadImportFailedRowsExportJob(importJobId, row.jobId)}>{t('exportDownload')}</button>
       </span>
     </div>
   )
@@ -122,6 +125,7 @@ function LeadsPanel({
   onImportExportSizeChange,
   createImportFailedRowsExportJob,
   downloadImportFailedRowsExportJob,
+  isImportActionPending,
 }) {
   const [bulkStatus, setBulkStatus] = useState('QUALIFIED')
   const [file, setFile] = useState(null)
@@ -223,7 +227,7 @@ function LeadsPanel({
       {canWrite && (
         <div className="inline-tools filter-row" style={{ marginTop: 12 }}>
           <input type="file" accept=".csv,text/csv" className="tool-input" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          <button className="mini-btn" disabled={!file} onClick={() => importCsv(file)}>{t('leadImportCsv')}</button>
+          <button className="mini-btn" disabled={!file || isImportActionPending?.('upload')} onClick={() => importCsv(file)}>{t('leadImportCsv')}</button>
           <button className="mini-btn" disabled={selectedCount === 0} onClick={async () => { await bulkAssignByRule(selectedIdList); clearSelection() }}>{t('leadBulkAssign')}</button>
           <select className="tool-input" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
             {LEAD_FORM_STATUS_VALUES.map((status) => (
@@ -277,6 +281,7 @@ function LeadsPanel({
                 selectImportJob={selectImportJob}
                 cancelImportJob={cancelImportJob}
                 retryImportJob={retryImportJob}
+                isImportActionPending={isImportActionPending}
               />
             )}
           />
@@ -317,7 +322,7 @@ function LeadsPanel({
             <select className="tool-input" value={importExportPaging.size} onChange={(e) => onImportExportSizeChange(Number(e.target.value || 10))}>
               {IMPORT_PAGE_SIZE_VALUES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
-            <button className="mini-btn" disabled={!canCreateImportExport || !importJob?.id} onClick={() => createImportFailedRowsExportJob(importJob?.id)}>{t('leadImportExportCreate')}</button>
+            <button className="mini-btn" disabled={!canCreateImportExport || !importJob?.id || isImportActionPending?.('export-create', importJob?.id)} onClick={() => createImportFailedRowsExportJob(importJob?.id)}>{t('leadImportExportCreate')}</button>
           </div>
           <div className="table-row table-head-row" style={{ marginTop: 8 }}>
             <span>{t('idLabel')}</span><span>{t('status')}</span><span>{t('progress')}</span><span>{t('count')}</span><span>{t('action')}</span>
@@ -336,6 +341,7 @@ function LeadsPanel({
                   importJobId={importJob?.id}
                   t={t}
                   downloadImportFailedRowsExportJob={downloadImportFailedRowsExportJob}
+                  isImportActionPending={isImportActionPending}
                 />
               )}
             />

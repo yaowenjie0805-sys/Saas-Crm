@@ -14,7 +14,7 @@ export function useCustomerMappers(params) {
     selectLeadImportJob, cancelLeadImportJob, retryLeadImportJob, leadImportFailedRows, downloadLeadImportTemplate,
     leadImportMetrics, leadImportExportJobs, leadImportExportStatusFilter, updateLeadImportExportStatusFilter,
     leadImportExportPage, leadImportExportTotalPages, leadImportExportSize, onLeadImportExportPageChange,
-    onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob,
+    onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob, isLeadImportActionPending,
     customerForm, setCustomerForm, saveCustomer, customers, editCustomer, canDeleteCustomer, removeCustomer,
     customerQ, setCustomerQ, customerStatus, setCustomerStatus, customerPage, customerTotalPages, customerSize,
     onCustomerPageChange, onCustomerSizeChange, loadCustomerTimeline, customerTimeline,
@@ -51,7 +51,8 @@ export function useCustomerMappers(params) {
     onImportExportSizeChange: onLeadImportExportSizeChange,
     createImportFailedRowsExportJob: createLeadImportFailedRowsExportJob,
     downloadImportFailedRowsExportJob: downloadLeadImportFailedRowsExportJob,
-  }), [leadForm, setLeadForm, saveLead, convertLead, crudErrors.lead, crudFieldErrors.lead, leads, editLead, leadQ, setLeadQ, leadStatus, setLeadStatus, leadPage, leadTotalPages, leadSize, onLeadPageChange, onLeadSizeChange, refreshLeads, bulkAssignLeadsByRule, bulkUpdateLeadStatus, importLeadsCsv, leadImportJob, leadImportJobs, leadImportStatusFilter, updateLeadImportStatusFilter, leadImportPage, leadImportTotalPages, leadImportSize, onLeadImportPageChange, onLeadImportSizeChange, selectLeadImportJob, cancelLeadImportJob, retryLeadImportJob, leadImportFailedRows, downloadLeadImportTemplate, leadImportMetrics, role, leadImportExportJobs, leadImportExportStatusFilter, updateLeadImportExportStatusFilter, leadImportExportPage, leadImportExportTotalPages, leadImportExportSize, onLeadImportExportPageChange, onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob])
+    isImportActionPending: isLeadImportActionPending,
+  }), [leadForm, setLeadForm, saveLead, convertLead, crudErrors.lead, crudFieldErrors.lead, leads, editLead, leadQ, setLeadQ, leadStatus, setLeadStatus, leadPage, leadTotalPages, leadSize, onLeadPageChange, onLeadSizeChange, refreshLeads, bulkAssignLeadsByRule, bulkUpdateLeadStatus, importLeadsCsv, leadImportJob, leadImportJobs, leadImportStatusFilter, updateLeadImportStatusFilter, leadImportPage, leadImportTotalPages, leadImportSize, onLeadImportPageChange, onLeadImportSizeChange, selectLeadImportJob, cancelLeadImportJob, retryLeadImportJob, leadImportFailedRows, downloadLeadImportTemplate, leadImportMetrics, role, leadImportExportJobs, leadImportExportStatusFilter, updateLeadImportExportStatusFilter, leadImportExportPage, leadImportExportTotalPages, leadImportExportSize, onLeadImportExportPageChange, onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob, isLeadImportActionPending])
 
   const mainCustomers = useMemo(() => ({
     customerForm, setCustomerForm, saveCustomer, formError: crudErrors.customer, fieldErrors: crudFieldErrors.customer, customers, editCustomer, canDeleteCustomer, removeCustomer, customerQ, setCustomerQ, customerStatus, setCustomerStatus, pagination: { page: customerPage, totalPages: customerTotalPages, size: customerSize }, onPageChange: onCustomerPageChange, onSizeChange: onCustomerSizeChange, onRefresh: refreshCustomers, loadTimeline: loadCustomerTimeline, timeline: customerTimeline, quickCreateFollowUp: createFollowUpShortcut, quickCreateTask: createTaskShortcut,

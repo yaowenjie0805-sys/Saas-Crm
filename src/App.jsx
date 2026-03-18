@@ -1302,6 +1302,7 @@ function App() {
     onLeadImportPageChange,
     onLeadImportSizeChange,
     downloadLeadImportTemplate,
+    isLeadImportActionPending,
   } = useLeadImportActions({
     auth,
     lang,
@@ -1531,7 +1532,7 @@ function App() {
         selectLeadImportJob, cancelLeadImportJob, retryLeadImportJob, leadImportFailedRows, downloadLeadImportTemplate,
         leadImportMetrics, leadImportExportJobs, leadImportExportStatusFilter, updateLeadImportExportStatusFilter,
         leadImportExportPage, leadImportExportTotalPages, leadImportExportSize, onLeadImportExportPageChange,
-        onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob,
+        onLeadImportExportSizeChange, createLeadImportFailedRowsExportJob, downloadLeadImportFailedRowsExportJob, isLeadImportActionPending,
         customerForm, setCustomerForm, saveCustomer, customers, editCustomer, canDeleteCustomer, removeCustomer,
         customerQ, setCustomerQ, customerStatus, setCustomerStatus, customerPage, customerTotalPages, customerSize,
         onCustomerPageChange, onCustomerSizeChange, loadCustomers, loadCustomerTimeline, customerTimeline,

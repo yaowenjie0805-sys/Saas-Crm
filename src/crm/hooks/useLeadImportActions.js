@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { API_BASE, api } from '../shared'
 
 export function useLeadImportActions({
@@ -18,6 +18,22 @@ export function useLeadImportActions({
   setLeadImportExportSize,
   setCrudError,
 }) {
+  const [pendingActions, setPendingActions] = useState({})
+  const pendingKey = useCallback((action, id = '') => `${String(action || '').trim()}:${String(id || '').trim()}`, [])
+  const markPending = useCallback((action, id, value) => {
+    const key = pendingKey(action, id)
+    setPendingActions((prev) => {
+      if (value) return { ...prev, [key]: true }
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }, [pendingKey])
+  const isLeadImportActionPending = useCallback((action, id = '') => {
+    return Boolean(pendingActions[pendingKey(action, id)])
+  }, [pendingActions, pendingKey])
+
   const resolveLeadImportMessage = useCallback((err, fallback = t('loadFailed')) => {
     const code = String(err?.code || '').trim().toLowerCase()
     if (code === 'lead_import_status_transition_invalid') {
@@ -49,6 +65,8 @@ export function useLeadImportActions({
 
   const importLeadsCsv = useCallback(async (file) => {
     if (!file) return
+    if (isLeadImportActionPending('upload')) return
+    markPending('upload', '', true)
     try {
       setCrudError?.('lead', '')
       const formData = new FormData()
@@ -58,8 +76,12 @@ export function useLeadImportActions({
       setLeadImportFailedRows([])
       await refreshPage('leads', 'panel_action')
       if (canViewOpsMetrics) await refreshPage('dashboard', 'panel_action')
-    } catch (err) { handleLeadImportError(err, t('leadImportCsv')) }
-  }, [auth?.token, canViewOpsMetrics, handleLeadImportError, lang, refreshPage, setCrudError, setLeadImportFailedRows, setLeadImportJob, t])
+    } catch (err) {
+      handleLeadImportError(err, t('leadImportCsv'))
+    } finally {
+      markPending('upload', '', false)
+    }
+  }, [auth?.token, canViewOpsMetrics, handleLeadImportError, isLeadImportActionPending, lang, markPending, refreshPage, setCrudError, setLeadImportFailedRows, setLeadImportJob, t])
 
   const selectLeadImportJob = useCallback(async (job) => {
     if (!job) return
@@ -68,31 +90,49 @@ export function useLeadImportActions({
   }, [refreshPage, setLeadImportJob])
 
   const cancelLeadImportJob = useCallback(async (jobId) => {
+    if (!jobId || isLeadImportActionPending('cancel', jobId)) return
+    markPending('cancel', jobId, true)
     try {
       setCrudError?.('lead', '')
       const d = await api(`/v1/leads/import-jobs/${jobId}/cancel`, { method: 'POST' }, auth.token, lang)
       setLeadImportJob(d)
       await refreshPage('leads', 'panel_action')
-    } catch (err) { await handleLeadImportError(err, t('close'), { refreshOnConflict: true }) }
-  }, [auth?.token, handleLeadImportError, lang, refreshPage, setCrudError, setLeadImportJob, t])
+    } catch (err) {
+      await handleLeadImportError(err, t('close'), { refreshOnConflict: true })
+    } finally {
+      markPending('cancel', jobId, false)
+    }
+  }, [auth?.token, handleLeadImportError, isLeadImportActionPending, lang, markPending, refreshPage, setCrudError, setLeadImportJob, t])
 
   const retryLeadImportJob = useCallback(async (jobId) => {
+    if (!jobId || isLeadImportActionPending('retry', jobId)) return
+    markPending('retry', jobId, true)
     try {
       setCrudError?.('lead', '')
       const d = await api(`/v1/leads/import-jobs/${jobId}/retry`, { method: 'POST' }, auth.token, lang)
       setLeadImportJob(d)
       await refreshPage('leads', 'panel_action')
-    } catch (err) { await handleLeadImportError(err, t('retry'), { refreshOnConflict: true }) }
-  }, [auth?.token, handleLeadImportError, lang, refreshPage, setCrudError, setLeadImportJob, t])
+    } catch (err) {
+      await handleLeadImportError(err, t('retry'), { refreshOnConflict: true })
+    } finally {
+      markPending('retry', jobId, false)
+    }
+  }, [auth?.token, handleLeadImportError, isLeadImportActionPending, lang, markPending, refreshPage, setCrudError, setLeadImportJob, t])
 
   const createLeadImportFailedRowsExportJob = useCallback(async (jobId) => {
     if (!jobId) return
+    if (isLeadImportActionPending('export-create', jobId)) return
+    markPending('export-create', jobId, true)
     try {
       setCrudError?.('lead', '')
       await api(`/v1/leads/import-jobs/${jobId}/failed-rows/export-jobs`, { method: 'POST' }, auth.token, lang)
       await refreshPage('leads', 'panel_action')
-    } catch (err) { await handleLeadImportError(err, t('leadImportExportCreate'), { refreshOnConflict: true }) }
-  }, [auth?.token, handleLeadImportError, lang, refreshPage, setCrudError, t])
+    } catch (err) {
+      await handleLeadImportError(err, t('leadImportExportCreate'), { refreshOnConflict: true })
+    } finally {
+      markPending('export-create', jobId, false)
+    }
+  }, [auth?.token, handleLeadImportError, isLeadImportActionPending, lang, markPending, refreshPage, setCrudError, t])
 
   const updateLeadImportExportStatusFilter = useCallback((value) => {
     setLeadImportExportStatusFilter(value)
@@ -108,6 +148,8 @@ export function useLeadImportActions({
   }, [setLeadImportExportSize])
 
   const downloadLeadImportFailedRowsExportJob = useCallback(async (jobId, exportJobId) => {
+    if (!jobId || !exportJobId || isLeadImportActionPending('export-download', exportJobId)) return
+    markPending('export-download', exportJobId, true)
     try {
       const headers = { 'Accept-Language': lang }
       if (auth?.token && auth.token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${auth.token}`
@@ -128,8 +170,12 @@ export function useLeadImportActions({
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-    } catch (err) { handleLeadImportError(err, t('downloadFailed')) }
-  }, [auth?.tenantId, auth?.token, handleLeadImportError, lang, t])
+    } catch (err) {
+      handleLeadImportError(err, t('downloadFailed'))
+    } finally {
+      markPending('export-download', exportJobId, false)
+    }
+  }, [auth?.tenantId, auth?.token, handleLeadImportError, isLeadImportActionPending, lang, markPending, t])
 
   const updateLeadImportStatusFilter = useCallback((value) => {
     setLeadImportStatusFilter(value)
@@ -180,5 +226,6 @@ export function useLeadImportActions({
     onLeadImportPageChange,
     onLeadImportSizeChange,
     downloadLeadImportTemplate,
+    isLeadImportActionPending,
   }
 }
