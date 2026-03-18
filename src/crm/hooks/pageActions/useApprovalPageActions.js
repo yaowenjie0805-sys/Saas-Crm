@@ -64,7 +64,7 @@ export function useApprovalPageActions(params) {
         message = t('approvalTaskClosedHint')
       }
     }
-    const requestId = String(err?.requestId || '').trim()
+    const requestId = String(err?.requestId || err?.requestIdRef || '').trim()
     return requestId ? `${message} [${requestId}]` : message
   }
 
@@ -79,7 +79,7 @@ export function useApprovalPageActions(params) {
   }
 
   const setActionResultFromError = (taskId, action, err) => {
-    const requestId = String(err?.requestId || '').trim()
+    const requestId = String(err?.requestId || err?.requestIdRef || '').trim()
     const code = String(err?.code || '').trim().toLowerCase()
     setApprovalActionResult({
       action: String(action || '').toUpperCase(),
@@ -89,6 +89,14 @@ export function useApprovalPageActions(params) {
       requestId,
       errorCode: code || '',
     })
+  }
+
+  const refreshApprovalViewsSafe = async (instanceId = '') => {
+    try {
+      await refreshApprovalViews(instanceId)
+    } catch (_) {
+      // Best-effort sync: keep original error surface while avoiding stale list/detail state.
+    }
   }
 
   const createApprovalTemplate = async () => {
@@ -181,7 +189,7 @@ export function useApprovalPageActions(params) {
     } catch (err) {
       setError(withRequestId(err))
       setActionResultFromError(taskId, action, err)
-      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') await refreshApprovalViews()
+      await refreshApprovalViewsSafe(String(approvalDetail?.id || '').trim())
       handleError(err)
     } finally {
       setTaskPending(taskId, false)
@@ -206,7 +214,7 @@ export function useApprovalPageActions(params) {
     } catch (err) {
       setError(withRequestId(err))
       setActionResultFromError(taskId, 'urge', err)
-      if (String(err?.code || '').toLowerCase() === 'approval_task_closed') await refreshApprovalViews()
+      await refreshApprovalViewsSafe(String(approvalDetail?.id || '').trim())
       handleError(err)
     } finally {
       setTaskPending(taskId, false)

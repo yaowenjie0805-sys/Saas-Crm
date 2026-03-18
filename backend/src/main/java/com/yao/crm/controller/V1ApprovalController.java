@@ -236,7 +236,7 @@ public class V1ApprovalController extends BaseApiController {
         }
 
         ApprovalInstance instance = new ApprovalInstance();
-        instance.setId("api_" + Long.toString(System.currentTimeMillis(), 36));
+        instance.setId(newId("api"));
         instance.setTenantId(tenantId);
         instance.setTemplateId(selected.getId());
         instance.setBizType(bizTypeUpper);
@@ -306,7 +306,7 @@ public class V1ApprovalController extends BaseApiController {
         if (affected <= 0) {
             recordConflictEvent(request, tenantId, task, "TRANSFER");
             auditLogService.record(currentUser(request), currentRole(request), "TRANSFER_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), buildTaskConflictDetails(task, "task_closed")));
         }
         task.setApproverUser(currentUser(request));
         task.setStatus("TRANSFERRED");
@@ -333,6 +333,7 @@ public class V1ApprovalController extends BaseApiController {
         Map<String, Object> body = toTaskView(next);
         body.put("result", "TRANSFERRED");
         body.put("action", "TRANSFER");
+        body.put("taskId", next.getId());
         body.put("requestIdRef", traceId(request));
         if (instanceOptional.isPresent()) {
             body.put("instance", toInstanceView(instanceOptional.get()));
@@ -393,8 +394,7 @@ public class V1ApprovalController extends BaseApiController {
     private ResponseEntity<?> urgeConflict(HttpServletRequest request, String tenantId, ApprovalTask task, String reason, LocalDateTime cooldownUntil, long dailyCount) {
         recordConflictEvent(request, tenantId, task, "URGE");
         auditLogService.record(currentUser(request), currentRole(request), "URGE_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task urge blocked: " + reason, tenantId);
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
-        details.put("reason", reason);
+        Map<String, Object> details = buildTaskConflictDetails(task, reason);
         details.put("dailyLimit", URGE_DAILY_LIMIT);
         details.put("dailyCount", dailyCount);
         if (cooldownUntil != null) {
@@ -584,7 +584,7 @@ public class V1ApprovalController extends BaseApiController {
         if (affected <= 0) {
             recordConflictEvent(request, tenantId, task, actionStatus);
             auditLogService.record(currentUser(request), currentRole(request), actionStatus + "_CONFLICT", "APPROVAL_TASK", task.getId(), "Approval task already closed", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), null));
+            return ResponseEntity.status(409).body(errorBody(request, "approval_task_closed", msg(request, "approval_task_closed"), buildTaskConflictDetails(task, "task_closed")));
         }
 
         task.setStatus(actionStatus);
@@ -649,6 +649,7 @@ public class V1ApprovalController extends BaseApiController {
         Map<String, Object> body = toTaskView(task);
         body.put("result", actionStatus);
         body.put("action", actionStatus);
+        body.put("taskId", task.getId());
         body.put("requestIdRef", traceId(request));
         if (latestInstance != null) {
             body.put("instance", toInstanceView(latestInstance));
@@ -657,6 +658,14 @@ public class V1ApprovalController extends BaseApiController {
             body.put("bizWriteback", bizWriteback);
         }
         return ResponseEntity.ok(successWithFields(request, "approval_task_updated", body));
+    }
+
+    private Map<String, Object> buildTaskConflictDetails(ApprovalTask task, String reason) {
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("taskId", task == null ? null : task.getId());
+        details.put("status", task == null ? null : task.getStatus());
+        details.put("reason", isBlank(reason) ? "task_closed" : reason);
+        return details;
     }
 
     private void recordConflictEvent(HttpServletRequest request, String tenantId, ApprovalTask task, String action) {
