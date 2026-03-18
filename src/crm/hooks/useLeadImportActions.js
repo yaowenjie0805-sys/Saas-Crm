@@ -18,17 +18,34 @@ export function useLeadImportActions({
   setLeadImportExportSize,
   setCrudError,
 }) {
+  const resolveLeadImportMessage = useCallback((err, fallback = t('loadFailed')) => {
+    const code = String(err?.code || '').trim().toLowerCase()
+    if (code === 'lead_import_status_transition_invalid') {
+      return lang === 'zh' ? '导入任务状态已变化，请刷新后重试' : 'Import job state changed, please refresh and retry'
+    }
+    if (code === 'lead_import_retry_no_pending_chunks') {
+      return lang === 'zh' ? '没有可重试的导入分片，请刷新后重试' : 'No retryable import chunks found, please refresh and retry'
+    }
+    if (code === 'lead_import_concurrent_limit_exceeded') {
+      return lang === 'zh' ? '导入任务并发已达上限，请稍后重试' : 'Import concurrency limit reached, please retry later'
+    }
+    return String(err?.message || fallback || '').trim()
+  }, [lang, t])
+
   const withRequestId = useCallback((err, fallback = t('loadFailed')) => {
-    const message = String(err?.message || fallback || '').trim()
+    const message = resolveLeadImportMessage(err, fallback)
     const requestId = String(err?.requestId || '').trim()
     return requestId ? `${message} [${requestId}]` : message
-  }, [t])
+  }, [resolveLeadImportMessage, t])
 
-  const handleLeadImportError = useCallback((err, fallback) => {
+  const handleLeadImportError = useCallback(async (err, fallback, options = {}) => {
     const message = withRequestId(err, fallback)
     setCrudError?.('lead', message)
     handleError(err)
-  }, [handleError, setCrudError, withRequestId])
+    if (options.refreshOnConflict && Number(err?.status) === 409) {
+      await refreshPage('leads', 'panel_action')
+    }
+  }, [handleError, refreshPage, setCrudError, withRequestId])
 
   const importLeadsCsv = useCallback(async (file) => {
     if (!file) return
@@ -56,7 +73,7 @@ export function useLeadImportActions({
       const d = await api(`/v1/leads/import-jobs/${jobId}/cancel`, { method: 'POST' }, auth.token, lang)
       setLeadImportJob(d)
       await refreshPage('leads', 'panel_action')
-    } catch (err) { handleLeadImportError(err, t('close')) }
+    } catch (err) { await handleLeadImportError(err, t('close'), { refreshOnConflict: true }) }
   }, [auth?.token, handleLeadImportError, lang, refreshPage, setCrudError, setLeadImportJob, t])
 
   const retryLeadImportJob = useCallback(async (jobId) => {
@@ -65,7 +82,7 @@ export function useLeadImportActions({
       const d = await api(`/v1/leads/import-jobs/${jobId}/retry`, { method: 'POST' }, auth.token, lang)
       setLeadImportJob(d)
       await refreshPage('leads', 'panel_action')
-    } catch (err) { handleLeadImportError(err, t('retry')) }
+    } catch (err) { await handleLeadImportError(err, t('retry'), { refreshOnConflict: true }) }
   }, [auth?.token, handleLeadImportError, lang, refreshPage, setCrudError, setLeadImportJob, t])
 
   const createLeadImportFailedRowsExportJob = useCallback(async (jobId) => {
@@ -74,12 +91,13 @@ export function useLeadImportActions({
       setCrudError?.('lead', '')
       await api(`/v1/leads/import-jobs/${jobId}/failed-rows/export-jobs`, { method: 'POST' }, auth.token, lang)
       await refreshPage('leads', 'panel_action')
-    } catch (err) { handleLeadImportError(err, t('leadImportExportCreate')) }
+    } catch (err) { await handleLeadImportError(err, t('leadImportExportCreate'), { refreshOnConflict: true }) }
   }, [auth?.token, handleLeadImportError, lang, refreshPage, setCrudError, t])
 
   const updateLeadImportExportStatusFilter = useCallback((value) => {
     setLeadImportExportStatusFilter(value)
-  }, [setLeadImportExportStatusFilter])
+    setLeadImportExportPage(1)
+  }, [setLeadImportExportPage, setLeadImportExportStatusFilter])
 
   const onLeadImportExportPageChange = useCallback((value) => {
     setLeadImportExportPage(value)
@@ -115,8 +133,9 @@ export function useLeadImportActions({
 
   const updateLeadImportStatusFilter = useCallback((value) => {
     setLeadImportStatusFilter(value)
+    setLeadImportPage(1)
     setLeadImportFailedRows([])
-  }, [setLeadImportFailedRows, setLeadImportStatusFilter])
+  }, [setLeadImportFailedRows, setLeadImportPage, setLeadImportStatusFilter])
 
   const onLeadImportPageChange = useCallback((value) => {
     setLeadImportPage(value)
