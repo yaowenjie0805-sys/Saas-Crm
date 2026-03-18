@@ -248,6 +248,129 @@ public class DualMarketDemoDataInitializer {
                 tenantId,
                 idPrefix
         );
+        if (!"GLOBAL".equals(marketProfile)) {
+            repairCnDemoLocaleData(
+                    tenantId,
+                    idPrefix,
+                    customerRepository,
+                    leadRepository,
+                    contactRepository,
+                    followUpRepository,
+                    taskRepository,
+                    productRepository,
+                    quoteItemRepository,
+                    contractRecordRepository,
+                    paymentRecordRepository,
+                    approvalTemplateRepository
+            );
+        }
+    }
+
+    private void repairCnDemoLocaleData(String tenantId,
+                                        String idPrefix,
+                                        CustomerRepository customerRepository,
+                                        LeadRepository leadRepository,
+                                        ContactRepository contactRepository,
+                                        FollowUpRepository followUpRepository,
+                                        TaskRepository taskRepository,
+                                        ProductRepository productRepository,
+                                        QuoteItemRepository quoteItemRepository,
+                                        ContractRecordRepository contractRecordRepository,
+                                        PaymentRecordRepository paymentRecordRepository,
+                                        ApprovalTemplateRepository approvalTemplateRepository) {
+        String[] customerNames = new String[]{"\u534e\u6676\u5236\u9020", "\u51cc\u950b\u533b\u7597", "\u542f\u5149\u79d1\u6280", "\u84dd\u56fe\u7269\u6d41", "\u661f\u6cb3\u6559\u80b2", "\u8fdc\u5c71\u96f6\u552e"};
+        for (int idx = 1; idx <= customerNames.length; idx++) {
+            final String customerId = "c_" + idPrefix + "_" + pad2(idx);
+            final String leadId = "l_" + idPrefix + "_" + pad2(idx);
+            final String customerName = customerNames[idx - 1];
+            customerRepository.findById(customerId).ifPresent(row -> {
+                if (!tenantId.equals(row.getTenantId())) return;
+                row.setName(customerName);
+                customerRepository.save(row);
+            });
+            leadRepository.findById(leadId).ifPresent(row -> {
+                if (!tenantId.equals(row.getTenantId())) return;
+                row.setName(customerName + "\u7ebf\u7d22");
+                row.setCompany(customerName);
+                row.setSource("\u4f01\u5fae");
+                leadRepository.save(row);
+            });
+        }
+
+        rewriteContactCn(contactRepository, "ct_" + idPrefix + "_01", tenantId, "\u5468\u51ef", "\u91c7\u8d2d\u603b\u76d1");
+        rewriteContactCn(contactRepository, "ct_" + idPrefix + "_02", tenantId, "\u5218\u654f", "IT\u7ecf\u7406");
+        rewriteContactCn(contactRepository, "ct_" + idPrefix + "_03", tenantId, "\u9648\u5353", "\u8fd0\u8425\u8d1f\u8d23\u4eba");
+
+        rewriteFollowUpCn(followUpRepository, "f_" + idPrefix + "_01", tenantId, "\u786e\u8ba4\u5b9e\u65bd\u8303\u56f4\u4e0e\u4ea4\u4ed8\u8282\u70b9");
+        rewriteFollowUpCn(followUpRepository, "f_" + idPrefix + "_02", tenantId, "\u9884\u7b97\u5ba1\u6279\u5f85\u5ba2\u6237\u7b7e\u5b57");
+        rewriteFollowUpCn(followUpRepository, "f_" + idPrefix + "_03", tenantId, "\u4ea4\u4ed8\u8ba1\u5212\u5df2\u540c\u6b65");
+
+        rewriteTaskCn(taskRepository, "t_" + idPrefix + "_01", tenantId, "\u51c6\u5907\u7eed\u7ea6\u8bc4\u5ba1\u4f1a");
+        rewriteTaskCn(taskRepository, "t_" + idPrefix + "_02", tenantId, "\u590d\u6838\u62a5\u4ef7\u7a0e\u5236\u53e3\u5f84");
+        rewriteTaskCn(taskRepository, "t_" + idPrefix + "_03", tenantId, "\u540c\u6b65\u4e0a\u7ebf\u6392\u671f");
+
+        rewriteProductCn(productRepository, "prd_" + idPrefix + "_01", tenantId, "CRM\u6388\u6743");
+        rewriteProductCn(productRepository, "prd_" + idPrefix + "_02", tenantId, "\u5b9e\u65bd\u670d\u52a1");
+
+        rewriteQuoteItemCn(quoteItemRepository, "qi_" + idPrefix + "_01", tenantId, "CRM\u6388\u6743");
+        rewriteQuoteItemCn(quoteItemRepository, "qi_" + idPrefix + "_02", tenantId, "\u5b9e\u65bd\u670d\u52a1");
+
+        contractRecordRepository.findById("cr_" + idPrefix + "_01").ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setTitle("CRM\u5e74\u5ea6\u4e3b\u5408\u540c");
+            contractRecordRepository.save(row);
+        });
+        paymentRecordRepository.findById("pm_" + idPrefix + "_01").ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setRemark("\u4e00\u671f\u56de\u6b3e\u5df2\u5230\u8d26");
+            paymentRecordRepository.save(row);
+        });
+        approvalTemplateRepository.findById("apt_" + idPrefix + "_01").ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setName("\u62a5\u4ef7\u5ba1\u6279\u6d41");
+            approvalTemplateRepository.save(row);
+        });
+    }
+
+    private void rewriteContactCn(ContactRepository repository, String id, String tenantId, String name, String title) {
+        repository.findById(id).ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setName(name);
+            row.setTitle(title);
+            repository.save(row);
+        });
+    }
+
+    private void rewriteFollowUpCn(FollowUpRepository repository, String id, String tenantId, String summary) {
+        repository.findById(id).ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setSummary(summary);
+            repository.save(row);
+        });
+    }
+
+    private void rewriteTaskCn(TaskRepository repository, String id, String tenantId, String title) {
+        repository.findById(id).ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setTitle(title);
+            repository.save(row);
+        });
+    }
+
+    private void rewriteProductCn(ProductRepository repository, String id, String tenantId, String name) {
+        repository.findById(id).ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setName(name);
+            repository.save(row);
+        });
+    }
+
+    private void rewriteQuoteItemCn(QuoteItemRepository repository, String id, String tenantId, String productName) {
+        repository.findById(id).ifPresent(row -> {
+            if (!tenantId.equals(row.getTenantId())) return;
+            row.setProductName(productName);
+            repository.save(row);
+        });
     }
 
     private void upsertTenant(TenantRepository repository, String id, String name, String marketProfile, String currency,
@@ -552,30 +675,102 @@ public class DualMarketDemoDataInitializer {
                                           String tenantId,
                                           String idPrefix) {
         String jobId = "lij_" + idPrefix + "_demo";
-        LeadImportJob job = jobRepository.findById(jobId).orElseGet(LeadImportJob::new);
-        job.setId(jobId);
-        job.setTenantId(tenantId);
-        job.setFileName("lead-import-" + idPrefix + ".csv");
-        job.setStatus("PARTIAL_SUCCESS");
-        job.setTotalRows(6);
-        job.setProcessedRows(6);
-        job.setSuccessCount(4);
-        job.setFailCount(2);
-        job.setPercent(100);
-        job.setCreatedBy("admin");
-        job.setCancelRequested(false);
-        job.setErrorMessage("lead_import_partial_failure");
-        job.setLastHeartbeatAt(LocalDateTime.now().minusMinutes(8));
-        jobRepository.save(job);
+        upsertLeadImportJob(
+                jobRepository,
+                jobId,
+                tenantId,
+                "lead-import-" + idPrefix + ".csv",
+                "PARTIAL_SUCCESS",
+                6,
+                6,
+                4,
+                2,
+                100,
+                "admin",
+                false,
+                "lead_import_partial_failure",
+                8
+        );
+        String pendingJobId = "lij_" + idPrefix + "_pending";
+        upsertLeadImportJob(
+                jobRepository,
+                pendingJobId,
+                tenantId,
+                "lead-import-" + idPrefix + "-pending.csv",
+                "PENDING",
+                8,
+                0,
+                0,
+                0,
+                0,
+                "manager",
+                false,
+                null,
+                2
+        );
+        String canceledJobId = "lij_" + idPrefix + "_canceled";
+        upsertLeadImportJob(
+                jobRepository,
+                canceledJobId,
+                tenantId,
+                "lead-import-" + idPrefix + "-canceled.csv",
+                "CANCELED",
+                5,
+                3,
+                2,
+                1,
+                60,
+                "manager",
+                true,
+                "job canceled",
+                5
+        );
 
         upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_01", tenantId, jobId, 1, "PROCESSED", 0, null);
         upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_02", tenantId, jobId, 2, "PROCESSED", 0, null);
         upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_03", tenantId, jobId, 3, "PROCESSED", 0, null);
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_pending_01", tenantId, pendingJobId, 1, "PENDING", 0, null);
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_pending_02", tenantId, pendingJobId, 2, "PENDING", 0, null);
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_canceled_01", tenantId, canceledJobId, 1, "PROCESSED", 0, null);
+        upsertLeadImportChunk(chunkRepository, "ljc_" + idPrefix + "_canceled_02", tenantId, canceledJobId, 2, "CANCELED", 1, "job canceled");
 
         upsertLeadImportItem(itemRepository, "lji_" + idPrefix + "_01", tenantId, jobId, 3,
                 "FAILED", "Duplicate lead row", "lead_import_duplicate", "duplicate lead");
         upsertLeadImportItem(itemRepository, "lji_" + idPrefix + "_02", tenantId, jobId, 5,
                 "FAILED", "Invalid phone", "contact_phone_invalid", "invalid phone");
+        upsertLeadImportItem(itemRepository, "lji_" + idPrefix + "_03", tenantId, canceledJobId, 4,
+                "FAILED", "Canceled import row", "lead_import_canceled", "job canceled before completion");
+    }
+
+    private void upsertLeadImportJob(LeadImportJobRepository repository,
+                                     String id,
+                                     String tenantId,
+                                     String fileName,
+                                     String status,
+                                     int totalRows,
+                                     int processedRows,
+                                     int successCount,
+                                     int failCount,
+                                     int percent,
+                                     String createdBy,
+                                     boolean cancelRequested,
+                                     String errorMessage,
+                                     int heartbeatMinutesAgo) {
+        LeadImportJob row = repository.findById(id).orElseGet(LeadImportJob::new);
+        row.setId(id);
+        row.setTenantId(tenantId);
+        row.setFileName(fileName);
+        row.setStatus(status);
+        row.setTotalRows(totalRows);
+        row.setProcessedRows(processedRows);
+        row.setSuccessCount(successCount);
+        row.setFailCount(failCount);
+        row.setPercent(percent);
+        row.setCreatedBy(createdBy);
+        row.setCancelRequested(cancelRequested);
+        row.setErrorMessage(errorMessage);
+        row.setLastHeartbeatAt(LocalDateTime.now().minusMinutes(Math.max(1, heartbeatMinutesAgo)));
+        repository.save(row);
     }
 
     private void upsertLeadImportChunk(LeadImportJobChunkRepository repository,

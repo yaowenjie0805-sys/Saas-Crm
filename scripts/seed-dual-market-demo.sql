@@ -72,8 +72,10 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO leads (id, name, company, phone, email, status, owner, source, tenant_id, created_at, updated_at) VALUES
   ('l_cn_01', 'CN Seed Lead 1', 'Huajing Manufacturing', '13900000001', 'cn.seed1@example.com', 'NEW', 'sales', 'WECOM', 'tenant_cn_demo', NOW(), NOW()),
   ('l_cn_02', 'CN Seed Lead 2', 'Lingfeng Medical', '13900000002', 'cn.seed2@example.com', 'QUALIFIED', 'manager', 'REFERRAL', 'tenant_cn_demo', NOW(), NOW()),
+  ('l_cn_03', 'CN Converted Lead', 'Huajing Manufacturing', '13900000003', 'cn.converted@example.com', 'CONVERTED', 'sales', 'EXHIBITION', 'tenant_cn_demo', NOW(), NOW()),
   ('l_gl_01', 'GLOBAL Seed Lead 1', 'Northwind Labs', '13900000011', 'gl.seed1@example.com', 'NEW', 'sales', 'WEBSITE', 'tenant_global_demo', NOW(), NOW()),
-  ('l_gl_02', 'GLOBAL Seed Lead 2', 'Borealis Retail', '13900000012', 'gl.seed2@example.com', 'NURTURING', 'manager', 'EMAIL', 'tenant_global_demo', NOW(), NOW())
+  ('l_gl_02', 'GLOBAL Seed Lead 2', 'Borealis Retail', '13900000012', 'gl.seed2@example.com', 'NURTURING', 'manager', 'EMAIL', 'tenant_global_demo', NOW(), NOW()),
+  ('l_gl_03', 'GLOBAL Converted Lead', 'Northwind Labs', '13900000013', 'gl.converted@example.com', 'CONVERTED', 'sales', 'PARTNER', 'tenant_global_demo', NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), company = VALUES(company), phone = VALUES(phone), email = VALUES(email),
   status = VALUES(status), owner = VALUES(owner), source = VALUES(source), tenant_id = VALUES(tenant_id), updated_at = NOW();
@@ -89,7 +91,9 @@ INSERT INTO lead_import_jobs (
   created_by, created_at, updated_at, processed_rows, percent, last_heartbeat_at, cancel_requested, error_message
 ) VALUES
   ('lij_cn_demo', 'tenant_cn_demo', 'lead-import-cn.csv', 'PARTIAL_SUCCESS', 6, 4, 2, NULL, 'admin', NOW(), NOW(), 6, 100, NOW(), 0, 'lead_import_partial_failure'),
-  ('lij_gl_demo', 'tenant_global_demo', 'lead-import-global.csv', 'PARTIAL_SUCCESS', 6, 4, 2, NULL, 'admin', NOW(), NOW(), 6, 100, NOW(), 0, 'lead_import_partial_failure')
+  ('lij_cn_pending', 'tenant_cn_demo', 'lead-import-cn-pending.csv', 'PENDING', 8, 0, 0, NULL, 'manager', NOW(), NOW(), 0, 0, NOW(), 0, NULL),
+  ('lij_gl_demo', 'tenant_global_demo', 'lead-import-global.csv', 'PARTIAL_SUCCESS', 6, 4, 2, NULL, 'admin', NOW(), NOW(), 6, 100, NOW(), 0, 'lead_import_partial_failure'),
+  ('lij_gl_canceled', 'tenant_global_demo', 'lead-import-global-canceled.csv', 'CANCELED', 5, 2, 1, NULL, 'manager', NOW(), NOW(), 3, 60, NOW(), 1, 'job canceled')
 ON DUPLICATE KEY UPDATE
   file_name = VALUES(file_name), status = VALUES(status), total_rows = VALUES(total_rows), success_count = VALUES(success_count),
   fail_count = VALUES(fail_count), processed_rows = VALUES(processed_rows), percent = VALUES(percent),
@@ -100,8 +104,12 @@ INSERT INTO lead_import_job_chunks (
 ) VALUES
   ('ljc_cn_01', 'tenant_cn_demo', 'lij_cn_demo', 1, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
   ('ljc_cn_02', 'tenant_cn_demo', 'lij_cn_demo', 2, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_cn_pending_01', 'tenant_cn_demo', 'lij_cn_pending', 1, 'PENDING', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_cn_pending_02', 'tenant_cn_demo', 'lij_cn_pending', 2, 'PENDING', '[]', 0, NULL, NOW(), NOW()),
   ('ljc_gl_01', 'tenant_global_demo', 'lij_gl_demo', 1, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
-  ('ljc_gl_02', 'tenant_global_demo', 'lij_gl_demo', 2, 'PROCESSED', '[]', 0, NULL, NOW(), NOW())
+  ('ljc_gl_02', 'tenant_global_demo', 'lij_gl_demo', 2, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_gl_canceled_01', 'tenant_global_demo', 'lij_gl_canceled', 1, 'PROCESSED', '[]', 0, NULL, NOW(), NOW()),
+  ('ljc_gl_canceled_02', 'tenant_global_demo', 'lij_gl_canceled', 2, 'CANCELED', '[]', 1, 'job canceled', NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   status = VALUES(status), payload_json = VALUES(payload_json), retry_count = VALUES(retry_count),
   last_error = VALUES(last_error), updated_at = NOW();
