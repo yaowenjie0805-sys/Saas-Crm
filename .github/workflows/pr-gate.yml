@@ -20,6 +20,7 @@ jobs:
       PREFLIGHT_SKIP_SLO_EVIDENCE: "true"
       PREFLIGHT_SKIP_PERF_EVIDENCE: "true"
       PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
+      PREFLIGHT_SKIP_ALERT_EVIDENCE: "true"
       PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
     steps:
       - name: Checkout

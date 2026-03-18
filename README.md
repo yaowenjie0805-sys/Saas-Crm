@@ -130,6 +130,11 @@ SRE daily check:
 npm run sre:daily-check
 ```
 
+SRE alert gate:
+```bash
+npm run sre:alert-check
+```
+
 Drill commands:
 ```bash
 npm run drill:backup-restore
@@ -293,6 +298,9 @@ npm run release:snapshot
   - `docs/operations/release-strategy.md`
   - `docs/operations/sre-slo-baseline.md`
   - `docs/operations/perf-baseline.md`
+  - `docs/operations/error-budget-policy.md`
+  - `docs/operations/oncall-escalation-runbook.md`
+  - `docs/operations/weekly-oncall-alert-review-template.md`
   - `docs/operations/change-control-checklist.md`
   - `docs/operations/incident-postmortem-template.md`
   - `docs/operations/staging-deploy-runbook.md`

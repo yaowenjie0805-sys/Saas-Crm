@@ -10,6 +10,9 @@
   "stagingReleaseReady": true,
   "stagingDeployed": true,
   "stagingRollbackReady": true,
+  "alertingReady": true,
+  "errorBudgetEnforced": true,
+  "oncallReady": true,
   "governanceComplete": true,
   "notes": "Ops hardening focus on observability, SLO daily checks, drill evidence, rollback traceability, performance baseline gate, staging release evidence, and security scan gate."
 }

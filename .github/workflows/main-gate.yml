@@ -19,6 +19,7 @@ jobs:
       PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
       PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
       PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
+      PREFLIGHT_SKIP_ALERT_EVIDENCE: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

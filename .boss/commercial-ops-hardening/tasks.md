@@ -1,21 +1,22 @@
-# 任务拆解：Staging 真部署闭环 + 发布治理收口
+# 任务拆解：SLO 告警与值班闭环
 
-## P0（本轮必须完成）
-- 新增 `staging:deploy`：制品上传、远端 Compose 拉起、健康检查、部署证据输出。
-- 新增 `staging:rollback`：回滚到上一可用版本并完成健康检查。
-- 强化 `staging-release` 工作流：审批环境、门禁顺序、失败回滚建议、证据上传命名规范。
-- `preflight:prod` 默认在主干发布分支要求 staging 证据（可通过环境变量覆盖）。
-- 更新 `staging:release:summary`：补齐 `commit -> artifact -> target -> gate -> rollbackRecommendation -> operator/approval`.
+## 提交 1（观测与告警数据面）
+- 扩展 `/api/v1/ops/slo-snapshot`：补齐 `errorBudget`、分级 `alerts`、`oncall` 字段（兼容追加）。
+- 新增 `npm run sre:alert-check`：读取 snapshot 与运维证据，输出 `logs/sre/alerts-*.json` 和 `alerts-latest.json`。
+- 主干与 staging 工作流在 `sre:daily-check` 后强制执行 `sre:alert-check`。
 
-## P1（本轮同时收口）
-- 新增 `docs/operations/staging-deploy-runbook.md`，固化部署/回滚/证据流程。
-- 更新 README 命令入口与证据路径。
-- 更新 `.meta/execution.json`：`stagingDeployed` 与 `stagingRollbackReady` 标记为完成。
+## 提交 2（值班与发布决策闭环）
+- 扩展 `preflight:prod`：新增错误预算、P1 告警、值班覆盖阻断项。
+- 补齐运行文档：
+  - `docs/operations/oncall-escalation-runbook.md`
+  - `docs/operations/error-budget-policy.md`
+  - `docs/operations/weekly-oncall-alert-review-template.md`
+- 同步 README 与 Boss 产物状态字段。
 
 ## QA Gate（串行）
-`lint -> build -> test:e2e -> test:backend -> test:full -> perf:baseline -> perf:gate -> sre:daily-check -> security:scan -> preflight:prod`
+`lint -> build -> test:e2e -> test:backend -> test:full -> perf:baseline -> perf:gate -> sre:daily-check -> sre:alert-check -> security:scan -> preflight:prod`
 
-## Staging 发布验收
-- `staging:deploy` 成功且 health `live/ready/deps` 全部 `UP`。
-- `staging:verify` 通过并生成 `logs/staging/staging-verify-latest.json`。
-- 手动错误版本演练后 `staging:rollback` 可恢复，并再次通过 `staging:verify`。
+## 验收场景
+- 触发错误率阈值时 `sre:alert-check` 非 0 退出并输出 P1/P2/P3 建议。
+- 预算超阈值或无 oncall 信息时 `preflight:prod` 稳定阻断。
+- 证据包可检索 alert verdict + error budget + oncall 三类字段。

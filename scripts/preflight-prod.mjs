@@ -168,6 +168,55 @@ function checkSloEvidence() {
   return checks
 }
 
+function checkAlertEvidence() {
+  const checks = []
+  const skipAlertEvidence = envVal('PREFLIGHT_SKIP_ALERT_EVIDENCE', 'false').toLowerCase() === 'true'
+  if (skipAlertEvidence) {
+    checks.push(pass('sre alert check', 'skipped by PREFLIGHT_SKIP_ALERT_EVIDENCE=true'))
+    return checks
+  }
+
+  const latest = path.join(sreDir, 'alerts-latest.json')
+  if (!fs.existsSync(latest)) {
+    checks.push(fail('sre alert check', 'missing logs/sre/alerts-latest.json'))
+    return checks
+  }
+  let body = {}
+  try {
+    body = JSON.parse(fs.readFileSync(latest, 'utf8'))
+  } catch (err) {
+    checks.push(fail('sre alert check', `invalid json: ${err.message}`))
+    return checks
+  }
+
+  const verdict = body?.verdict || {}
+  const level = String(verdict.level || 'NONE')
+  const reasons = Array.isArray(verdict.reasons) ? verdict.reasons : []
+  const oncall = body?.sloSnapshot?.oncall || {}
+  const dailyBudget = body?.sloSnapshot?.errorBudget?.daily || {}
+  const weeklyBudget = body?.sloSnapshot?.errorBudget?.weekly || {}
+
+  checks.push(verdict.pass
+    ? pass('sre alert verdict', 'pass=true')
+    : fail('sre alert verdict', `pass=false reasons=${reasons.join(',') || 'unknown'}`))
+  checks.push(level === 'P1'
+    ? fail('sre alert level', 'P1 active')
+    : pass('sre alert level', `level=${level}`))
+  checks.push(dailyBudget.pass === false
+    ? fail('daily error budget', `consumed=${dailyBudget.consumed} budget=${dailyBudget.budget}`)
+    : pass('daily error budget', `consumed=${dailyBudget.consumed || 0}`))
+  checks.push(weeklyBudget.pass === false
+    ? fail('weekly error budget', `consumed=${weeklyBudget.consumed} budget=${weeklyBudget.budget}`)
+    : pass('weekly error budget', `consumed=${weeklyBudget.consumed || 0}`))
+  checks.push(oncall.primary && oncall.primary !== 'UNASSIGNED'
+    ? pass('oncall primary', `primary=${oncall.primary}`)
+    : fail('oncall primary', 'missing current oncall primary'))
+  checks.push(oncall.escalation && oncall.escalation !== 'UNDEFINED'
+    ? pass('oncall escalation', `escalation=${oncall.escalation}`)
+    : fail('oncall escalation', 'missing escalation chain'))
+  return checks
+}
+
 function checkPerfEvidence() {
   const checks = []
   const skipPerfEvidence = envVal('PREFLIGHT_SKIP_PERF_EVIDENCE', 'false').toLowerCase() === 'true'
@@ -305,6 +354,7 @@ async function main() {
   checks.push(...checkReleaseEvidence())
   checks.push(...checkPerfEvidence())
   checks.push(...checkSloEvidence())
+  checks.push(...checkAlertEvidence())
   checks.push(...checkSecurityEvidence())
   checks.push(...checkStagingEvidence())
   checks.push(...(await checkOptionalDependencies()))

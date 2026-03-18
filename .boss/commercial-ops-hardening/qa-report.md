@@ -37,3 +37,9 @@ daily evaluable, evidence-backed release gate, executable drills, and rollback t
 - Added staging rollback command (`npm run staging:rollback`) with previous-version restore logic.
 - `staging-release` workflow now runs real deploy (replacing placeholder), keeps manual trigger, and uploads artifact as `staging-evidence-<run_number>`.
 - Staging release summary now includes operator/approval metadata and deployment evidence links.
+
+## SLO Alerting Closure (Current Round)
+- `/api/v1/ops/slo-snapshot` now includes `errorBudget`, `alertsLevel/alertsDetailed`, and `oncall`.
+- Added `npm run sre:alert-check` for alert verdict generation and release recommendation evidence.
+- `preflight:prod` now enforces alert verdict, error budget, and oncall coverage checks.
+- Mainline/staging CI now includes `sre:alert-check` in mandatory gate sequence.
