@@ -44,7 +44,7 @@ function startBackendIfNeeded() {
   if (String(process.env.SRE_AUTO_START_BACKEND || 'true').toLowerCase() === 'false') {
     return null
   }
-  const jar = path.join(root, 'backend', 'target', 'crm-backend-1.0.0.jar')
+  const jar = path.join(root, 'apps', 'api', 'target', 'crm-backend-1.0.0.jar')
   if (!fs.existsSync(jar)) {
     return null
   }

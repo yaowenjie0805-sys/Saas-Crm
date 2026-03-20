@@ -10,6 +10,8 @@ const rawFile = path.join(outDir, `perf-${mode}-${stamp}-raw.json`)
 const reportFile = path.join(outDir, `perf-${mode}-${stamp}.json`)
 const latestFile = path.join(outDir, `perf-${mode}-latest.json`)
 const summaryFile = path.join(outDir, `perf-${mode}-${stamp}.txt`)
+const backendLogFile = path.join(outDir, `perf-${mode}-${stamp}-backend.log`)
+const backendLogLatestFile = path.join(outDir, `perf-${mode}-backend-latest.log`)
 
 const API_PORT = process.env.API_PORT || '18080'
 const BASE_URL = process.env.PERF_BASE_URL || `http://127.0.0.1:${API_PORT}`
@@ -17,7 +19,10 @@ const REQUIRE_K6 = String(process.env.PERF_REQUIRE_K6 || 'false').toLowerCase() 
 const DB_NAME = process.env.DB_NAME || 'crm_local_e2e'
 const DB_USER = process.env.DB_USER || 'root'
 const DB_PASSWORD = process.env.DB_PASSWORD || 'root'
+const DB_HOST = process.env.DB_HOST || '127.0.0.1'
+const DB_PORT = process.env.DB_PORT || '3306'
 const DB_URL = process.env.DB_URL || `jdbc:mysql://127.0.0.1:3306/${DB_NAME}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true`
+const PERF_FLYWAY_AUTO_REPAIR = String(process.env.PERF_FLYWAY_AUTO_REPAIR || 'true').toLowerCase() === 'true'
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -29,12 +34,15 @@ function sleep(ms) {
 
 async function waitForLive(baseUrl, timeoutMs, isExited) {
   const deadline = Date.now() + timeoutMs
+  const endpoints = ['/api/health/live', '/api/health']
   while (Date.now() < deadline) {
     if (isExited && isExited()) return false
-    try {
-      const res = await fetch(`${baseUrl}/api/health/live`)
-      if (res.ok) return true
-    } catch (_) {}
+    for (const endpoint of endpoints) {
+      try {
+        const res = await fetch(`${baseUrl}${endpoint}`)
+        if (res.ok) return true
+      } catch (_) {}
+    }
     await sleep(400)
   }
   return false
@@ -42,9 +50,17 @@ async function waitForLive(baseUrl, timeoutMs, isExited) {
 
 function startBackendIfNeeded() {
   if (String(process.env.PERF_AUTO_START_BACKEND || 'true').toLowerCase() === 'false') return null
-  const jar = path.join(root, 'backend', 'target', 'crm-backend-1.0.0.jar')
-  if (!fs.existsSync(jar)) return null
-  const child = spawn('java', [
+  const jar = path.join(root, 'apps', 'api', 'target', 'crm-backend-1.0.0.jar')
+  if (!fs.existsSync(jar)) {
+    return {
+      child: null,
+      isExited: () => true,
+      exitCode: () => -1,
+      startupLog: () => 'backend_jar_missing',
+      startSkipped: 'backend_jar_missing',
+    }
+  }
+  const spawnBackend = (disableFlywayValidation) => spawn('java', [
     '-Dspring.profiles.active=dev',
     '-Dlead.import.listener.enabled=false',
     '-Dlead.import.mq.declare.enabled=false',
@@ -52,6 +68,7 @@ function startBackendIfNeeded() {
     '-Dspring.rabbitmq.listener.simple.auto-startup=false',
     '-Dspring.rabbitmq.listener.direct.auto-startup=false',
     '-Dspring.rabbitmq.dynamic=false',
+    ...(disableFlywayValidation ? ['-Dspring.flyway.validate-on-migrate=false'] : []),
     `-Dserver.port=${API_PORT}`,
     `-DDB_URL=${DB_URL}`,
     `-DDB_USER=${DB_USER}`,
@@ -60,11 +77,94 @@ function startBackendIfNeeded() {
     jar,
   ], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
 
+  let flywayValidationBypassed = false
+  let child = spawnBackend(false)
+  let startupLog = ''
   let exited = false
-  child.on('exit', () => {
-    exited = true
+  let exitCode = null
+  const capture = (text) => {
+    const chunk = String(text || '')
+    startupLog = `${startupLog}${chunk}`.slice(-12000)
+    fs.appendFileSync(backendLogFile, chunk)
+  }
+  const bindListeners = () => {
+    child.stdout?.on('data', capture)
+    child.stderr?.on('data', capture)
+    child.on('exit', (code) => {
+      exited = true
+      exitCode = code
+    })
+  }
+  bindListeners()
+
+  const restartDisableFlywayValidation = () => {
+    if (flywayValidationBypassed) return false
+    flywayValidationBypassed = true
+    exited = false
+    exitCode = null
+    startupLog = `${startupLog}\n[perf-run] restart_with_flyway_validate_on_migrate_false\n`.slice(-6000)
+    child = spawnBackend(true)
+    bindListeners()
+    return true
+  }
+
+  return {
+    get child() { return child },
+    isExited: () => exited,
+    exitCode: () => exitCode,
+    startupLog: () => startupLog.trim(),
+    isFlywayValidationBypassed: () => flywayValidationBypassed,
+    restartDisableFlywayValidation,
+    startSkipped: '',
+  }
+}
+
+function repairFailedFlywayMigrations() {
+  const result = spawnSync('mysql', [
+    '-h', DB_HOST,
+    '-P', DB_PORT,
+    `-u${DB_USER}`,
+    `-p${DB_PASSWORD}`,
+    '-D', DB_NAME,
+    '-N',
+    '-B',
+    '-e',
+    'DELETE FROM flyway_schema_history WHERE success = 0;',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
   })
-  return { child, isExited: () => exited }
+  return {
+    ok: result.status === 0,
+    status: result.status,
+    stdout: String(result.stdout || '').trim(),
+    stderr: String(result.stderr || '').trim(),
+  }
+}
+
+function countFailedFlywayMigrations() {
+  const result = spawnSync('mysql', [
+    '-h', DB_HOST,
+    '-P', DB_PORT,
+    `-u${DB_USER}`,
+    `-p${DB_PASSWORD}`,
+    '-D', DB_NAME,
+    '-N',
+    '-B',
+    '-e',
+    'SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0;',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  const count = Number.parseInt(String(result.stdout || '').trim(), 10)
+  return {
+    ok: result.status === 0 && Number.isFinite(count),
+    status: result.status,
+    count: Number.isFinite(count) ? count : 0,
+    stdout: String(result.stdout || '').trim(),
+    stderr: String(result.stderr || '').trim(),
+  }
 }
 
 function runK6() {
@@ -213,15 +313,64 @@ function writeSummary(report) {
 
 async function main() {
   ensureDir(outDir)
+  fs.writeFileSync(backendLogFile, '')
   let backend = null
+  let flywayAutoRepairUsed = false
+  let flywayAutoRepairResult = null
+  let flywayFailedRowsBeforeStart = null
   try {
+    if (PERF_FLYWAY_AUTO_REPAIR) {
+      const failedBeforeStart = countFailedFlywayMigrations()
+      flywayFailedRowsBeforeStart = failedBeforeStart
+      if (failedBeforeStart.ok && failedBeforeStart.count > 0) {
+        flywayAutoRepairUsed = true
+        flywayAutoRepairResult = repairFailedFlywayMigrations()
+      }
+    }
+
     let ready = await waitForLive(BASE_URL, 3000)
     if (!ready) {
       backend = startBackendIfNeeded()
+      if (backend?.startSkipped) {
+        throw new Error(`perf_backend_not_ready:${backend.startSkipped}`)
+      }
       ready = await waitForLive(BASE_URL, 90000, backend?.isExited)
+      if (!ready && backend?.isExited?.()) {
+        const startupTail = backend?.startupLog?.() || ''
+        const hasFailedMigration = startupTail.toLowerCase().includes('failed migration')
+        if (hasFailedMigration && PERF_FLYWAY_AUTO_REPAIR) {
+          flywayAutoRepairUsed = true
+          flywayAutoRepairResult = repairFailedFlywayMigrations()
+          if (flywayAutoRepairResult.ok) {
+            backend = startBackendIfNeeded()
+            ready = await waitForLive(BASE_URL, 90000, backend?.isExited)
+          }
+        }
+        const hasChecksumMismatch = startupTail.toLowerCase().includes('checksum mismatch')
+        if (hasChecksumMismatch && backend?.restartDisableFlywayValidation?.()) {
+          ready = await waitForLive(BASE_URL, 90000, backend?.isExited)
+          if (!ready && backend?.isExited?.()) {
+            const retryTail = backend?.startupLog?.() || ''
+            const retryHasFailedMigration = retryTail.toLowerCase().includes('failed migration')
+          if (retryHasFailedMigration && PERF_FLYWAY_AUTO_REPAIR) {
+            flywayAutoRepairUsed = true
+            flywayAutoRepairResult = repairFailedFlywayMigrations()
+              if (flywayAutoRepairResult.ok) {
+                backend = startBackendIfNeeded()
+                if (backend?.restartDisableFlywayValidation?.()) {
+                  ready = await waitForLive(BASE_URL, 90000, backend?.isExited)
+                }
+              }
+            }
+          }
+        }
+      }
     }
     if (!ready) {
-      throw new Error('perf_backend_not_ready')
+      const exitCode = backend?.exitCode?.()
+      const startupTail = backend?.startupLog?.() || ''
+      const status = backend?.isExited?.() ? `backend_exited_${exitCode}` : 'backend_live_check_timeout'
+      throw new Error(`perf_backend_not_ready:${status}${startupTail ? `:${startupTail.slice(-500)}` : ''}`)
     }
 
     const k6Exists = spawnSync('k6', ['version'], { cwd: root, encoding: 'utf8' }).status === 0
@@ -239,8 +388,17 @@ async function main() {
 
     const raw = JSON.parse(fs.readFileSync(rawFile, 'utf8'))
     const report = buildReport(raw)
+    report.backendDiagnostics = {
+      autoStarted: !!backend,
+      flywayValidationBypassed: !!backend?.isFlywayValidationBypassed?.(),
+      flywayAutoRepairUsed,
+      flywayAutoRepairResult,
+      flywayFailedRowsBeforeStart,
+      backendLogFile: path.relative(root, backendLogFile),
+    }
     fs.writeFileSync(reportFile, JSON.stringify(report, null, 2))
     fs.writeFileSync(latestFile, JSON.stringify(report, null, 2))
+    fs.copyFileSync(backendLogFile, backendLogLatestFile)
     writeSummary(report)
     console.log(`PERF_${mode.toUpperCase()}_OK ${path.relative(root, reportFile)}`)
   } finally {
@@ -256,6 +414,15 @@ main().catch((err) => {
     generatedAt: new Date().toISOString(),
     mode,
     failed: true,
+    baseUrl: BASE_URL,
+    diagnostics: {
+      apiPort: API_PORT,
+      backendJarExists: fs.existsSync(path.join(root, 'apps', 'api', 'target', 'crm-backend-1.0.0.jar')),
+      autoStartBackend: String(process.env.PERF_AUTO_START_BACKEND || 'true'),
+      flywayValidationBypassed: false,
+      flywayAutoRepairEnabled: PERF_FLYWAY_AUTO_REPAIR,
+      backendLogFile: path.relative(root, backendLogFile),
+    },
     error: err?.message || String(err),
   }
   fs.writeFileSync(reportFile, JSON.stringify(failReport, null, 2))

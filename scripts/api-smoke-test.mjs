@@ -1,12 +1,13 @@
 import { spawn } from 'node:child_process'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-const DB_NAME = process.env.DB_NAME || 'crm_local_e2e'
+const RUN_ID = Date.now()
+const DB_NAME = process.env.DB_NAME || `crm_local_e2e_${RUN_ID}`
 const DB_USER = process.env.DB_USER || 'root'
 const DB_PASSWORD = process.env.DB_PASSWORD || 'root'
 const API_PORT = process.env.API_PORT || '18080'
 const BASE_URL = `http://127.0.0.1:${API_PORT}`
-const DB_URL = process.env.DB_URL || `jdbc:mysql://127.0.0.1:3306/${DB_NAME}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true`
+const DB_URL = process.env.DB_URL || `jdbc:mysql://127.0.0.1:3306/${DB_NAME}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true`
 
 async function waitHealth(isExited) {
   for (let i = 0; i < 150; i += 1) {
@@ -105,7 +106,7 @@ const app = spawn('java', [
   `-DDB_USER=${DB_USER}`,
   `-DDB_PASSWORD=${DB_PASSWORD}`,
   '-jar',
-  'backend/target/crm-backend-1.0.0.jar',
+  'apps/api/target/crm-backend-1.0.0.jar',
 ], {
   cwd: process.cwd(),
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -279,3 +280,4 @@ try {
 } finally {
   app.kill()
 }
+

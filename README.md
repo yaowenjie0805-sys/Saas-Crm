@@ -38,7 +38,7 @@ bash scripts/init-db.sh root root crm_local
 
 ## 3. Run Backend (Java)
 ```bash
-mvn -f backend/pom.xml spring-boot:run
+mvn -f apps/api/pom.xml spring-boot:run
 ```
 Windows recommended startup (auto cleanup invalid build folder + release 8080 + run):
 ```bash
@@ -74,7 +74,7 @@ npm run build
 ```
 Backend:
 ```bash
-mvn -f backend/pom.xml clean package -DskipTests
+mvn -f apps/api/pom.xml clean package -DskipTests
 ```
 
 API smoke test:
@@ -243,15 +243,15 @@ npm run release:snapshot
   - Maven Reload/Reimport project in IDEA.
   - Ensure runtime classpath contains both `flyway-core` and `flyway-mysql`.
   - Verify dependency tree includes MySQL extension:
-    - `mvn -f backend/pom.xml dependency:tree | findstr flyway`
-  - If you ever see `backend/${project.build.directory}`, delete it and rebuild:
-    - `mvn -f backend/pom.xml clean compile -DskipTests`
+    - `mvn -f apps/api/pom.xml dependency:tree | findstr flyway`
+  - If you ever see `apps/api/${project.build.directory}`, delete it and rebuild:
+    - `mvn -f apps/api/pom.xml clean compile -DskipTests`
   - If IDEA still throws `Unsupported Database: MySQL 8.0`, run once by Maven to sync runtime:
-    - `mvn -f backend/pom.xml spring-boot:run`
+    - `mvn -f apps/api/pom.xml spring-boot:run`
   - If `8080` is in use, stop old process:
     - `netstat -ano | findstr :8080`
     - `taskkill /PID <pid> /F`
-- Backend schema is versioned by Flyway migrations (`backend/src/main/resources/db/migration/V*.sql`).
+- Backend schema is versioned by Flyway migrations (`apps/api/src/main/resources/db/migration/V*.sql`).
 - `dev/test/prod` are split by Spring profiles; `test/prod` do not allow schema drift by Hibernate DDL.
 - Backend startup includes Flyway state guard and will fail fast on invalid migration states.
 - Backend startup also performs datasource precheck and fails with readable error if DB is unreachable.
@@ -320,5 +320,5 @@ npm run release:snapshot
 
 ## 8. Controller architecture
 - Controllers are split by domain (auth/health/dashboard/reports/customers/tasks/follow-ups/opportunities/audit).
-- Common controller helpers are centralized in `backend/src/main/java/com/yao/crm/controller/BaseApiController.java`.
+- Common controller helpers are centralized in `apps/api/src/main/java/com/yao/crm/controller/BaseApiController.java`.
 - Dashboard/report aggregation logic is moved to service layer (DashboardService, ReportService).

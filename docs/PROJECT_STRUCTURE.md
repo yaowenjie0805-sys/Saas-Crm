@@ -1,12 +1,13 @@
 ﻿# CRM Project Structure
 
 ## Root
-- `backend/`: Spring Boot backend (REST API, auth, role permissions, reports, exports).
-- `src/`: React frontend.
+- `apps/api/`: Spring Boot backend (REST API, auth, role permissions, reports, exports).
+- `apps/web/`: React frontend.
 - `scripts/`: local helper scripts (DB init, API smoke, local e2e).
+- `packages/`: shared packages placeholder (future extraction).
 - `docs/`: project documentation.
 
-## Frontend (`src`)
+## Frontend (`apps/web/src`)
 - `App.jsx`: app state orchestration, API calls, auth flow, and data loaders.
 - `App.css`: global styles and component-level visual rules.
 - `crm/i18n.js`: Chinese/English translation dictionary.
@@ -28,7 +29,7 @@
     - `PaymentsPanel.jsx`
     - `TasksPanel.jsx`
 
-## Backend (`backend`)
+## Backend (`apps/api`)
 - `src/main/java/com/yao/crm/controller/`: REST controllers by domain.
 - `src/main/java/com/yao/crm/entity/`: JPA entities.
 - `src/main/java/com/yao/crm/repository/`: Spring Data repositories.
@@ -47,3 +48,4 @@
 - Backend: `npm run dev:backend`
 - API smoke: `npm run test:api`
 - Frontend lint/build: `npm run lint` / `npm run build`
+- Playwright config: `apps/web/playwright.config.js`

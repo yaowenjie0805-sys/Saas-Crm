@@ -10,13 +10,21 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-backend/target
+apps/web/dist
+apps/web/test-results
+apps/api/target
+test-results
+.m2repo/
 *.local
+verify-*.png
+.codeartsdoer/
+.qoder/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
+.mvn/
 .DS_Store
 *.suo
 *.ntvs*

@@ -1,0 +1,36 @@
+{
+  "baselineEntryGzipBytes": 129168,
+  "entryReductionMinPct": 30,
+  "entryGzipMaxBytes": 95000,
+  "totalJsGzipMaxBytes": 360000,
+  "criticalRouteChunkMaxGzipBytes": 120000,
+  "criticalRouteChunkPatterns": [
+    "route-dashboard",
+    "route-customers",
+    "route-commerce",
+    "route-approvals",
+    "route-report-designer",
+    "app-runtime",
+    "app-shell"
+  ],
+  "requiredChunkPatterns": [
+    "route-dashboard",
+    "route-customers",
+    "route-customers-detail",
+    "route-commerce",
+    "route-commerce-detail",
+    "route-report-designer",
+    "route-report-designer-detail",
+    "app-runtime",
+    "app-shell",
+    "crm-i18n-core",
+    "crm-i18n-ns-dashboard",
+    "crm-i18n-ns-governance",
+    "crm-i18n-ns-report-designer",
+    "crm-i18n-ns-opportunity-workbench"
+  ],
+  "chunkGzipMaxBytesByPattern": {
+    "app-runtime": 95000,
+    "route-": 120000
+  }
+}

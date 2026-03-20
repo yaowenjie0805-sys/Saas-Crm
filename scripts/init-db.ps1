@@ -30,7 +30,7 @@ $env:LEAD_IMPORT_MQ_DECLARE_ENABLED = "false"
 $env:LEAD_IMPORT_MQ_PUBLISH_ENABLED = "false"
 
 Write-Host "[db:init] Running Flyway migrations + seed data ..."
-mvn -f backend/pom.xml -DskipTests spring-boot:run "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.init-only=true"
+mvn -f apps/api/pom.xml -DskipTests spring-boot:run "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.init-only=true"
 if ($LASTEXITCODE -ne 0) {
   throw "[db:init] backend init failed"
 }
@@ -42,3 +42,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[db:init] Done (database + migration + seed)."
+

@@ -23,7 +23,7 @@ export LEAD_IMPORT_MQ_DECLARE_ENABLED="false"
 export LEAD_IMPORT_MQ_PUBLISH_ENABLED="false"
 
 echo "[db:init] Running Flyway migrations + seed data ..."
-mvn -f backend/pom.xml -DskipTests spring-boot:run \
+mvn -f apps/api/pom.xml -DskipTests spring-boot:run \
   "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.init-only=true"
 
 echo "[db:init] Applying dual-market demo SQL seed ..."
@@ -31,3 +31,4 @@ mysql --protocol=TCP -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWO
   < scripts/seed-dual-market-demo.sql
 
 echo "[db:init] Done (database + migration + seed)."
+

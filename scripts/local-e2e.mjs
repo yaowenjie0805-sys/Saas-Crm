@@ -43,8 +43,8 @@ async function main() {
 
   console.log('[full-test] Step 2/4: package backend')
   const mavenArgs = E2E_FAST
-    ? [`-Dmaven.repo.local=${MAVEN_REPO}`, '-f', 'backend/pom.xml', 'package', '-DskipTests']
-    : [`-Dmaven.repo.local=${MAVEN_REPO}`, '-f', 'backend/pom.xml', 'clean', 'package', '-DskipTests']
+    ? [`-Dmaven.repo.local=${MAVEN_REPO}`, '-f', 'apps/api/pom.xml', 'package', '-DskipTests']
+    : [`-Dmaven.repo.local=${MAVEN_REPO}`, '-f', 'apps/api/pom.xml', 'clean', 'package', '-DskipTests']
   if (IS_WIN) {
     await run('cmd.exe', ['/c', 'mvn', ...mavenArgs], 'maven package')
   } else {
@@ -52,7 +52,7 @@ async function main() {
   }
 
   console.log('[full-test] Step 3/4: browser e2e')
-  await run(IS_WIN ? 'node.exe' : 'node', ['scripts/run-playwright-e2e.mjs'], 'browser e2e', {
+  await run(IS_WIN ? 'node.exe' : 'node', ['apps/web/scripts/run-playwright-e2e.mjs'], 'browser e2e', {
     env: { ...process.env, E2E_SKIP_PACKAGE: '1' },
   })
 
@@ -66,3 +66,4 @@ main().catch((err) => {
   console.error('[full-test] FAIL', err.message)
   process.exitCode = 1
 })
+

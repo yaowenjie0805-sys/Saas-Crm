@@ -3,7 +3,7 @@ import path from 'node:path'
 import net from 'node:net'
 
 const root = process.cwd()
-const backendProdProps = path.join(root, 'backend', 'src', 'main', 'resources', 'application-prod.properties')
+const backendProdProps = path.join(root, 'apps', 'api', 'src', 'main', 'resources', 'application-prod.properties')
 const releaseDir = path.join(root, 'logs', 'release')
 const sreDir = path.join(root, 'logs', 'sre')
 const drillDir = path.join(root, 'logs', 'drills')

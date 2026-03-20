@@ -3,13 +3,13 @@
 ## Before Release
 1. Link change to ticket/feature and owner.
 2. Confirm impacted API/routes and rollback path.
-3. Complete gate: `lint/build/test:e2e/test:backend/test:full/preflight:prod`.
+3. Complete gate: `npm run lint`, `npm run build`, `npm run test:e2e`, `npm run test:backend`, `npm run test:full`, `npm run preflight:prod`.
 4. Confirm runbook references updated if behavior changed.
 5. Prepare release snapshot (`npm run release:snapshot`).
 
 ## Release Window
 1. Notify on-duty and stakeholder channel.
-2. Deploy backend + frontend artifacts.
+2. Deploy `apps/api` + `apps/web` artifacts.
 3. Validate `/api/health/ready`.
 4. Run smoke path (login, dashboard, customers, quotes).
 5. Record requestId samples for traceability.

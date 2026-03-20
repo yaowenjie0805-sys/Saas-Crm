@@ -13,7 +13,7 @@
 - Rollback owner:
 
 ## Verification
-- Required gates: `lint/build/e2e/backend/full/perf/sre/security/preflight`
+- Required gates: `npm run ci:frontend`, `npm run ci:backend`, `npm run test:full`, `npm run perf:gate`, `npm run sre:daily-check`, `npm run sre:alert-check`, `npm run security:scan`, `npm run preflight:prod`
 - Staging evidence bundle:
 - Post-release checks:
 

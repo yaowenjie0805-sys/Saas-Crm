@@ -6,6 +6,7 @@ const perfDir = path.join(root, 'logs', 'perf')
 const perfBaselineDoc = path.join(root, 'docs', 'operations', 'perf-baseline.md')
 const sreDoc = path.join(root, 'docs', 'operations', 'sre-slo-baseline.md')
 const outFile = path.join(perfDir, 'perf-gate-latest.json')
+const perfSnapshotFile = path.join(perfDir, 'perf-acceptance-latest.json')
 
 function readLatestBaselineReport() {
   if (!fs.existsSync(perfDir)) return null
@@ -106,10 +107,26 @@ function main() {
     const report = {
       generatedAt: new Date().toISOString(),
       pass: false,
+      reason: 'precondition_failed',
+      message: 'Missing perf baseline report. Run "npm run perf:baseline" before "npm run perf:gate".',
       checks: [fail('baseline report', 'missing perf-baseline-*.json')],
     }
     fs.writeFileSync(outFile, JSON.stringify(report, null, 2))
-    console.error('PERF_GATE_FAIL missing baseline report')
+    console.error('PERF_GATE_PRECONDITION_FAIL missing baseline report')
+    console.error('PERF_GATE_HINT run "npm run perf:baseline" then rerun "npm run perf:gate"')
+    process.exit(1)
+  }
+  if (latest.report?.failed) {
+    const report = {
+      generatedAt: new Date().toISOString(),
+      pass: false,
+      reason: 'baseline_failed',
+      baselineReport: path.relative(root, latest.latest),
+      message: latest.report?.error || 'perf baseline failed',
+      checks: [fail('baseline report', latest.report?.error || 'perf baseline failed')],
+    }
+    fs.writeFileSync(outFile, JSON.stringify(report, null, 2))
+    console.error(`PERF_GATE_BASELINE_FAIL ${report.message}`)
     process.exit(1)
   }
 
@@ -122,21 +139,43 @@ function main() {
 
   const checks = evaluate(latest.report, thresholds)
   const failed = checks.filter((c) => !c.ok)
+  const bundleGate = readJsonIfExists(path.join(perfDir, 'bundle-gate-latest.json'))
+  const sqlExplainCompare = readJsonIfExists(path.join(perfDir, 'sql-explain-compare-latest.json'))
   const gateReport = {
     generatedAt: new Date().toISOString(),
     baselineReport: path.relative(root, latest.latest),
     thresholds,
     checks,
+    relatedReports: {
+      bundleGate: bundleGate ? 'logs/perf/bundle-gate-latest.json' : '',
+      sqlExplainCompare: sqlExplainCompare ? 'logs/perf/sql-explain-compare-latest.json' : '',
+    },
     pass: failed.length === 0,
     failedCount: failed.length,
   }
   fs.writeFileSync(outFile, JSON.stringify(gateReport, null, 2))
+  const snapshot = {
+    generatedAt: new Date().toISOString(),
+    perfGate: gateReport,
+    bundleGate,
+    sqlExplainCompare,
+  }
+  fs.writeFileSync(perfSnapshotFile, JSON.stringify(snapshot, null, 2))
 
   if (failed.length > 0) {
     console.error(`PERF_GATE_FAIL count=${failed.length}`)
     process.exit(1)
   }
   console.log(`PERF_GATE_OK ${path.relative(root, outFile)}`)
+}
+
+function readJsonIfExists(file) {
+  if (!fs.existsSync(file)) return null
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
 }
 
 main()

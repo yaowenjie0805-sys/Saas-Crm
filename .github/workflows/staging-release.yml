@@ -65,7 +65,7 @@ jobs:
         run: npm run test:backend
 
       - name: Backend Package
-        run: mvn -f backend/pom.xml -DskipTests package
+        run: mvn -f apps/api/pom.xml -DskipTests package
 
       - name: Performance Baseline
         run: npm run perf:baseline
@@ -117,3 +117,4 @@ jobs:
             logs/preflight/**
             logs/security/**
             logs/staging/**
+

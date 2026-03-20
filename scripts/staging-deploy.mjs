@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 
 const root = process.cwd()
@@ -58,9 +59,41 @@ function writeReport(report) {
   fs.writeFileSync(latestFile, JSON.stringify(report, null, 2))
 }
 
+function hashFile(file) {
+  if (!fs.existsSync(file)) return ''
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+}
+
+function hashDirectoryTree(dir) {
+  if (!fs.existsSync(dir)) return ''
+  const entries = []
+  const stack = [dir]
+  while (stack.length) {
+    const current = stack.pop()
+    for (const name of fs.readdirSync(current)) {
+      const full = path.join(current, name)
+      const stat = fs.statSync(full)
+      if (stat.isDirectory()) {
+        stack.push(full)
+      } else if (stat.isFile()) {
+        entries.push(path.relative(dir, full).replace(/\\/g, '/'))
+      }
+    }
+  }
+  entries.sort()
+  const hash = crypto.createHash('sha256')
+  for (const rel of entries) {
+    hash.update(rel)
+    hash.update('\n')
+    hash.update(fs.readFileSync(path.join(dir, rel)))
+    hash.update('\n')
+  }
+  return hash.digest('hex')
+}
+
 function makeBundle(version) {
-  const distDir = path.join(root, 'dist')
-  const jarFile = path.join(root, 'backend', 'target', 'crm-backend-1.0.0.jar')
+  const distDir = path.join(root, 'apps', 'web', 'dist')
+  const jarFile = path.join(root, 'apps', 'api', 'target', 'crm-backend-1.0.0.jar')
   const composeFile = path.join(root, 'infra', 'staging', 'docker-compose.yml')
   const nginxFile = path.join(root, 'infra', 'staging', 'nginx.conf')
   const envTemplate = path.join(root, 'infra', 'staging', 'staging.env.example')
@@ -74,13 +107,13 @@ function makeBundle(version) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-staging-'))
   const bundleDir = path.join(tempRoot, version)
   fs.mkdirSync(bundleDir, { recursive: true })
-  fs.mkdirSync(path.join(bundleDir, 'frontend'), { recursive: true })
-  fs.mkdirSync(path.join(bundleDir, 'backend'), { recursive: true })
+  fs.mkdirSync(path.join(bundleDir, 'apps', 'web'), { recursive: true })
+  fs.mkdirSync(path.join(bundleDir, 'apps', 'api'), { recursive: true })
 
-  fs.cpSync(distDir, path.join(bundleDir, 'frontend', 'dist'), { recursive: true })
-  fs.copyFileSync(jarFile, path.join(bundleDir, 'backend', 'crm-backend-1.0.0.jar'))
+  fs.cpSync(distDir, path.join(bundleDir, 'apps', 'web', 'dist'), { recursive: true })
+  fs.copyFileSync(jarFile, path.join(bundleDir, 'apps', 'api', 'crm-backend-1.0.0.jar'))
   fs.copyFileSync(composeFile, path.join(bundleDir, 'docker-compose.yml'))
-  fs.copyFileSync(nginxFile, path.join(bundleDir, 'frontend', 'nginx.conf'))
+  fs.copyFileSync(nginxFile, path.join(bundleDir, 'apps', 'web', 'nginx.conf'))
   fs.copyFileSync(envTemplate, path.join(bundleDir, '.env'))
 
   const commit = runGit(['rev-parse', 'HEAD'])
@@ -90,6 +123,10 @@ function makeBundle(version) {
     artifactVersion: version,
     commit: commit.ok ? commit.stdout.trim() : '',
     branch: branch.ok ? branch.stdout.trim() : '',
+    releaseManifest: {
+      frontendDistSha256: hashDirectoryTree(distDir),
+      backendJarSha256: hashFile(jarFile),
+    },
   }
   fs.writeFileSync(path.join(bundleDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
   return { tempRoot, bundleDir, manifest }

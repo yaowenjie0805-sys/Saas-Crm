@@ -22,7 +22,8 @@ if ($portOwner) {
 }
 
 Write-Host "[step] mvn clean compile"
-mvn -f backend/pom.xml clean compile -DskipTests
+node scripts/run-maven.mjs -f apps/api/pom.xml clean compile -DskipTests
 
 Write-Host "[step] run backend with dev profile"
-mvn -f backend/pom.xml spring-boot:run "-Dspring-boot.run.profiles=dev"
+node scripts/run-maven.mjs -f apps/api/pom.xml spring-boot:run "-Dspring-boot.run.profiles=dev"
+

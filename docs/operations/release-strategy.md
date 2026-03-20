@@ -1,8 +1,8 @@
 # Release Strategy
 
 ## Artifact Strategy
-- Frontend artifact: `dist/assets/*`.
-- Backend artifact: `backend/target/crm-backend-1.0.0.jar`.
+- Frontend artifact: `apps/web/dist/assets/*`.
+- Backend artifact: `apps/api/target/crm-backend-1.0.0.jar`.
 - Snapshot mapping: `npm run release:snapshot` writes commit -> artifact -> config summary.
 
 ## Versioning
