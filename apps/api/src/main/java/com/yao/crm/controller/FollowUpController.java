@@ -77,11 +77,11 @@ public class FollowUpController extends BaseApiController {
                 predicates.add(cb.equal(root.get("customerId"), customerId));
             }
             if (!isBlank(q)) {
-                String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("summary")), pattern),
-                        cb.like(cb.lower(root.get("result")), pattern),
-                        cb.like(cb.lower(root.get("author")), pattern)
+                        cb.like(cb.lower(root.get("summary")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("result")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("author")), pattern, '\\')
                 ));
             }
             if (salesScoped) {

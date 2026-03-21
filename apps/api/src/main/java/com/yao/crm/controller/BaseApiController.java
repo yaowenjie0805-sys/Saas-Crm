@@ -214,6 +214,13 @@ abstract class BaseApiController {
         return "\"" + escaped + "\"";
     }
 
+    protected String escapeLike(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_");
+    }
+
     protected String traceId(HttpServletRequest request) {
         Object trace = request.getAttribute(TraceIdInterceptor.TRACE_ID_ATTR);
         return trace == null ? "" : String.valueOf(trace);

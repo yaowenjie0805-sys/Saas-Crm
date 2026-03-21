@@ -77,6 +77,12 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- TODO: Add springdoc-openapi-ui for API documentation when network allows -->
+        <!-- <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-ui</artifactId>
+            <version>1.8.0</version>
+        </dependency> -->
     </dependencies>
 
     <build>

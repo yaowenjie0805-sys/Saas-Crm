@@ -1,5 +1,36 @@
 import { Component } from 'react'
 
+const ERROR_REPORT_ENDPOINT = '/api/v1/ops/client-errors'
+const MAX_ERROR_REPORTS_PER_SESSION = 10
+let sessionErrorCount = 0
+
+function reportErrorToServer(error, errorInfo) {
+  if (sessionErrorCount >= MAX_ERROR_REPORTS_PER_SESSION) return
+  sessionErrorCount++
+  try {
+    const payload = {
+      message: String(error?.message || 'Unknown error'),
+      stack: String(error?.stack || '').slice(0, 2000),
+      componentStack: String(errorInfo?.componentStack || '').slice(0, 2000),
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      timestamp: new Date().toISOString(),
+    }
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(ERROR_REPORT_ENDPOINT, JSON.stringify(payload))
+    } else {
+      fetch(ERROR_REPORT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {})
+    }
+  } catch (_e) {
+    // Swallow reporting errors to prevent cascading failures
+  }
+}
+
 class CrmErrorBoundary extends Component {
   constructor(props) {
     super(props)
@@ -12,8 +43,9 @@ class CrmErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     if (import.meta.env.DEV) {
-      // Keep detailed diagnostics in dev without breaking the full app shell.
       console.error('[CRM_PAGE_ERROR_BOUNDARY]', error, errorInfo)
+    } else {
+      reportErrorToServer(error, errorInfo)
     }
   }
 

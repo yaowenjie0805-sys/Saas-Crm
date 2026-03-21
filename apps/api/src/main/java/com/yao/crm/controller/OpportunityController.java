@@ -37,8 +37,22 @@ public class OpportunityController extends BaseApiController {
     }
 
     @GetMapping("/opportunities")
-    public List<Opportunity> opportunities(HttpServletRequest request) {
-        return opportunityRepository.findByTenantId(currentTenant(request));
+    public ResponseEntity<?> opportunities(HttpServletRequest request,
+                                           @RequestParam(defaultValue = "1") int page,
+                                           @RequestParam(defaultValue = "50") int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, Math.min(50, size));
+        Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
+                new HashSet<String>(Arrays.asList("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt")),
+                "updatedAt");
+        org.springframework.data.domain.Page<Opportunity> result = opportunityRepository.findByTenantId(currentTenant(request), pageable);
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("items", result.getContent());
+        body.put("total", result.getTotalElements());
+        body.put("page", safePage);
+        body.put("size", safeSize);
+        body.put("totalPages", result.getTotalPages());
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/opportunities/search")

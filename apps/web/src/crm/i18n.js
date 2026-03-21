@@ -82,12 +82,13 @@ export async function ensureI18nNamespaces(lang, namespaces = []) {
   const safeLang = normalizeLang(lang)
   await ensureI18nBase(safeLang)
   const target = Array.from(new Set(Array.isArray(namespaces) ? namespaces : []))
+  const pending = []
   for (const ns of target) {
     if (!ns || ns === 'common') continue
     if (i18nNsLoaded[safeLang].has(ns)) continue
     const existing = i18nNsInFlight[safeLang].get(ns)
     if (existing) {
-      await existing
+      pending.push(existing)
       continue
     }
     const loader = I18N_NS_LOADERS[ns]
@@ -105,6 +106,9 @@ export async function ensureI18nNamespaces(lang, namespaces = []) {
         i18nNsInFlight[safeLang].delete(ns)
       })
     i18nNsInFlight[safeLang].set(ns, task)
-    await task
+    pending.push(task)
+  }
+  if (pending.length > 0) {
+    await Promise.all(pending)
   }
 }

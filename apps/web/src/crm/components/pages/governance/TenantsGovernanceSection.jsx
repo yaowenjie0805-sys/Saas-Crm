@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { translateStatus } from '../../../shared'
-import { MARKET_PROFILE_OPTIONS, TENANT_APPROVAL_MODE_OPTIONS } from '../../../shared'
+import { translateStatus, MARKET_PROFILE_OPTIONS, TENANT_APPROVAL_MODE_OPTIONS } from '../../../shared'
 import ServerPager from '../../ServerPager'
 import VirtualListTable from '../../VirtualListTable'
 import { useGovernanceTableState } from '../../../hooks/useGovernanceTableState'

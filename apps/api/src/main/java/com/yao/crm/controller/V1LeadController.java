@@ -110,12 +110,12 @@ public class V1LeadController extends BaseApiController {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(q)) {
-                String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), pattern),
-                        cb.like(cb.lower(root.get("company")), pattern),
-                        cb.like(cb.lower(root.get("email")), pattern),
-                        cb.like(cb.lower(root.get("phone")), pattern)
+                        cb.like(cb.lower(root.get("name")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("company")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("email")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("phone")), pattern, '\\')
                 ));
             }
             if (!isBlank(status)) {

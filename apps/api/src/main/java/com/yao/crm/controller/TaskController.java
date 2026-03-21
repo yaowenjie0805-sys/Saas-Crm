@@ -33,8 +33,22 @@ public class TaskController extends BaseApiController {
     }
 
     @GetMapping("/tasks")
-    public List<TaskItem> tasks(HttpServletRequest request) {
-        return taskRepository.findByTenantId(currentTenant(request));
+    public ResponseEntity<?> tasks(HttpServletRequest request,
+                                   @RequestParam(defaultValue = "1") int page,
+                                   @RequestParam(defaultValue = "50") int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, Math.min(50, size));
+        Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
+                new HashSet<String>(Arrays.asList("title", "owner", "done", "createdAt", "updatedAt")),
+                "updatedAt");
+        org.springframework.data.domain.Page<TaskItem> result = taskRepository.findByTenantId(currentTenant(request), pageable);
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("items", result.getContent());
+        body.put("total", result.getTotalElements());
+        body.put("page", safePage);
+        body.put("size", safeSize);
+        body.put("totalPages", result.getTotalPages());
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/tasks/search")
@@ -85,12 +99,12 @@ public class TaskController extends BaseApiController {
                 predicates.add(root.get("owner").in(ownerScope));
             }
             if (!isBlank(q)) {
-                String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("title")), pattern),
-                        cb.like(cb.lower(root.get("time")), pattern),
-                        cb.like(cb.lower(root.get("level")), pattern),
-                        cb.like(cb.lower(root.get("owner")), pattern)
+                        cb.like(cb.lower(root.get("title")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("time")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("level")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("owner")), pattern, '\\')
                 ));
             }
             if (!isBlank(done)) {

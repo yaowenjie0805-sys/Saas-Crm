@@ -11,6 +11,8 @@ import java.util.Base64;
 @Service
 public class TokenService {
 
+    private static final int TOKEN_VERSION = 2;
+
     private final String secret;
     private final long ttlMillis;
 
@@ -28,7 +30,15 @@ public class TokenService {
 
     public String createToken(String username, String role, String ownerScope, String tenantId, boolean mfaVerified) {
         long exp = System.currentTimeMillis() + ttlMillis;
-        String payload = username + "|" + role + "|" + exp + "|" + safe(ownerScope) + "|" + safe(tenantId) + "|" + (mfaVerified ? "1" : "0");
+        // V2: JSON-based payload for safe serialization (no delimiter collision)
+        String payload = "{\"v\":" + TOKEN_VERSION
+                + ",\"u\":\"" + jsonEscape(safe(username))
+                + "\",\"r\":\"" + jsonEscape(safe(role))
+                + "\",\"e\":" + exp
+                + ",\"o\":\"" + jsonEscape(safe(ownerScope))
+                + "\",\"t\":\"" + jsonEscape(safe(tenantId))
+                + "\",\"m\":" + (mfaVerified ? 1 : 0)
+                + "}";
         String encodedPayload = base64UrlEncode(payload.getBytes(StandardCharsets.UTF_8));
         String signature = sign(encodedPayload);
         return encodedPayload + "." + signature;
@@ -48,6 +58,40 @@ public class TokenService {
             return null;
         }
         String decoded = new String(base64UrlDecode(payload), StandardCharsets.UTF_8);
+
+        // V2 JSON format
+        if (decoded.startsWith("{")) {
+            return verifyJsonPayload(decoded);
+        }
+        // V1 legacy pipe-delimited format (backward compatible)
+        return verifyLegacyPayload(decoded);
+    }
+
+    private AuthPrincipal verifyJsonPayload(String json) {
+        try {
+            String username = extractJsonString(json, "u");
+            String role = extractJsonString(json, "r");
+            long exp = extractJsonLong(json, "e");
+            String ownerScope = extractJsonString(json, "o");
+            String tenantId = extractJsonString(json, "t");
+            int mfa = (int) extractJsonLong(json, "m");
+
+            if (username == null || role == null || exp <= 0) {
+                return null;
+            }
+            if (System.currentTimeMillis() > exp) {
+                return null;
+            }
+            return new AuthPrincipal(username, role,
+                    safe(ownerScope).isEmpty() ? username : ownerScope,
+                    safe(tenantId).isEmpty() ? "tenant_default" : tenantId,
+                    mfa == 1);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private AuthPrincipal verifyLegacyPayload(String decoded) {
         String[] values = decoded.split("\\|", -1);
         if (values.length != 3 && values.length != 4 && values.length != 6) {
             return null;
@@ -67,6 +111,37 @@ public class TokenService {
         String tenantId = values.length >= 6 ? safe(values[4]) : "tenant_default";
         boolean mfaVerified = values.length >= 6 ? "1".equals(values[5]) : true;
         return new AuthPrincipal(values[0], values[1], ownerScope, tenantId, mfaVerified);
+    }
+
+    private String extractJsonString(String json, String key) {
+        String search = "\"" + key + "\":\"";
+        int start = json.indexOf(search);
+        if (start < 0) return null;
+        start += search.length();
+        int end = json.indexOf("\"", start);
+        if (end < 0) return null;
+        return json.substring(start, end).replace("\\\"", "\"").replace("\\\\", "\\");
+    }
+
+    private long extractJsonLong(String json, String key) {
+        String search = "\"" + key + "\":";
+        int start = json.indexOf(search);
+        if (start < 0) return 0L;
+        start += search.length();
+        int end = start;
+        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
+            end++;
+        }
+        try {
+            return Long.parseLong(json.substring(start, end));
+        } catch (NumberFormatException ex) {
+            return 0L;
+        }
+    }
+
+    private String jsonEscape(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String sign(String payload) {

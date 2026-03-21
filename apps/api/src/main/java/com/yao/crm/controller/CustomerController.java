@@ -37,8 +37,22 @@ public class CustomerController extends BaseApiController {
     }
 
     @GetMapping("/customers")
-    public List<Customer> customers(HttpServletRequest request) {
-        return customerRepository.findByTenantId(currentTenant(request));
+    public ResponseEntity<?> customers(HttpServletRequest request,
+                                       @RequestParam(defaultValue = "1") int page,
+                                       @RequestParam(defaultValue = "50") int size) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, Math.min(50, size));
+        Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
+                new HashSet<String>(Arrays.asList("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
+                "updatedAt");
+        Page<Customer> result = customerRepository.findByTenantId(currentTenant(request), pageable);
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("items", result.getContent());
+        body.put("total", result.getTotalElements());
+        body.put("page", safePage);
+        body.put("size", safeSize);
+        body.put("totalPages", result.getTotalPages());
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/customers/search")
@@ -73,11 +87,11 @@ public class CustomerController extends BaseApiController {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
             if (!isBlank(q)) {
-                String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), pattern),
-                        cb.like(cb.lower(root.get("owner")), pattern),
-                        cb.like(cb.lower(root.get("tag")), pattern)
+                        cb.like(cb.lower(root.get("name")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("owner")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("tag")), pattern, '\\')
                 ));
             }
             if (!isBlank(status)) {

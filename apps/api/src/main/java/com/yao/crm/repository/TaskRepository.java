@@ -12,6 +12,7 @@ import java.util.List;
 
 public interface TaskRepository extends JpaRepository<TaskItem, String>, JpaSpecificationExecutor<TaskItem> {
     List<TaskItem> findByTenantId(String tenantId);
+    Page<TaskItem> findByTenantId(String tenantId, Pageable pageable);
     List<TaskItem> findByTenantIdAndCreatedAtBetween(String tenantId, LocalDateTime from, LocalDateTime to);
     List<TaskItem> findByTenantIdAndOwnerIn(String tenantId, Collection<String> owners);
     List<TaskItem> findByTenantIdAndOwnerInAndCreatedAtBetween(String tenantId, Collection<String> owners, LocalDateTime from, LocalDateTime to);

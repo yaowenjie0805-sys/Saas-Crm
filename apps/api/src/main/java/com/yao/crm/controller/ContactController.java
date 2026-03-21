@@ -72,12 +72,12 @@ public class ContactController extends BaseApiController {
                 predicates.add(cb.equal(root.get("customerId"), customerId));
             }
             if (!isBlank(q)) {
-                String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("name")), pattern),
-                        cb.like(cb.lower(root.get("phone")), pattern),
-                        cb.like(cb.lower(root.get("email")), pattern),
-                        cb.like(cb.lower(root.get("title")), pattern)
+                        cb.like(cb.lower(root.get("name")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("phone")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("email")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("title")), pattern, '\\')
                 ));
             }
             if (salesScoped) {

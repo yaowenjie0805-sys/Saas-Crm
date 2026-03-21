@@ -12,6 +12,7 @@ import java.util.List;
 
 public interface OpportunityRepository extends JpaRepository<Opportunity, String>, JpaSpecificationExecutor<Opportunity> {
     java.util.List<Opportunity> findByTenantId(String tenantId);
+    org.springframework.data.domain.Page<Opportunity> findByTenantId(String tenantId, org.springframework.data.domain.Pageable pageable);
     java.util.List<Opportunity> findByTenantIdAndIdIn(String tenantId, Collection<String> ids);
     java.util.List<Opportunity> findByTenantIdAndCreatedAtBetween(String tenantId, LocalDateTime from, LocalDateTime to);
     java.util.List<Opportunity> findByTenantIdAndOwnerIn(String tenantId, Collection<String> owners);

@@ -12,6 +12,7 @@ import java.util.List;
 
 public interface CustomerRepository extends JpaRepository<Customer, String>, JpaSpecificationExecutor<Customer> {
     java.util.List<Customer> findByTenantId(String tenantId);
+    org.springframework.data.domain.Page<Customer> findByTenantId(String tenantId, org.springframework.data.domain.Pageable pageable);
     java.util.List<Customer> findByTenantIdAndIdIn(String tenantId, Collection<String> ids);
     java.util.List<Customer> findByTenantIdAndCreatedAtBetween(String tenantId, LocalDateTime from, LocalDateTime to);
     java.util.List<Customer> findByTenantIdAndOwnerIn(String tenantId, Collection<String> owners);

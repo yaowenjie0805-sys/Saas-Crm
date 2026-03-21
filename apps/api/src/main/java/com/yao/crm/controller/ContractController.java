@@ -81,10 +81,10 @@ public class ContractController extends BaseApiController {
                 predicates.add(cb.equal(cb.lower(root.get("status")), valueNormalizerService.normalizeContractStatus(status).toLowerCase(Locale.ROOT)));
             }
             if (!isBlank(q)) {
-                String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("contractNo")), pattern),
-                        cb.like(cb.lower(root.get("title")), pattern)
+                        cb.like(cb.lower(root.get("contractNo")), pattern, '\\'),
+                        cb.like(cb.lower(root.get("title")), pattern, '\\')
                 ));
             }
             if (salesScoped) {

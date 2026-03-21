@@ -29,7 +29,13 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^_' }],
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-debugger': 'error',
+      'eqeqeq': ['error', 'always', { null: 'ignore' }],
+      'no-var': 'error',
+      'prefer-const': 'warn',
+      'no-duplicate-imports': 'error',
     },
   },
 ])

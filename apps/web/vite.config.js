@@ -22,6 +22,8 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             return 'vendor-misc'
           }
+          // Domain loaders share circular deps with orchestrators,
+          // so they must stay in the same chunk to avoid circular chunk warnings.
           if (id.includes('/src/crm/hooks/useCoreListDomainLoaders')) {
             return 'app-runtime-core'
           }

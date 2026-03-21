@@ -8,13 +8,13 @@ jobs:
   gate:
     runs-on: windows-latest
     env:
-      AUTH_TOKEN_SECRET: ci-secret-not-default
-      SECURITY_MFA_STATIC_CODE: 918273
+      AUTH_TOKEN_SECRET: ${{ secrets.CI_AUTH_TOKEN_SECRET }}
+      SECURITY_MFA_STATIC_CODE: ${{ secrets.CI_MFA_STATIC_CODE }}
       SECURITY_SSO_MODE: oidc
-      AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ci-strong-password
+      AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ${{ secrets.CI_BOOTSTRAP_PASSWORD }}
       DB_URL: jdbc:mysql://127.0.0.1:3306/crm_local
-      DB_USER: root
-      DB_PASSWORD: root
+      DB_USER: ${{ secrets.CI_DB_USER }}
+      DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
       LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
       PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
       PREFLIGHT_SKIP_SLO_EVIDENCE: "true"

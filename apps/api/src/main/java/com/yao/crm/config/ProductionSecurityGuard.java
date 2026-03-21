@@ -19,7 +19,9 @@ public class ProductionSecurityGuard {
                                                         @Value("${auth.token.secret:crm-secret-change-me}") String tokenSecret,
                                                         @Value("${security.mfa.static-code:000000}") String mfaStaticCode,
                                                         @Value("${security.sso.mode:mock}") String ssoMode,
-                                                        @Value("${auth.bootstrap.default-password:admin123}") String bootstrapDefaultPassword) {
+                                                        @Value("${auth.bootstrap.default-password:admin123}") String bootstrapDefaultPassword,
+                                                        @Value("${spring.rabbitmq.username:guest}") String rabbitmqUser,
+                                                        @Value("${spring.rabbitmq.password:guest}") String rabbitmqPassword) {
         return args -> {
             if (!isProd(environment)) {
                 return;
@@ -35,6 +37,9 @@ public class ProductionSecurityGuard {
             }
             if ("admin123".equals(bootstrapDefaultPassword)) {
                 throw new IllegalStateException("SECURITY_GUARD: AUTH_BOOTSTRAP_DEFAULT_PASSWORD uses insecure default in prod.");
+            }
+            if ("guest".equals(rabbitmqUser) || "guest".equals(rabbitmqPassword)) {
+                throw new IllegalStateException("SECURITY_GUARD: RabbitMQ uses default guest credentials in prod. Set RABBITMQ_USER and RABBITMQ_PASSWORD.");
             }
         };
     }
