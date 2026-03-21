@@ -155,23 +155,25 @@ crm/
 │   ├── api/                 # Spring Boot backend
 │   │   ├── src/main/java/com/yao/crm/
 │   │   │   ├── controller/  # REST controllers (34)
-│   │   │   ├── service/     # Business logic
+│   │   │   ├── service/     # Business logic (24)
 │   │   │   ├── entity/      # JPA entities (31)
-│   │   │   ├── repository/  # Data access
-│   │   │   └── security/    # Auth & permissions
+│   │   │   ├── repository/  # Data access (33)
+│   │   │   ├── dto/        # Request/Response DTOs
+│   │   │   ├── config/      # Spring configs (12)
+│   │   │   └── security/    # Auth & permissions (17)
 │   │   └── src/main/resources/
 │   │       └── db/migration/ # Flyway migrations
 │   └── web/                 # React frontend
 │       └── src/crm/
-│           ├── components/  # UI components
-│           ├── hooks/       # Custom hooks (32)
+│           ├── components/  # UI components (74)
+│           ├── hooks/      # Custom hooks (123)
 │           ├── store/       # Zustand state
-│           └── i18n/        # Translations
+│           └── i18n/       # Translations
 ├── docs/
-│   └── operations/          # SRE runbooks (16)
-├── scripts/                 # DevOps scripts (34)
-├── infra/                   # Docker/Deploy configs
-└── logs/                    # Local logs (gitignored)
+│   └── operations/          # SRE runbooks (18)
+├── scripts/                # DevOps scripts (34)
+├── infra/                  # Docker/Deploy configs
+└── logs/                  # Local logs (gitignored)
 ```
 
 ---
