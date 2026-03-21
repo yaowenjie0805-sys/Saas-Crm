@@ -23,25 +23,25 @@ export default defineConfig({
             return 'vendor-misc'
           }
           if (id.includes('/src/crm/hooks/useCoreListDomainLoaders')) {
-            return 'app-runtime-customer'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/useWorkbenchDomainLoaders')) {
-            return 'app-runtime-workbench'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/useCommerceDomainLoaders')) {
-            return 'app-runtime-commerce'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/useGovernanceDomainLoaders')) {
-            return 'app-runtime-governance'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/useApprovalDomainLoaders')) {
-            return 'app-runtime-approval'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/useReportingAuditDomainLoaders')) {
-            return 'app-runtime-reporting'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/useLeadImportDomainLoaders')) {
-            return 'app-runtime-lead-import'
+            return 'app-runtime-core'
           }
           if (id.includes('/src/crm/hooks/orchestrators/')) {
             return 'app-runtime-core'

@@ -1,60 +1,59 @@
-# SRE SLO 鍩虹嚎 | SRE SLO Baseline
-
-鏈枃妗ｅ畾涔?CRM 绯荤粺鐨勬湇鍔℃按骞崇洰鏍囷紙SLO锛夊拰鍛婅闃堝€笺€? 
-This document defines the Service Level Objectives (SLO) and alert thresholds for the CRM system.
+# SRE SLO 基线 | SRE SLO Baseline
 
 ---
 
-## 鏈嶅姟姘村钩鐩爣 | Service Level Objectives
+## 目标 | Objective
 
-| 鎸囨爣 | 鐩爣 | Metric | Target |
-|------|------|--------|--------|
-| 鍙敤鎬?SLO | 99.9% 鏈堝害锛堣璇佺敤鎴?`/api/**`锛?| Availability SLO | 99.9% monthly for authenticated `/api/**` |
-| 閿欒棰勭畻 | 0.1% 鏈堝害 | Error budget | 0.1% monthly |
-| API 寤惰繜 SLO | P95 < 800ms锛堟牳蹇冭矾鐢憋級 | API latency SLO | P95 < 800ms for core routes |
-| 璁よ瘉杩炵画鎬?SLO | 鐧诲綍鎴愬姛鐜?>= 99.5%锛堟帓闄ゆ棤鏁堝嚟璇侊級 | Auth continuity SLO | Login success rate >= 99.5% (excluding invalid credentials) |
-
-### 鏍稿績璺敱 | Core Routes
-
-- `/api/dashboard` - 浠〃鐩?| Dashboard
-- `/api/customers/search` - 瀹㈡埛鎼滅储 | Customer search
-- `/api/v1/reports/overview` - 鎶ヨ〃姒傝 | Reports overview
+| 中文 | English |
+|------|---------|
+| 定义核心 CRM 可用性和延迟的基线 SLO | Define baseline SLOs for core CRM availability and latency. |
 
 ---
 
-## 鍛婅闃堝€?| Alert Thresholds
+## 服务等级目标 | Service Level Objectives
 
-| 鍛婅鏉′欢 | 闃堝€?| 鍝嶅簲鍔ㄤ綔 | Alert Condition | Threshold | Action |
-|----------|------|----------|-----------------|-----------|--------|
-| API 閿欒鐜?| >= 2% 鎸佺画 5 鍒嗛挓 | 鍊肩彮鍝嶅簲 | `api_error` ratio | >= 2% for 5 minutes | Page on-call |
-| P95 寤惰繜 | >= 1500ms 鎸佺画 10 鍒嗛挓 | 璀﹀憡 | P95 latency | >= 1500ms for 10 minutes | Warning |
-| 绉熸埛绂佹閿欒 | >= 3x 鍩虹嚎宄板€?| 瀹夊叏瀹℃煡 | `TENANT_FORBIDDEN` spike | >= 3x baseline | Security review |
-| 瀹¤瀵煎嚭澶辫触 | >= 10% 鎸佺画 30 鍒嗛挓 | 璐熻矗浜哄崌绾?| Audit export failed ratio | >= 10% in 30 minutes | Owner escalation |
+| 指标 | 中文 | English |
+|------|------|---------|
+| API 可用性 | >= 99.9% 月度 | API availability: >= 99.9% monthly. |
+| P95 延迟 - `/api/dashboard` | <= 400ms | `/api/dashboard` <= 400ms |
+| P95 延迟 - `/api/customers/search` | <= 500ms | `/api/customers/search` <= 500ms |
+| P95 延迟 - `/api/v1/reports/overview` | <= 700ms | `/api/v1/reports/overview` <= 700ms |
+| 错误率 | <= 1% 持续 10 分钟 | Error rate: <= 1% sustained over 10 minutes. |
 
 ---
-## 杩愮淮淇″彿 | Operational Signals
 
-### 缁撴瀯鍖栨棩蹇?| Structured Logs
+## 告警阈值 | Alert Thresholds
 
-| 鏃ュ織绫诲瀷 | 鎻忚堪 | Log Type | Description |
-|----------|------|----------|-------------|
-| `api_request` | API 璇锋眰鏃ュ織 | `api_request` | API request logs |
-| `api_error` | API 閿欒鏃ュ織 | `api_error` | API error logs |
-| `api_slow` | API 鎱㈣姹傛棩蹇?| `api_slow` | API slow request logs |
+| 级别 | 中文 | English |
+|------|------|---------|
+| P1 | 持续中断或严重 API 故障 | sustained outage or severe API failure. |
+| P2 | 影响关键工作流的主要降级 | major degradation affecting critical workflows. |
+| P3 | 需要跟进的趋势警告 | trend warning requiring follow-up. |
 
-### 鍋ュ悍妫€鏌ョ鐐?| Health Endpoints
+---
 
-| 绔偣 | 鐢ㄩ€?| Endpoint | Purpose |
-|------|------|----------|---------|
-| `/api/health/ready` | 閮ㄧ讲闂ㄧ | `/api/health/ready` | Deployment gate |
-| `/api/health/live` | 瀛樻椿鎺㈤拡 | `/api/health/live` | Liveness probe |
-| `/api/health/deps` | 渚濊禆妫€鏌?| `/api/health/deps` | Dependencies check |
+## 测量窗口 | Measurement Windows
 
-### 瀹¤瀵煎嚭鎸囨爣 | Audit Export Metrics
+| 窗口 | 中文 | English |
+|------|------|---------|
+| 实时检查 | 1分钟/5分钟 窗口 | Real-time checks: 1m/5m windows. |
+| 每日审核 | 前 24 小时 | Daily review: previous 24h. |
+| 每周审核 | 趋势 + 错误预算燃烧 | Weekly review: trend + error budget burn. |
 
-浣跨敤 `/api/audit-logs/export-metrics` 鐩戞帶浠ヤ笅瓒嬪娍锛?
-Use `/api/audit-logs/export-metrics` to monitor the following trends:
+---
 
-- 闃熷垪娣卞害 | Queue depth
-- 澶辫触鐜?| Failure rate
-- 閲嶈瘯瓒嬪娍 | Retry trend
+## 运维操作 | Operational Actions
+
+| 中文 | English |
+|------|---------|
+| 如 SLO 燃烧率高，冻结非关键发布 | If SLO burn rate is high, freeze non-critical releases. |
+| 优先处理可靠性修复而非功能发布 | Prioritize reliability fixes over feature rollout. |
+| 记录事故时间线和缓解措施 | Document incident timeline and mitigation. |
+
+---
+
+## 报告 | Reporting
+
+| 中文 | English |
+|------|---------|
+| 使用值班周审模板并在发布审核中发布摘要 | Use weekly on-call template and publish summary in release review. |

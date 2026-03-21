@@ -1,64 +1,63 @@
-# 鍙戝竷/鍥炴粴鎵嬪唽 | Release / Rollback Runbook
-
-鏈枃妗ｆ弿杩板彂甯冩祦绋嬪拰鍥炴粴鎿嶄綔姝ラ銆? 
-This document describes the release process and rollback procedures.
+# 发布/回滚手册 | Release / Rollback Runbook
 
 ---
 
-## 鍥炴粴瑙﹀彂鏉′欢 | Trigger Conditions
+## 适用范围 | Scope
 
-婊¤冻浠ヤ笅浠讳竴鏉′欢鏃惰Е鍙戝洖婊?| Rollback is triggered when any of the following conditions are met:
-
-- `test:full` 缂哄皯 `API_SMOKE_TEST_OK` 鏍囪 | `test:full` missing `API_SMOKE_TEST_OK`
-- 鍙椾繚鎶ょ殑 `/api/**` 璺敱閿欒鐜囬鍗?| Error rate spike on protected `/api/**` routes
-- 璺ㄧ鎴锋巿鏉冨洖褰掞紙`403` 璇箟澶辨晥锛?| Cross-tenant authorization regression (`403` semantics broken)
-- 鐧诲綍/浼氳瘽杩炵画鎬у洖褰?| Login/session continuity regression
+| 中文 | English |
+|------|---------|
+| 预发/生产环境的部署和回滚运维手册 | Operational runbook for deployment and rollback in staging/production. |
 
 ---
 
-## 鍙戝竷妫€鏌ユ竻鍗?| Release Checklist
+## 发布前置条件 | Release Preconditions
 
-| 姝ラ | 鍛戒护 | Step | Command |
-|------|------|------|---------|
-| 1 | `npm run lint` | 1 | `npm run lint` |
-| 2 | `npm run build` | 2 | `npm run build` |
-| 3 | `npm run test:e2e` | 3 | `npm run test:e2e` |
-| 4 | `npm run test:backend` | 4 | `npm run test:backend` |
-| 5 | `npm run test:full` | 5 | `npm run test:full` |
-| 6 | `npm run preflight:prod` | 6 | `npm run preflight:prod` |
+| 中文 | English |
+|------|---------|
+| CI 门禁通过 | CI gates pass. |
+| 变更请求已批准 | Change request approved. |
+| 回滚产物和流程已准备 | Rollback artifact and procedure prepared. |
+| 值班人员和利益相关方已通知 | On-call and stakeholders notified. |
 
 ---
 
-## 鍥炴粴姝ラ | Rollback Steps
+## 发布步骤 | Release Steps
 
-1. **纭畾鐩爣绋冲畾鐗堟湰** | Identify target stable commit hash
-   - 鎵惧埌鏈€鍚庝竴涓ǔ瀹氱殑 commit hash
-   - Find the last stable commit hash
-
-2. **閲嶆柊閮ㄧ讲浜х墿** | Redeploy artifacts
-   - 浠庣ǔ瀹?commit 閲嶆柊閮ㄧ讲鍚庣鍜屽墠绔骇鐗?   - Redeploy backend + frontend artifacts from stable commit
-
-3. **鎭㈠鐜閰嶇疆** | Re-apply environment config
-   - 閲嶆柊搴旂敤绋冲畾鐗堟湰鐨勭幆澧冮厤缃泦
-   - Re-apply stable environment config set
-
-4. **楠岃瘉鍋ュ悍鐘舵€?* | Validate health status
-   - 纭 `/api/health/ready` 杩斿洖 `UP`
-   - Confirm `/api/health/ready` is `UP`
-
-5. **杩愯鍐掔儫娴嬭瘯** | Run smoke tests
-   - 鎵ц E2E 鍐掔儫娴嬭瘯鍜?API 鍐掔儫娴嬭瘯
-   - Run E2E smoke and API smoke tests
-
-6. **閫氱煡瀹屾垚** | Announce completion
-   - 鍙戝竷鍥炴粴瀹屾垚閫氱煡锛屽寘鍚?requestId 鍜岄敊璇獥鍙ｆ憳瑕?   - Announce rollback completion with requestId/error window summary
+| 步骤 | 中文 | English |
+|------|------|---------|
+| 1 | 确认目标版本和产物校验和 | Confirm target version and artifact checksums. |
+| 2 | 部署到目标环境 | Deploy to target environment. |
+| 3 | 运行部署后检查: 健康端点、API 冒烟测试、关键页面冒烟检查 | Run post-deploy checks: health endpoints, API smoke tests, key page smoke checks |
+| 4 | 观察指标和告警至少 15 分钟 | Observe metrics and alerts for at least 15 minutes. |
 
 ---
 
-## 鑱岃矗鍒嗗伐 | Ownership
+## 回滚触发条件 | Rollback Triggers
 
-| 瑙掕壊 | 鑱岃矗 | Role | Responsibility |
-|------|------|------|----------------|
-| 鍙戝竷璐熻矗浜?| 鎶€鏈礋璐ｄ汉/DevOps | Release driver | Tech Lead / DevOps |
-| 楠岃瘉璐熻矗浜?| QA | Validation | QA |
-| 浜嬫晠娌熼€?| 鍊肩彮璐熻矗浜?| Incident communication | On-duty owner |
+| 中文 | English |
+|------|---------|
+| P1 中断或重复 P2 降级 | P1 outage or repeated P2 degradation. |
+| 核心 API 错误率超过阈值 | Core API error rate over threshold. |
+| 数据正确性风险已确认 | Data correctness risk confirmed. |
+
+---
+
+## 回滚步骤 | Rollback Steps
+
+| 步骤 | 中文 | English |
+|------|------|---------|
+| 1 | 停止当前发布并冻结新变更 | Stop current rollout and freeze new changes. |
+| 2 | 部署之前稳定的后端产物 | Deploy previous stable backend artifact. |
+| 3 | 如需要，回滚前端产物 | Roll back frontend artifact if needed. |
+| 4 | 重新运行健康和冒烟检查 | Re-run health and smoke checks. |
+| 5 | 宣布回滚完成 | Announce rollback completion. |
+
+---
+
+## 回滚后 | Post-Rollback
+
+| 中文 | English |
+|------|---------|
+| 开启事故报告 | Open incident report. |
+| 记录根因和纠正措施 | Document root cause and corrective actions. |
+| 下次发布前更新发布清单 | Update release checklist before next rollout. |

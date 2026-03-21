@@ -36,23 +36,17 @@ export const PAGE_CHUNK_PRELOADERS = {
 }
 
 export const PAGE_DOMAIN_PRELOADERS = {
-  dashboard: () => Promise.all([
-    import('../../useWorkbenchDomainLoaders'),
-    import('../../useReportingAuditDomainLoaders'),
-  ]),
-  customers: () => import('../../useCoreListDomainLoaders'),
-  pipeline: () => import('../../useCoreListDomainLoaders'),
-  reports: () => import('../../useReportingAuditDomainLoaders'),
-  reportDesigner: () => import('../../useReportingAuditDomainLoaders'),
-  approvals: () => import('../../useApprovalDomainLoaders'),
-  quotes: () => import('../../useCommerceDomainLoaders'),
-  orders: () => import('../../useCommerceDomainLoaders'),
-  permissions: () => import('../../useGovernanceDomainLoaders'),
-  usersAdmin: () => import('../../useGovernanceDomainLoaders'),
-  salesAutomation: () => Promise.all([
-    import('../../useGovernanceDomainLoaders'),
-    import('../../useLeadImportDomainLoaders'),
-  ]),
+  dashboard: () => Promise.resolve(),
+  customers: () => Promise.resolve(),
+  pipeline: () => Promise.resolve(),
+  reports: () => Promise.resolve(),
+  reportDesigner: () => Promise.resolve(),
+  approvals: () => Promise.resolve(),
+  quotes: () => Promise.resolve(),
+  orders: () => Promise.resolve(),
+  permissions: () => Promise.resolve(),
+  usersAdmin: () => Promise.resolve(),
+  salesAutomation: () => Promise.resolve(),
 }
 
 export const REFRESH_REASONS = new Set(['topbar_refresh', 'panel_action', 'workbench_jump', 'sidebar_nav'])

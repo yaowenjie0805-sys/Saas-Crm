@@ -1,4 +1,14 @@
+# ===========================================
+# CRM Staging Docker Compose
+# CRM 预发环境 Docker Compose 配置
+# ===========================================
+# Usage: docker compose -f docker-compose.yml --env-file staging.env up -d
+# 用法: docker compose -f docker-compose.yml --env-file staging.env up -d
+
 services:
+  # -------------------------------------------
+  # Backend Service | 后端服务
+  # -------------------------------------------
   backend:
     image: eclipse-temurin:8-jre
     container_name: ${COMPOSE_PROJECT_NAME:-crm-staging}-backend
@@ -16,13 +26,23 @@ services:
       - /app/apps/api/crm-backend-1.0.0.jar
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # -------------------------------------------
+  # Frontend Service | 前端服务
+  # -------------------------------------------
   frontend:
     image: nginx:1.27-alpine
     container_name: ${COMPOSE_PROJECT_NAME:-crm-staging}-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     volumes:
       - ${RELEASE_DIR}/apps/web/dist:/usr/share/nginx/html:ro
       - ${RELEASE_DIR}/apps/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro

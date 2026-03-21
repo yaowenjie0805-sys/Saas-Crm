@@ -1,83 +1,14 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { translateOwnerAlias, translateStatus } from '../../shared'
-import ListState from '../ListState'
-import ServerPager from '../ServerPager'
-import VirtualListTable from '../VirtualListTable'
+import { translateStatus } from '../../shared'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
-
-const LEAD_FORM_STATUS_VALUES = ['NEW', 'QUALIFIED', 'NURTURING', 'DISQUALIFIED']
-const LEAD_FILTER_STATUS_VALUES = [...LEAD_FORM_STATUS_VALUES, 'CONVERTED']
-const PAGE_SIZE_VALUES = [8, 10, 20, 50]
-const IMPORT_STATUS_VALUES = ['ALL', 'PENDING', 'RUNNING', 'PARTIAL_SUCCESS', 'SUCCESS', 'FAILED', 'CANCELED']
-const IMPORT_EXPORT_STATUS_VALUES = ['ALL', 'PENDING', 'RUNNING', 'DONE', 'FAILED']
-const IMPORT_PAGE_SIZE_VALUES = [10, 20, 50]
-
-const safeSnippet = (value, max = 120) => {
-  const text = String(value || '').trim()
-  if (!text) return '-'
-  return text.length > max ? `${text.slice(0, max)}...` : text
-}
-
-const LeadRow = memo(function LeadRow({ row, checked, onToggle, canWrite, t, editLead, convertLead }) {
-  return (
-    <div className="table-row table-row-6">
-      <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
-      <span>{row.name}</span>
-      <span>{row.company || '-'}</span>
-      <span>{row.statusLabel || '-'}</span>
-      <span>{translateOwnerAlias(t, row.owner || '-')}</span>
-      <span>
-        <div className="inline-tools">
-          <button className="mini-btn" onClick={() => editLead(row)}>{t('detail')}</button>
-          {canWrite && (
-            <button
-              className="mini-btn"
-              disabled={String(row.status || '').toUpperCase() === 'CONVERTED'}
-              onClick={() => convertLead(row.id)}
-            >
-              {t('leadConvert')}
-            </button>
-          )}
-        </div>
-      </span>
-    </div>
-  )
-})
-
-const LeadImportJobRow = memo(function LeadImportJobRow({ row, t, selectImportJob, cancelImportJob, retryImportJob, isImportActionPending }) {
-  const cancelPending = Boolean(isImportActionPending?.('cancel', row.id))
-  const retryPending = Boolean(isImportActionPending?.('retry', row.id))
-  return (
-    <div className="table-row">
-      <span>{row.id}</span>
-      <span>{row.statusLabel || '-'}</span>
-      <span>{row.percent || 0}% ({row.processedRows || 0}/{row.totalRows || 0})</span>
-      <span>{row.failCount || 0}</span>
-      <span>
-        <div className="inline-tools">
-          <button className="mini-btn" onClick={() => selectImportJob(row)}>{t('detail')}</button>
-          <button className="mini-btn" disabled={cancelPending || !['PENDING', 'RUNNING'].includes(String(row.status || '').toUpperCase())} onClick={() => cancelImportJob(row.id)}>{t('close')}</button>
-          <button className="mini-btn" disabled={retryPending || !['FAILED', 'CANCELED'].includes(String(row.status || '').toUpperCase())} onClick={() => retryImportJob(row.id)}>{t('retry')}</button>
-        </div>
-      </span>
-    </div>
-  )
-})
-
-const LeadImportExportJobRow = memo(function LeadImportExportJobRow({ row, importJobId, t, downloadImportFailedRowsExportJob, isImportActionPending }) {
-  const downloadPending = Boolean(isImportActionPending?.('export-download', row.jobId))
-  return (
-    <div className="table-row">
-      <span>{row.jobId}</span>
-      <span>{row.statusLabel || '-'}</span>
-      <span>{row.progress || 0}%</span>
-      <span>{row.rowCount || 0}</span>
-      <span>
-        <button className="mini-btn" disabled={downloadPending || !row.downloadReady} onClick={() => downloadImportFailedRowsExportJob(importJobId, row.jobId)}>{t('exportDownload')}</button>
-      </span>
-    </div>
-  )
-})
+import LeadImportSection from './leads/LeadImportSection'
+import LeadListSection from './leads/LeadListSection'
+import {
+  LEAD_FILTER_STATUS_VALUES,
+  LEAD_FORM_STATUS_VALUES,
+  PAGE_SIZE_VALUES,
+  safeSnippet,
+} from './leads/leadPanelConstants'
 
 function LeadsPanel({
   activePage,
@@ -238,166 +169,50 @@ function LeadsPanel({
         </div>
       )}
 
-      {importJob && (
-        <div className="info-banner" style={{ marginTop: 10 }}>
-          {t('status')}: {translateStatus(t, importJob.status)} | {t('count')}: {importJob.processedRows || 0}/{importJob.totalRows || 0} | {t('success')}: {importJob.successCount || 0} | {t('failed')}: {importJob.failCount || 0} | {t('progress')}: {importJob.percent || 0}%
-        </div>
-      )}
-      {!!importMetrics && (
-        <section className="stats-grid" style={{ marginTop: 12 }}>
-          <article className="stat-card"><p>{t('leadImportMetricTotal')}</p><h3>{importMetrics.importJobTotal || 0}</h3><span>{t('last24Hours')}</span></article>
-          <article className="stat-card"><p>{t('leadImportMetricRunning')}</p><h3>{importMetrics.importRunning || 0}</h3><span>{translateStatus(t, 'RUNNING')}</span></article>
-          <article className="stat-card"><p>{t('leadImportMetricSuccessRate')}</p><h3>{Math.round((Number(importMetrics.importSuccessRate || 0) * 100))}%</h3><span>{t('success')}</span></article>
-          <article className="stat-card"><p>{t('leadImportMetricFailureRate')}</p><h3>{Math.round((Number(importMetrics.importFailureRate || 0) * 100))}%</h3><span>{t('failed')}</span></article>
-          <article className="stat-card"><p>{t('leadImportMetricAvgDuration')}</p><h3>{Math.round(Number(importMetrics.importAvgDurationMs || 0) / 1000)}s</h3><span>{t('duration')}</span></article>
-        </section>
-      )}
-
-      <div className="panel" style={{ marginTop: 12, boxShadow: 'none' }}>
-        <div className="panel-head"><h2>{t('leadImportJobs')}</h2></div>
-        <div className="inline-tools filter-row">
-          <select className="tool-input" value={importStatus} onChange={(e) => setImportStatus(e.target.value)}>
-            {IMPORT_STATUS_VALUES.map((s) => <option key={s} value={s}>{s === 'ALL' ? t('filterAll') : translateStatus(t, s)}</option>)}
-          </select>
-          <select className="tool-input" value={importPaging.size} onChange={(e) => onImportSizeChange(Number(e.target.value || 10))}>
-            {IMPORT_PAGE_SIZE_VALUES.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </div>
-        <div className="table-row table-head-row" style={{ marginTop: 8 }}>
-          <span>{t('idLabel')}</span><span>{t('status')}</span><span>{t('progress')}</span><span>{t('failed')}</span><span>{t('action')}</span>
-        </div>
-        <ListState loading={loading} empty={!loading && importJobsView.length === 0} emptyText={t('noData')} />
-        {!loading && importJobsView.length > 0 && (
-          <VirtualListTable
-            rows={importJobsView}
-            viewportHeight={240}
-            rowHeight={42}
-            getRowKey={(row) => row.id}
-            renderRow={(row) => (
-              <LeadImportJobRow
-                key={row.id}
-                row={row}
-                t={t}
-                selectImportJob={selectImportJob}
-                cancelImportJob={cancelImportJob}
-                retryImportJob={retryImportJob}
-                isImportActionPending={isImportActionPending}
-              />
-            )}
-          />
-        )}
-        {!loading && importJobsView.length > 0 && (
-          <ServerPager
-            t={t}
-            page={importPaging.page}
-            totalPages={importPaging.totalPages}
-            size={importPaging.size}
-            onPageChange={onImportPageChange}
-            onSizeChange={onImportSizeChange}
-          />
-        )}
-        {!!importFailedRowsView.length && (
-          <div style={{ marginTop: 8 }}>
-            <div className="table-row table-head-row">
-              <span>{t('lineNo')}</span><span>{t('summary')}</span><span>{t('errorReason')}</span>
-            </div>
-            {importFailedRowsView.map((row) => (
-              <div key={row.key} className="table-row">
-                <span>{row.lineNo}</span>
-                <span title={row.rawLine || ''}>{row.rawLineSnippet}</span>
-                <span title={row.errorMessage || row.errorCode || ''}>{row.errorSnippet}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="panel" style={{ marginTop: 12, boxShadow: 'none' }}>
-          <div className="panel-head">
-            <h2>{t('leadImportFailedRowsExport')}</h2>
-          </div>
-          <div className="inline-tools filter-row">
-            <select className="tool-input" value={importExportStatus} onChange={(e) => setImportExportStatus(e.target.value)}>
-              {IMPORT_EXPORT_STATUS_VALUES.map((s) => <option key={s} value={s}>{s === 'ALL' ? t('filterAll') : translateStatus(t, s)}</option>)}
-            </select>
-            <select className="tool-input" value={importExportPaging.size} onChange={(e) => onImportExportSizeChange(Number(e.target.value || 10))}>
-              {IMPORT_PAGE_SIZE_VALUES.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button className="mini-btn" disabled={!canCreateImportExport || !importJob?.id || isImportActionPending?.('export-create', importJob?.id)} onClick={() => createImportFailedRowsExportJob(importJob?.id)}>{t('leadImportExportCreate')}</button>
-          </div>
-          <div className="table-row table-head-row" style={{ marginTop: 8 }}>
-            <span>{t('idLabel')}</span><span>{t('status')}</span><span>{t('progress')}</span><span>{t('count')}</span><span>{t('action')}</span>
-          </div>
-          <ListState loading={loading} empty={!loading && importExportJobsView.length === 0} emptyText={t('noData')} />
-          {!loading && importExportJobsView.length > 0 && (
-            <VirtualListTable
-              rows={importExportJobsView}
-              viewportHeight={220}
-              rowHeight={42}
-              getRowKey={(row) => row.jobId}
-              renderRow={(row) => (
-                <LeadImportExportJobRow
-                  key={row.jobId}
-                  row={row}
-                  importJobId={importJob?.id}
-                  t={t}
-                  downloadImportFailedRowsExportJob={downloadImportFailedRowsExportJob}
-                  isImportActionPending={isImportActionPending}
-                />
-              )}
-            />
-          )}
-          {!loading && importExportJobsView.length > 0 && (
-            <ServerPager
-              t={t}
-              page={importExportPaging.page}
-              totalPages={importExportPaging.totalPages}
-              size={importExportPaging.size}
-              onPageChange={onImportExportPageChange}
-              onSizeChange={onImportExportSizeChange}
-            />
-          )}
-        </div>
-      </div>
+      <LeadImportSection
+        t={t}
+        loading={loading}
+        importJob={importJob}
+        importMetrics={importMetrics}
+        importJobsView={importJobsView}
+        importStatus={importStatus}
+        setImportStatus={setImportStatus}
+        importPaging={importPaging}
+        onImportPageChange={onImportPageChange}
+        onImportSizeChange={onImportSizeChange}
+        selectImportJob={selectImportJob}
+        cancelImportJob={cancelImportJob}
+        retryImportJob={retryImportJob}
+        importFailedRowsView={importFailedRowsView}
+        importExportStatus={importExportStatus}
+        setImportExportStatus={setImportExportStatus}
+        importExportPaging={importExportPaging}
+        onImportExportPageChange={onImportExportPageChange}
+        onImportExportSizeChange={onImportExportSizeChange}
+        canCreateImportExport={canCreateImportExport}
+        createImportFailedRowsExportJob={createImportFailedRowsExportJob}
+        importExportJobsView={importExportJobsView}
+        downloadImportFailedRowsExportJob={downloadImportFailedRowsExportJob}
+        isImportActionPending={isImportActionPending}
+      />
 
       {!!formError && <div className="error-banner" style={{ marginTop: 10 }}>{formError}</div>}
 
-      <div className="table-row table-head-row table-row-6" style={{ marginTop: 12 }}>
-        <span><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></span>
-        <span>{t('leadName')}</span>
-        <span>{t('companyName')}</span>
-        <span>{t('status')}</span>
-        <span>{t('owner')}</span>
-        <span>{t('action')}</span>
-      </div>
-      <VirtualListTable
+      <LeadListSection
+        t={t}
         rows={rows}
-        viewportHeight={460}
-        getRowKey={(row) => row.id}
-        renderRow={(row) => (
-          <LeadRow
-            key={row.id}
-            row={row}
-            checked={selectedIds.has(row.id)}
-            onToggle={(e) => toggleOne(row.id, e.target.checked)}
-            canWrite={canWrite}
-            t={t}
-            editLead={editLead}
-            convertLead={convertLead}
-          />
-        )}
+        leads={leads}
+        selectedIds={selectedIds}
+        allChecked={allChecked}
+        toggleAll={toggleAll}
+        toggleOne={toggleOne}
+        canWrite={canWrite}
+        editLead={editLead}
+        convertLead={convertLead}
+        pagination={pagination}
+        onPageChange={onPageChange}
+        onSizeChange={onSizeChange}
       />
-      {(leads || []).length === 0 && <div className="empty-tip">{t('noData')}</div>}
-
-      {(rows || []).length > 0 && (
-        <ServerPager
-          t={t}
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          size={pagination.size}
-          onPageChange={onPageChange}
-          onSizeChange={onSizeChange}
-        />
-      )}
     </section>
   )
 }

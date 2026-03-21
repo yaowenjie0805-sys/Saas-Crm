@@ -1,34 +1,13 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { api, formatMoney, translateStatus } from '../../shared'
+import { api } from '../../shared'
 import ListState from '../ListState'
 import { useBatchActions } from '../useBatchActions'
 import BatchResultModal from '../BatchResultModal'
 import VirtualListTable from '../VirtualListTable'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
-
-const EMPTY_FORM = { id: '', customerId: '', opportunityId: '', quoteId: '', owner: '', amount: '0', signDate: '' }
-const EMPTY_ROWS = []
+import { OrderRow } from './orders/OrderPanelRows'
+import { EMPTY_FORM, EMPTY_ROWS, formatOrderActionError, getOrderStatusOptions } from './orders/orderPanelHelpers'
 const OrderEditorModal = lazy(() => import('./orders/OrderEditorModal'))
-
-const OrderRow = memo(function OrderRow({ row, checked, onToggle, t, openEdit, act, actionPending, canWrite }) {
-  return (
-    <div className="table-row table-row-6">
-      <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
-      <span>{row.orderNo}</span>
-      <span>{row.owner}</span>
-      <span>{translateStatus(t, row.status)}</span>
-      <span>{formatMoney(row.amount)}</span>
-      <span>
-        <button className="mini-btn" onClick={() => openEdit(row)}>{t('detail')}</button>
-        <button className="mini-btn" disabled={!canWrite || actionPending} onClick={() => act(row.id, 'confirm')}>{t('confirm')}</button>
-        <button className="mini-btn" disabled={!canWrite || actionPending} onClick={() => act(row.id, 'fulfill')}>{t('fulfill')}</button>
-        <button className="mini-btn" disabled={!canWrite || actionPending} onClick={() => act(row.id, 'complete')}>{t('complete')}</button>
-        <button className="mini-btn" disabled={!canWrite || actionPending} onClick={() => act(row.id, 'to-contract')}>{t('toContract')}</button>
-        <button className="mini-btn" disabled={!canWrite || actionPending} onClick={() => act(row.id, 'cancel')}>{t('cancel')}</button>
-      </span>
-    </div>
-  )
-})
 
 function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, refreshPage, commerce }) {
   const orders = commerce?.orders || {}
@@ -49,6 +28,7 @@ function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, r
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [approvalMode, setApprovalMode] = useState('STRICT')
   const [actionPendingById, setActionPendingById] = useState({})
+  const statusOptions = useMemo(() => getOrderStatusOptions(t), [t])
 
   const token = apiContext?.token
   const lang = apiContext?.lang || 'en'
@@ -152,21 +132,6 @@ function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, r
     }
   }
 
-  const renderActionError = useCallback((err) => {
-    if (err?.code === 'order_stage_gate_requires_quote_accepted') {
-      const fallback = t('orderStageGateQuoteAcceptedRequired')
-      const req = err?.details?.requiredStatus ? ` (${t('requiredStatusLabel')}: ${err.details.requiredStatus})` : ''
-      return `${fallback}${req}`
-    }
-    if (err?.code === 'order_stage_gate_requires_fulfilling') {
-      const fallback = t('orderStageGateFulfillingRequired')
-      const req = err?.details?.requiredStatus ? ` (${t('requiredStatusLabel')}: ${err.details.requiredStatus})` : ''
-      return `${fallback}${req}`
-    }
-    if (err?.code === 'order_status_transition_invalid') return t('orderStatusConflict')
-    return err?.message || t('loadFailed')
-  }, [t])
-
   const act = async (id, action) => {
     if (actionPendingById[id]) return
     setActionPendingById((prev) => ({ ...prev, [id]: true }))
@@ -174,7 +139,7 @@ function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, r
       await api(`/v1/orders/${id}/${action}`, { method: 'POST' }, token, lang)
       await refreshSelf()
     } catch (err) {
-      const message = renderActionError(err)
+      const message = formatOrderActionError(err, t)
       setError(err.requestId ? `${message} [${err.requestId}]` : message)
       await refreshSelf()
     } finally {
@@ -210,11 +175,7 @@ function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, r
         />
         <select className="tool-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">{t('allStatuses')}</option>
-          <option value="DRAFT">{translateStatus(t, 'DRAFT')}</option>
-          <option value="CONFIRMED">{translateStatus(t, 'CONFIRMED')}</option>
-          <option value="FULFILLING">{translateStatus(t, 'FULFILLING')}</option>
-          <option value="COMPLETED">{translateStatus(t, 'COMPLETED')}</option>
-          <option value="CANCELED">{translateStatus(t, 'CANCELED')}</option>
+          {statusOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
       </div>
       <div className="filter-bar">
@@ -228,11 +189,7 @@ function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, r
         <input className="tool-input" placeholder={t('batchOwnerPlaceholder')} value={batchOwner} onChange={(e) => setBatchOwner(e.target.value)} />
         <select className="tool-input" value={batchStatus} onChange={(e) => setBatchStatus(e.target.value)}>
           <option value="">{t('batchSetStatus')}</option>
-          <option value="DRAFT">{translateStatus(t, 'DRAFT')}</option>
-          <option value="CONFIRMED">{translateStatus(t, 'CONFIRMED')}</option>
-          <option value="FULFILLING">{translateStatus(t, 'FULFILLING')}</option>
-          <option value="COMPLETED">{translateStatus(t, 'COMPLETED')}</option>
-          <option value="CANCELED">{translateStatus(t, 'CANCELED')}</option>
+          {statusOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
         <button className="mini-btn" disabled={!canWrite} onClick={batchAssign}>{t('batchAssignOwner')}</button>
         <button className="mini-btn" disabled={!canWrite} onClick={batchChangeStatus}>{t('batchSetStatus')}</button>

@@ -1,85 +1,70 @@
-# 澶囦唤/鎭㈠鎵嬪唽 | Backup / Restore Runbook
-
-鏈枃妗ｆ彁渚?MySQL 鏁版嵁搴撳浠藉拰鎭㈠婕旂粌鐨勫彲閲嶅鏈€灏忔祦绋嬨€? 
-This document provides a repeatable minimum process for MySQL backup and restore drills.
+# 备份/恢复手册 | Backup / Restore Runbook
 
 ---
 
-## 澶囦唤鎿嶄綔 | Backup
+## 适用范围 | Scope
 
-### 鍛戒护 | Command
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/db-backup.ps1 -OutDir backups
-```
-
-### 鍙傛暟璇存槑 | Parameter Description
-
-| 鍙傛暟 | 鎻忚堪 | Parameter | Description |
-|------|------|-----------|-------------|
-| `-OutDir` | 澶囦唤鏂囦欢杈撳嚭鐩綍 | `-OutDir` | Backup file output directory |
+| 中文 | English |
+|------|---------|
+| CRM 环境的 MySQL 备份和恢复验证手册 | Runbook for MySQL backup and restore verification for CRM environments. |
 
 ---
 
-## 鎭㈠鎿嶄綔 | Restore
+## 前置条件 | Preconditions
 
-### 鍛戒护 | Command
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/db-restore.ps1 -BackupFile backups/<your-file>.sql
-```
-
-### 鍙傛暟璇存槑 | Parameter Description
-
-| 鍙傛暟 | 鎻忚堪 | Parameter | Description |
-|------|------|-----------|-------------|
-| `-BackupFile` | 瑕佹仮澶嶇殑澶囦唤鏂囦欢璺緞 | `-BackupFile` | Backup file path to restore |
+| 中文 | English |
+|------|---------|
+| 数据库主机和凭证访问权限 | Access to DB host and credentials. |
+| 足够的磁盘空间存放转储文件 | Enough disk space for dump files. |
+| 恢复演练已获得维护窗口批准 | Maintenance window approved for restore drills. |
 
 ---
 
-## 婕旂粌妫€鏌ユ竻鍗?| Drill Checklist
+## 备份 | Backup
 
-| 姝ラ | 鎿嶄綔 | Step | Action |
-|------|------|------|--------|
-| 1 | 鍦ㄦ紨缁冪幆澧冧腑鍒涘缓澶囦唤 | 1 | Create backup in drill environment |
-| 2 | 鎻掑叆鎴栨洿鏂颁竴涓凡鐭ユ爣璁拌褰?| 2 | Insert or update a known marker record |
-| 3 | 浠庡浠芥仮澶?| 3 | Restore from backup |
-| 4 | 楠岃瘉鏍囪璁板綍宸插洖婊氬苟杩愯 `npm run test:e2e` 鍐掔儫娴嬭瘯 | 4 | Verify marker rollback and run `npm run test:e2e` smoke |
-| 5 | 璁板綍婕旂粌鏃堕棿銆佹搷浣滀汉鍜岀粨鏋?| 5 | Record drill time, operator, and result |
+| 步骤 | 中文 | English |
+|------|------|---------|
+| 1 | 运行备份脚本: `powershell -ExecutionPolicy Bypass -File scripts/db-backup.ps1` | Run backup script: `powershell -ExecutionPolicy Bypass -File scripts/db-backup.ps1` |
+| 2 | 验证备份产物存在且非空 | Verify backup artifact exists and is non-empty. |
+| 3 | 记录产物路径、大小和时间戳 | Record artifact path, size, and timestamp. |
 
 ---
 
-## 娉ㄦ剰浜嬮」 | Notes
+## 恢复演练 | Restore Drill
 
-### 鍑瘉閰嶇疆 | Credentials Configuration
-
-鍑瘉鏉ヨ嚜浠ヤ笅鐜鍙橀噺 | Credentials come from the following environment variables:
-
-| 鍙橀噺 | 鎻忚堪 | Variable | Description |
-|------|------|----------|-------------|
-| `DB_HOST` | 鏁版嵁搴撲富鏈?| `DB_HOST` | Database host |
-| `DB_PORT` | 鏁版嵁搴撶鍙?| `DB_PORT` | Database port |
-| `DB_NAME` | 鏁版嵁搴撳悕绉?| `DB_NAME` | Database name |
-| `DB_USER` | 鏁版嵁搴撶敤鎴峰悕 | `DB_USER` | Database username |
-| `DB_PASSWORD` | 鏁版嵁搴撳瘑鐮?| `DB_PASSWORD` | Database password |
-
-### 榛樿鍊?| Defaults
-
-濡傛灉鐜鍙橀噺鏈缃紝灏嗕娇鐢ㄦ湰鍦板紑鍙戦粯璁ゅ€笺€? 
-If environment variables are absent, local dev values are used as defaults.
+| 步骤 | 中文 | English |
+|------|------|---------|
+| 1 | 准备隔离的目标数据库实例 | Prepare isolated target DB instance. |
+| 2 | 运行恢复脚本: `powershell -ExecutionPolicy Bypass -File scripts/db-restore.ps1` | Run restore script: `powershell -ExecutionPolicy Bypass -File scripts/db-restore.ps1` |
+| 3 | 运行冒烟验证: `npm run test:api` | Run smoke validation: `npm run test:api` |
+| 4 | 验证关键表行数和最近记录 | Verify key tables row counts and recent records. |
 
 ---
 
-## 婕旂粌璁板綍妯℃澘 | Drill Record Template
+## 成功标准 | Success Criteria
 
-```markdown
-## 澶囦唤鎭㈠婕旂粌璁板綍 | Backup/Restore Drill Record
+| 中文 | English |
+|------|---------|
+| 恢复完成且无 SQL 错误 | Restore completes without SQL errors. |
+| API 冒烟测试通过 | API smoke test passes. |
+| 租户和核心 CRM 数据可查询 | Tenant and core CRM data are queryable. |
 
-- 鏃ユ湡 | Date: YYYY-MM-DD
-- 鎿嶄綔浜?| Operator: [濮撳悕 | Name]
-- 鐜 | Environment: [dev/staging]
-- 澶囦唤鏂囦欢 | Backup File: [鏂囦欢鍚?| Filename]
-- 鎭㈠缁撴灉 | Restore Result: [鎴愬姛/澶辫触 | Success/Failure]
-- 楠岃瘉缁撴灉 | Verification Result: [閫氳繃/澶辫触 | Pass/Fail]
-- 澶囨敞 | Notes: [浠讳綍闂鎴栬瀵?| Any issues or observations]
-```
+---
+
+## 回滚 | Rollback
+
+| 中文 | English |
+|------|---------|
+| 如恢复演练失败，丢弃目标数据库并使用之前的已知良好备份重试 | If restore drill fails, discard target DB and retry with previous known-good backup. |
+| 如连续两次尝试失败，升级至值班人员 | Escalate to on-call if two consecutive attempts fail. |
+
+---
+
+## 证据归档 | Evidence
+
+| 中文 | English |
+|------|---------|
+| 备份命令输出 | Backup command output |
+| 恢复命令输出 | Restore command output |
+| API 冒烟结果 | API smoke result |
+| 操作员 + 审核人签字 | Operator + reviewer sign-off |

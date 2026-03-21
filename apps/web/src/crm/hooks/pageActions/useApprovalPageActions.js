@@ -1,4 +1,13 @@
 import { api } from '../../shared'
+import {
+  createAllNotificationSelection,
+  createApprovalActionErrorResult,
+  isApprovalTaskPending,
+  normalizeApprovalAmount,
+  updateNotificationSelection,
+  updatePendingTaskIds,
+  withApprovalRequestId,
+} from './approvalActionHelpers'
 
 export function useApprovalPageActions(params) {
   const {
@@ -38,35 +47,10 @@ export function useApprovalPageActions(params) {
 
   const setTaskPending = (taskId, pending) => {
     if (!taskId) return
-    setApprovalPendingTaskIds((prev) => {
-      const next = { ...(prev || {}) }
-      if (pending) next[taskId] = true
-      else delete next[taskId]
-      return next
-    })
+    setApprovalPendingTaskIds((prev) => updatePendingTaskIds(prev, taskId, pending))
   }
 
-  const isTaskPending = (taskId) => !!(taskId && approvalPendingTaskIds?.[taskId])
-
-  const withRequestId = (err) => {
-    const code = String(err?.code || '').trim().toLowerCase()
-    const reason = String(err?.details?.reason || '').trim().toLowerCase()
-    let message = String(err?.message || '')
-    if (code === 'approval_task_closed') {
-      if (reason === 'urge_cooldown') {
-        const until = String(err?.details?.cooldownUntil || '').trim()
-        message = until ? `${t('approvalUrgeCooldownHint')} (${until})` : t('approvalUrgeCooldownHint')
-      } else if (reason === 'urge_daily_limit') {
-        const count = Number(err?.details?.dailyCount || 0)
-        const limit = Number(err?.details?.dailyLimit || 10)
-        message = `${t('approvalUrgeDailyLimitHint')} (${count}/${limit})`
-      } else {
-        message = t('approvalTaskClosedHint')
-      }
-    }
-    const requestId = String(err?.requestId || err?.requestIdRef || '').trim()
-    return requestId ? `${message} [${requestId}]` : message
-  }
+  const isTaskPending = (taskId) => isApprovalTaskPending(approvalPendingTaskIds, taskId)
 
   const refreshApprovalViews = async (instanceId = '') => {
     await loadApprovalStats()
@@ -79,18 +63,12 @@ export function useApprovalPageActions(params) {
   }
 
   const setActionResultFromError = (taskId, action, err) => {
-    const requestId = String(err?.requestId || err?.requestIdRef || '').trim()
-    const code = String(err?.code || '').trim().toLowerCase()
-    const reason = String(err?.details?.reason || '').trim().toLowerCase()
-    setApprovalActionResult({
-      action: String(action || '').toUpperCase(),
-      taskId: taskId || String(err?.details?.taskId || '').trim(),
-      result: code === 'approval_task_closed' ? 'CONFLICT' : 'FAILED',
-      instanceId: String(approvalDetail?.id || err?.details?.instanceId || '').trim(),
-      requestId,
-      errorCode: code || '',
-      reason,
-    })
+    setApprovalActionResult(createApprovalActionErrorResult({
+      taskId,
+      action,
+      err,
+      approvalDetailId: approvalDetail?.id,
+    }))
   }
 
   const refreshApprovalViewsSafe = async (instanceId = '') => {
@@ -117,7 +95,7 @@ export function useApprovalPageActions(params) {
       await loadApprovalInstances()
       await loadApprovalTasks()
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
@@ -138,7 +116,7 @@ export function useApprovalPageActions(params) {
       await loadApprovalInstances()
       await loadApprovalTasks()
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
@@ -149,8 +127,8 @@ export function useApprovalPageActions(params) {
         method: 'PATCH',
         body: JSON.stringify({
           name: row.name,
-          amountMin: row.amountMin === '' || row.amountMin === null || row.amountMin === undefined ? null : Number(row.amountMin),
-          amountMax: row.amountMax === '' || row.amountMax === null || row.amountMax === undefined ? null : Number(row.amountMax),
+          amountMin: normalizeApprovalAmount(row.amountMin),
+          amountMax: normalizeApprovalAmount(row.amountMax),
           role: row.role || '',
           department: row.department || '',
           approverRoles: row.approverRoles || '',
@@ -163,7 +141,7 @@ export function useApprovalPageActions(params) {
       setApprovalTemplates((prev) => prev.map((x) => x.id === updated.id ? updated : x))
       await loadApprovalStats()
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
@@ -189,7 +167,7 @@ export function useApprovalPageActions(params) {
       setApprovalActionComment('')
       if (action === 'transfer') setApprovalTransferTo('')
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       setActionResultFromError(taskId, action, err)
       await refreshApprovalViewsSafe(String(approvalDetail?.id || '').trim())
       handleError(err)
@@ -214,7 +192,7 @@ export function useApprovalPageActions(params) {
       })
       setApprovalActionComment('')
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       setActionResultFromError(taskId, 'urge', err)
       await refreshApprovalViewsSafe(String(approvalDetail?.id || '').trim())
       handleError(err)
@@ -230,7 +208,7 @@ export function useApprovalPageActions(params) {
       await loadApprovalStats()
       await loadApprovalTemplateVersions(templateId)
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
@@ -242,7 +220,7 @@ export function useApprovalPageActions(params) {
       await loadApprovalStats()
       await loadApprovalTemplateVersions(templateId)
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
@@ -252,23 +230,17 @@ export function useApprovalPageActions(params) {
       await api('/v1/integrations/notifications/jobs/' + jobId + '/retry', { method: 'POST' }, auth.token, lang)
       await loadNotificationJobs()
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
 
   const toggleNotificationJob = (jobId, checked) => {
-    setSelectedNotificationJobs((prev) => {
-      const set = new Set(prev)
-      if (checked) set.add(jobId)
-      else set.delete(jobId)
-      return Array.from(set)
-    })
+    setSelectedNotificationJobs((prev) => updateNotificationSelection(prev, jobId, checked))
   }
 
   const toggleAllNotificationJobs = (checked) => {
-    if (!checked) { setSelectedNotificationJobs([]); return }
-    setSelectedNotificationJobs((notificationJobs || []).map((j) => j.jobId))
+    setSelectedNotificationJobs(createAllNotificationSelection(notificationJobs, checked))
   }
 
   const retryNotificationJobsByIds = async () => {
@@ -281,7 +253,7 @@ export function useApprovalPageActions(params) {
       setError(`${t('retry')}: requested=${result.requested}, succeeded=${result.succeeded}, skipped=${result.skipped}`)
       await loadNotificationJobs(notificationPage, notificationSize)
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }
@@ -295,7 +267,7 @@ export function useApprovalPageActions(params) {
       setError(`${t('retry')}: requested=${result.requested}, succeeded=${result.succeeded}, skipped=${result.skipped}`)
       await loadNotificationJobs(notificationPage, notificationSize)
     } catch (err) {
-      setError(withRequestId(err))
+      setError(withApprovalRequestId(err, t))
       handleError(err)
     }
   }

@@ -3,6 +3,7 @@ import BarChartRow from '../BarChartRow'
 import { formatDateTime, formatMoneyByCurrency, formatStatValue, mapToBars, translateChannel, translateOwnerAlias, translateRole, translateStage, translateStatLabel, translateStatus } from '../../shared'
 import ServerPager from '../ServerPager'
 import VirtualListTable from '../VirtualListTable'
+import { buildCardMeta, buildStatusLabel, createOwnerAliasMap, mapWorkbenchItems } from './dashboard/dashboardPanelHelpers'
 
 function DashboardPanel({
   activePage,
@@ -53,12 +54,7 @@ function DashboardPanel({
   const arrLike = Number(localizedMetrics?.arrLike || 0)
   const localizedFallback = !!reports?.localizedFallback
   const tenantConfigSynced = !!reports?.tenantConfigSynced
-  const ownerAlias = {
-    'Li Jun': t('ownerLiJun'),
-    'Wang Ling': t('ownerWangLing'),
-    'Chen Xi': t('ownerChenXi'),
-    'Zhao Ning': t('ownerZhaoNing'),
-  }
+  const ownerAlias = createOwnerAliasMap(t)
   const ownerBars = mapToBars(reports?.customerByOwner).map((item) => ({ ...item, label: ownerAlias[item.label] || translateOwnerAlias(t, item.label) }))
   const statusBars = mapToBars(reports?.revenueByStatus).map((item) => ({ ...item, label: translateStatus(t, item.label) }))
   const stageBars = mapToBars(reports?.opportunityByStage).map((item) => ({ ...item, label: translateStage(t, item.label) }))
@@ -69,17 +65,10 @@ function DashboardPanel({
     value: formatStatValue(t, item.label, item.value),
   }))
   const workbenchCards = workbenchToday?.cards || []
-  const todoItems = workbenchToday?.todoItems || []
-  const warningItems = workbenchToday?.warningItems || []
+  const todoItems = mapWorkbenchItems(workbenchToday?.todoItems, t)
+  const warningItems = mapWorkbenchItems(workbenchToday?.warningItems, t)
   const cardLabel = (row) => t(row?.labelKey || row?.key || '')
-  const statusLabel = (s) => s === 'PENDING' ? t('exportPending') : s === 'RUNNING' ? t('exportRunning') : s === 'DONE' ? t('exportDone') : s === 'FAILED' ? t('exportFailed') : (s || '-')
-  const cardMeta = {
-    todoTasks: { targetPage: 'tasks', payload: {}, actionKey: 'workbenchHandle' },
-    overdueFollowUps: { targetPage: 'followUps', payload: {}, actionKey: 'workbenchHandle' },
-    pendingApprovals: { targetPage: 'approvals', payload: { status: 'PENDING' }, actionKey: 'workbenchUrge' },
-    upcomingContracts: { targetPage: 'contracts', payload: {}, actionKey: 'workbenchView' },
-    paymentWarnings: { targetPage: 'payments', payload: { status: 'Overdue' }, actionKey: 'workbenchHandle' },
-  }
+  const cardMeta = buildCardMeta()
 
   const jobs = (reportExportJobs || []).filter((job) => {
     if (reportExportStatusFilter === 'ALL') return true
@@ -148,7 +137,7 @@ function DashboardPanel({
                     onWorkbenchNavigate?.(item.targetPage || 'dashboard', item.payload || {})
                   }}>
                     <span>{item.title}</span>
-                    <small>{translateStatus(t, item.status)} · {translateOwnerAlias(t, item.owner || '-')}</small>
+                    <small>{item.statusText} · {item.ownerText}</small>
                   </button>
                 ))}
                 {todoItems.length === 0 && <div className="empty-tip">{t('noData')}</div>}
@@ -161,7 +150,7 @@ function DashboardPanel({
                     onWorkbenchNavigate?.(item.targetPage || 'dashboard', item.payload || {})
                   }}>
                     <span>{item.title}</span>
-                    <small>{translateStatus(t, item.status)} · {translateOwnerAlias(t, item.owner || '-')}</small>
+                    <small>{item.statusText} · {item.ownerText}</small>
                   </button>
                 ))}
                 {warningItems.length === 0 && <div className="empty-tip">{t('noData')}</div>}
@@ -248,7 +237,7 @@ function DashboardPanel({
             renderRow={(job) => (
               <div key={job.jobId} className="table-row table-row-6 compact">
                 <span>{job.jobId}</span>
-                <span>{statusLabel(job.status)}</span>
+                <span>{buildStatusLabel(t, job.status)}</span>
                 <span>{job.progress || 0}%</span>
                 <span>{formatDateTime(job.createdAt)}</span>
                 <span>{job.filters ? `${job.filters.role ? translateRole(t, job.filters.role) : '-'} | ${job.filters.from || '-'}~${job.filters.to || '-'}` : '-'}</span>
@@ -278,4 +267,3 @@ function DashboardPanel({
 }
 
 export default memo(DashboardPanel)
-

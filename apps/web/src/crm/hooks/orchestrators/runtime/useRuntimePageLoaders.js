@@ -1,4 +1,6 @@
 import { useCallback, useMemo } from 'react'
+import { buildRuntimeCommonPageLoaders } from './buildRuntimeCommonPageLoaders'
+import { buildRuntimeKeyPageLoaders } from './buildRuntimeKeyPageLoaders'
 
 export function useRuntimePageLoaders({
   leadQ,
@@ -100,131 +102,56 @@ export function useRuntimePageLoaders({
   }, [])
 
   const commonPageLoaders = useMemo(
-    () => ({
-      leads: {
-        signature: pageSignature(
-          'leads',
-          {
-            q: leadQ,
-            status: leadStatus,
-            importStatus: leadImportStatusFilter,
-            importPage: leadImportPage,
-            importSize: leadImportSize,
-            importExportStatus: leadImportExportStatusFilter,
-            importExportPage: leadImportExportPage,
-            importExportSize: leadImportExportSize,
-            importJobId: leadImportJobId || '',
-          },
-          leadPage,
-          leadSize,
-        ),
-        delay: 220,
-        run: async (controller) => {
-          const options = { signal: controller?.signal }
-          const tasks = [
-            loadLeads(leadPage, leadSize, options),
-            loadLeadImportJobs(leadImportPage, leadImportSize, options),
-          ]
-          if (leadImportJobId) {
-            tasks.push(loadLeadImportFailedRows(leadImportJobId, options))
-            tasks.push(loadLeadImportExportJobs(leadImportJobId, leadImportExportPage, leadImportExportSize, options))
-          }
-          if (canViewOpsMetrics) tasks.push(loadLeadImportMetrics(options))
-          await Promise.all(tasks)
-        },
-      },
-      customers: {
-        signature: pageSignature('customers', { q: customerQ, status: customerStatus }, customerPage, customerSize),
-        delay: 220,
-        run: (controller) => loadCustomers(customerPage, customerSize, { signal: controller?.signal }),
-      },
-      pipeline: {
-        signature: pageSignature('pipeline', { stage: oppStage }, opportunityPage, opportunitySize),
-        delay: 220,
-        run: () => loadOpportunities(opportunityPage, opportunitySize),
-      },
-      contacts: {
-        signature: pageSignature('contacts', { q: contactQ }, contactPage, contactSize),
-        delay: 220,
-        run: () => loadContacts(contactPage, contactSize),
-      },
-      contracts: {
-        signature: pageSignature('contracts', { q: contractQ, status: contractStatus }, contractPage, contractSize),
-        delay: 220,
-        run: () => loadContracts(contractPage, contractSize),
-      },
-      payments: {
-        signature: pageSignature('payments', { status: paymentStatus }, paymentPage, paymentSize),
-        delay: 220,
-        run: () => loadPayments(paymentPage, paymentSize),
-      },
-      priceBooks: {
-        signature: pageSignature(
-          'priceBooks',
-          {
-            status: commerceDomain.signatures.priceBooks.filters.status,
-            name: commerceDomain.signatures.priceBooks.filters.name,
-          },
-          commerceDomain.signatures.priceBooks.pageNo,
-          commerceDomain.signatures.priceBooks.pageSize,
-        ),
-        delay: 180,
-        run: (controller) => commerceDomain.loaders.loadPriceBooks({ signal: controller?.signal }),
-      },
-      products: {
-        signature: pageSignature(
-          'products',
-          {
-            status: commerceDomain.signatures.products.filters.status,
-            code: commerceDomain.signatures.products.filters.code,
-            name: commerceDomain.signatures.products.filters.name,
-            category: commerceDomain.signatures.products.filters.category,
-          },
-          commerceDomain.signatures.products.pageNo,
-          commerceDomain.signatures.products.pageSize,
-        ),
-        delay: 180,
-        run: (controller) => commerceDomain.loaders.loadProducts({ signal: controller?.signal }),
-      },
-      quotes: {
-        signature: pageSignature(
-          'quotes',
-          {
-            status: commerceDomain.signatures.quotes.filters.status,
-            owner: commerceDomain.signatures.quotes.filters.owner,
-            opportunityId: commerceDomain.signatures.quotes.filters.opportunityId || quoteOpportunityFilter,
-          },
-          commerceDomain.signatures.quotes.pageNo,
-          commerceDomain.signatures.quotes.pageSize,
-        ),
-        delay: 180,
-        run: (controller) => commerceDomain.loaders.loadQuotes({ signal: controller?.signal }),
-      },
-      orders: {
-        signature: pageSignature(
-          'orders',
-          {
-            status: commerceDomain.signatures.orders.filters.status,
-            owner: commerceDomain.signatures.orders.filters.owner,
-            opportunityId: commerceDomain.signatures.orders.filters.opportunityId || orderOpportunityFilter,
-          },
-          commerceDomain.signatures.orders.pageNo,
-          commerceDomain.signatures.orders.pageSize,
-        ),
-        delay: 180,
-        run: (controller) => commerceDomain.loaders.loadOrders({ signal: controller?.signal }),
-      },
-      followUps: {
-        signature: pageSignature('followUps', { customerId: followCustomerId, q: followQ }, 1, 0),
-        delay: 250,
-        run: () => loadFollowUps(),
-      },
-      tasks: {
-        signature: pageSignature('tasks', {}, 1, 0),
-        delay: 0,
-        run: () => loadTasks(),
-      },
-    }),
+    () =>
+      buildRuntimeCommonPageLoaders({
+        pageSignature,
+        leadQ,
+        leadStatus,
+        leadImportStatusFilter,
+        leadImportPage,
+        leadImportSize,
+        leadImportExportStatusFilter,
+        leadImportExportPage,
+        leadImportExportSize,
+        leadImportJobId,
+        leadPage,
+        leadSize,
+        loadLeads,
+        loadLeadImportJobs,
+        loadLeadImportFailedRows,
+        loadLeadImportExportJobs,
+        loadLeadImportMetrics,
+        canViewOpsMetrics,
+        customerQ,
+        customerStatus,
+        customerPage,
+        customerSize,
+        loadCustomers,
+        oppStage,
+        opportunityPage,
+        opportunitySize,
+        loadOpportunities,
+        contactQ,
+        contactPage,
+        contactSize,
+        loadContacts,
+        contractQ,
+        contractStatus,
+        contractPage,
+        contractSize,
+        loadContracts,
+        paymentStatus,
+        paymentPage,
+        paymentSize,
+        loadPayments,
+        commerceDomain,
+        quoteOpportunityFilter,
+        orderOpportunityFilter,
+        followCustomerId,
+        followQ,
+        loadFollowUps,
+        loadTasks,
+      }),
     [
       pageSignature,
       leadQ, leadStatus, leadImportStatusFilter, leadImportPage, leadImportSize,
@@ -245,124 +172,53 @@ export function useRuntimePageLoaders({
   )
 
   const keyPageLoaders = useMemo(
-    () => ({
-      dashboard: {
-        signature: pageSignature(
-          'dashboard',
-          {
-            from: auditFrom,
-            to: auditTo,
-            owner: reportOwner,
-            department: reportDepartment,
-            timezone: reportTimezone,
-            role: auditRole,
-            currency: reportCurrency,
-            canViewReports,
-            reportExportStatusFilter,
-            reportExportJobsPage,
-            reportExportJobsSize,
-          },
-          1,
-          0,
-        ),
-        canRun: () => true,
-        run: () => Promise.all([
-          loadTasks(),
-          loadWorkbenchToday(),
-          canViewReports ? loadReports() : Promise.resolve(null),
-          canViewReports ? loadReportExportJobs(reportExportJobsPage, reportExportJobsSize) : Promise.resolve(null),
-        ]),
-      },
-      reports: {
-        signature: pageSignature(
-          'reports',
-          {
-            from: auditFrom,
-            to: auditTo,
-            owner: reportOwner,
-            department: reportDepartment,
-            timezone: reportTimezone,
-            role: auditRole,
-            currency: reportCurrency,
-            canViewReports,
-            reportExportStatusFilter,
-            reportExportJobsPage,
-            reportExportJobsSize,
-          },
-          1,
-          0,
-        ),
-        canRun: () => canViewReports,
-        run: () => Promise.all([loadReports(), loadReportExportJobs(reportExportJobsPage, reportExportJobsSize)]),
-      },
-      audit: {
-        signature: pageSignature(
-          'audit',
-          {
-            user: auditUser,
-            role: auditRole,
-            action: auditAction,
-            from: auditFrom,
-            to: auditTo,
-            exportStatusFilter,
-            exportJobsPage,
-            exportJobsSize,
-          },
-          1,
-          0,
-        ),
-        canRun: () => canViewAudit,
-        run: () => Promise.all([loadAudit(), loadExportJobs(exportJobsPage, exportJobsSize)]),
-      },
-      permissions: {
-        signature: pageSignature('permissions', {}, 1, 0),
-        canRun: () => true,
-        run: () => Promise.all([loadPermissionMatrix(), loadPermissionConflicts()]),
-      },
-      usersAdmin: {
-        signature: pageSignature('usersAdmin', {}, 1, 0),
-        canRun: () => canManageUsers,
-        run: () => Promise.all([loadAdminUsers(), loadTenants()]),
-      },
-      salesAutomation: {
-        signature: pageSignature('salesAutomation', {}, 1, 0),
-        canRun: () => canManageSalesAutomation,
-        run: () => Promise.all([loadLeadAssignmentRules(), loadAutomationRulesV1()]),
-      },
-      adminTenants: {
-        signature: pageSignature('adminTenants', {}, 1, 0),
-        canRun: () => canManageUsers,
-        run: () => loadTenants(),
-      },
-      approvals: {
-        signature: pageSignature(
-          'approvals',
-          {
-            taskStatus: approvalTaskStatus,
-            overdueOnly: approvalOverdueOnly,
-            escalatedOnly: approvalEscalatedOnly,
-            notificationStatusFilter,
-            notificationPage,
-            notificationSize,
-          },
-          1,
-          0,
-        ),
-        canRun: () => true,
-        run: () => Promise.all([
-          loadApprovalTemplates(),
-          loadApprovalStats(),
-          loadApprovalInstances(),
-          loadApprovalTasks(),
-          loadNotificationJobs(notificationPage, notificationSize),
-        ]),
-      },
-      reportDesigner: {
-        signature: pageSignature('reportDesigner', {}, 1, 0),
-        canRun: () => true,
-        run: () => loadDesignerTemplates(),
-      },
-    }),
+    () =>
+      buildRuntimeKeyPageLoaders({
+        pageSignature,
+        auditFrom,
+        auditTo,
+        reportOwner,
+        reportDepartment,
+        reportTimezone,
+        auditRole,
+        reportCurrency,
+        canViewReports,
+        reportExportStatusFilter,
+        reportExportJobsPage,
+        reportExportJobsSize,
+        loadTasks,
+        loadWorkbenchToday,
+        loadReports,
+        loadReportExportJobs,
+        auditUser,
+        auditAction,
+        exportStatusFilter,
+        exportJobsPage,
+        exportJobsSize,
+        canViewAudit,
+        loadAudit,
+        loadExportJobs,
+        loadPermissionMatrix,
+        loadPermissionConflicts,
+        canManageUsers,
+        loadAdminUsers,
+        loadTenants,
+        canManageSalesAutomation,
+        loadLeadAssignmentRules,
+        loadAutomationRulesV1,
+        approvalTaskStatus,
+        approvalOverdueOnly,
+        approvalEscalatedOnly,
+        notificationStatusFilter,
+        notificationPage,
+        notificationSize,
+        loadApprovalTemplates,
+        loadApprovalStats,
+        loadApprovalInstances,
+        loadApprovalTasks,
+        loadNotificationJobs,
+        loadDesignerTemplates,
+      }),
     [
       pageSignature,
       auditFrom, auditTo, reportOwner, reportDepartment, reportTimezone,

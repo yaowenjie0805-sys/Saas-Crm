@@ -1,52 +1,62 @@
-# 鐜鐭╅樀 | Environment Matrix
-
-鏈枃妗ｆ弿杩?CRM 绯荤粺鍚勭幆澧冪殑閰嶇疆鍜屾檵鍗囪鍒欍€? 
-This document describes the configuration and promotion rules for each environment in the CRM system.
+# 环境矩阵 | Environment Matrix
 
 ---
 
-## 鐜鍩虹嚎 | Baseline
+## 环境定义 | Environments
 
-| 鐜 | 鐢ㄩ€?| 鏁版嵁婧?| 绉嶅瓙绛栫暐 | 璁よ瘉 Cookie | SSO 妯″紡 |
-|------|------|--------|----------|-------------|----------|
-| Env | Purpose | Data Source | Seed Policy | Auth Cookie | SSO Mode |
-| dev | 鍔熻兘寮€鍙?| 鏈湴 MySQL | 鍚敤 | secure=false | mock/oidc |
-| staging | 鍙戝竷楠岃瘉 | 鎵樼 MySQL 鍏嬮殕 | 绂佺敤 | secure=true | oidc |
-| prod | 鐢熶骇娴侀噺 | 鎵樼 MySQL | 绂佺敤 | secure=true | oidc |
-
----
-
-## 瀵嗛挜涓庨厤缃鍒?| Secrets & Config Rules
-
-### 鍩烘湰鍘熷垯 | Basic Principles
-
-- **姘镐笉鎻愪氦瀵嗛挜鍒颁唬鐮佷粨搴?* | Never commit secrets in repo
-- **绂佹鐢熶骇鐜浣跨敤榛樿鍊?* | Prod forbidden defaults: `crm-secret-change-me`, `000000`, `mock`, `admin123`
-
-### 蹇呴渶鐨勭幆澧冨彉閲?| Required Environment Variables
-
-| 鍙橀噺 | 鎻忚堪 | Variable | Description |
-|------|------|----------|-------------|
-| `AUTH_TOKEN_SECRET` | 璁よ瘉浠ょ墝瀵嗛挜 | `AUTH_TOKEN_SECRET` | Auth token secret |
-| `DB_URL` | 鏁版嵁搴撹繛鎺?URL | `DB_URL` | Database connection URL |
-| `DB_USER` | 鏁版嵁搴撶敤鎴峰悕 | `DB_USER` | Database username |
-| `DB_PASSWORD` | 鏁版嵁搴撳瘑鐮?| `DB_PASSWORD` | Database password |
-
-### CORS 閰嶇疆 | CORS Configuration
-
-- `SECURITY_CORS_ALLOWED_ORIGINS` 蹇呴』浣跨敤鐜鐗瑰畾鐨勭櫧鍚嶅崟
-- `SECURITY_CORS_ALLOWED_ORIGINS` must be environment-specific allowlist
+| 环境 | 中文 | English |
+|------|------|---------|
+| Local | 开发机器，用于编码和快速验证 | developer machine for coding and fast validation. |
+| Staging | 预生产环境，用于发布验证 | pre-production environment for release verification. |
+| Production | 面向客户的环境 | customer-facing environment. |
 
 ---
 
-## 鏅嬪崌瑙勫垯 | Promotion Rules
+## 环境用途 | Purpose by Environment
 
-### dev 鈫?staging
+| 环境 | 中文 | English |
+|------|------|---------|
+| Local | 功能开发，代码检查/构建/E2E 迭代 | feature development, lint/build/e2e iteration. |
+| Staging | 集成检查，发布候选验证 | integration checks, release candidate verification. |
+| Production | 稳定服务运行 | stable service operation. |
 
-1. 闂ㄧ妫€鏌ュ叏閮ㄩ€氳繃 | Gate green
-2. 鍙樻洿妫€鏌ユ竻鍗曞畬鎴?| Change checklist complete
+---
 
-### staging 鈫?prod
+## 必需输入 | Required Inputs
 
-1. 鍥炴粴婕旂粌璇佹嵁 | Rollback drill evidence
-2. 鍙戝竷蹇収 | Release snapshot
+| 中文 | English |
+|------|---------|
+| `VITE_API_BASE_URL` 用于前端 API 目标地址 | `VITE_API_BASE_URL` for frontend API target. |
+| 后端数据库连接配置 | DB connection settings for backend. |
+| 用于 `/api/v1/**` 验证的租户感知认证头 | Tenant-aware auth headers for `/api/v1/**` verification. |
+
+---
+
+## 晋升规则 | Promotion Rules
+
+| 步骤 | 中文 | English |
+|------|------|---------|
+| 1 | 本地检查通过 (`lint`, `build`, smoke e2e) | Local checks pass (`lint`, `build`, smoke e2e). |
+| 2 | 预发部署和验证通过 | Staging deploy and verification pass. |
+| 3 | 变更控制清单完成 | Change-control checklist is complete. |
+| 4 | 获得发布窗口批准 | Release window approval is granted. |
+
+---
+
+## 禁止实践 | Forbidden Practices
+
+| 中文 | English |
+|------|---------|
+| 生产发布前跳过预发验证 | Skipping staging verification before production. |
+| 无回滚计划的情况下在生产环境应用数据库/索引变更 | Applying DB/index changes in production without rollback plan. |
+| 混用环境凭证 | Mixing environment credentials. |
+
+---
+
+## 快速命令 | Quick Commands
+
+| 命令 | 中文 | English |
+|------|------|---------|
+| `npm run validate:env` | 验证开发环境 | Validate env |
+| `npm run validate:env:staging` | 验证预发环境 | Validate staging env |
+| `npm run validate:env:prod` | 验证生产环境 | Validate production env |

@@ -19,18 +19,18 @@ import {
   toNumber,
   toList,
 } from './shared'
-
-const EMPTY_MODULES = {
-  contacts: [],
-  opportunities: [],
-  quotes: [],
-  orders: [],
-  contracts: [],
-  payments: [],
-  approvals: [],
-  audits: [],
-  notifications: [],
-}
+import {
+  buildCustomer360ViewModel,
+  createCustomer360PrefetchLoaders,
+  createResilientListLoader,
+  EMPTY_CUSTOMER360_MODULES,
+  createCustomer360ModuleLoaders,
+  filterRequestedModules,
+  moduleServerFilterSignature,
+  getCustomer360PrefetchSignature,
+  orderCustomer360Modules,
+  rebalanceAdaptivePrefetchModules,
+} from './customer360DataHelpers'
 
 export default function useCustomer360Data({
   t,
@@ -49,7 +49,7 @@ export default function useCustomer360Data({
 }) {
   const [timelineLoading, setTimelineLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [detailModules, setDetailModules] = useState(EMPTY_MODULES)
+  const [detailModules, setDetailModules] = useState(EMPTY_CUSTOMER360_MODULES)
   const [detailModuleMeta, setDetailModuleMeta] = useState(() => createCustomer360ModuleMeta())
   const detailsAbortRef = useRef(null)
   const prefetchAbortRef = useRef(null)
@@ -108,9 +108,7 @@ export default function useCustomer360Data({
   const loadCustomer360 = useCallback(async (customer, options = {}) => {
     const customerId = customer?.id
     if (!customerId || !token) return
-    const requestedModules = Array.isArray(options.modules) && options.modules.length
-      ? options.modules.filter((key) => CUSTOMER360_MODULE_KEYS.includes(key))
-      : CUSTOMER360_MODULE_KEYS
+    const requestedModules = filterRequestedModules(options.modules, CUSTOMER360_MODULE_KEYS)
     const fullRefresh = requestedModules.length === CUSTOMER360_MODULE_KEYS.length
     const shouldReset = !!options.resetModules
     const force = !!options.force
@@ -119,7 +117,7 @@ export default function useCustomer360Data({
     const customerChanged = detailsCustomerIdRef.current !== customerIdText
     if (shouldReset || customerChanged) {
       detailsCustomerIdRef.current = customerIdText
-      setDetailModules(EMPTY_MODULES)
+      setDetailModules(EMPTY_CUSTOMER360_MODULES)
       setDetailModuleMeta(createCustomer360ModuleMeta())
     }
     if (detailsAbortRef.current) detailsAbortRef.current.abort()
@@ -130,12 +128,7 @@ export default function useCustomer360Data({
     if (fullRefresh || shouldReset) setDetailLoading(true)
     const startedAt = Date.now()
     try {
-      const loadList = async (path, fallbackPath = '') => {
-        try { return toList(await api(path, { signal: controller.signal }, token, lang)) } catch {
-          if (!fallbackPath) return []
-          try { return toList(await api(fallbackPath, { signal: controller.signal }, token, lang)) } catch { return [] }
-        }
-      }
+      const loadList = createResilientListLoader({ api, controller, token, lang, toList })
       const timedLoad = async (moduleName, path, fallbackPath = '') => {
         const moduleStartedAt = Date.now()
         const list = await loadList(path, fallbackPath)
@@ -149,35 +142,19 @@ export default function useCustomer360Data({
         }
         return list
       }
-      const moduleLoaders = {
-        contacts: async () => toArray(await timedLoad('contacts', `/contacts/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS),
-        opportunities: async () => toArray(await timedLoad('opportunities', `/opportunities/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS),
-        contracts: async () => toArray(await timedLoad('contracts', `/contracts/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS),
-        payments: async () => toArray(await timedLoad('payments', `/payments/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS),
-        quotes: async () => toArray(await timedLoad('quotes', `/v1/quotes?page=1&size=${MAX_ASSOC_ITEMS}&customerId=${encodeURIComponent(customerIdText)}`, '/v1/quotes?page=1&size=30')).filter((item) => String(item.customerId || item.customer?.id || '') === customerIdText).slice(0, MAX_ASSOC_ITEMS),
-        orders: async () => toArray(await timedLoad('orders', `/v1/orders?page=1&size=${MAX_ASSOC_ITEMS}&customerId=${encodeURIComponent(customerIdText)}`, '/v1/orders?page=1&size=30')).filter((item) => String(item.customerId || item.customer?.id || '') === customerIdText).slice(0, MAX_ASSOC_ITEMS),
-        approvals: async () => toArray(await timedLoad('approvals', '/v1/approval/instances?limit=30')).filter((item) => {
-          const bizId = String(item.bizId || '')
-          const ref = String(item.refId || '')
-          return bizId === customerIdText || ref === customerIdText || bizId.includes(customerIdText) || ref.includes(customerIdText)
-        }).slice(0, MAX_ASSOC_ITEMS),
-        audits: async () => toArray(await timedLoad('audits', `/audit-logs/search?q=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS),
-        notifications: async () => toArray(await timedLoad('notifications', '/v1/integrations/notifications/jobs?status=ALL&page=1&size=30')).filter((item) => JSON.stringify(item).includes(customerIdText)).slice(0, MAX_ASSOC_ITEMS),
-      }
-      const moduleServerFilterSignature = (moduleName) => ({
-        contacts: `size=${MAX_ASSOC_ITEMS}`,
-        opportunities: `size=${MAX_ASSOC_ITEMS}`,
-        contracts: `size=${MAX_ASSOC_ITEMS}`,
-        payments: `size=${MAX_ASSOC_ITEMS}`,
-        quotes: `size=${MAX_ASSOC_ITEMS}`,
-        orders: `size=${MAX_ASSOC_ITEMS}`,
-        approvals: 'limit=30',
-        audits: `size=${MAX_ASSOC_ITEMS}`,
-        notifications: 'status=ALL:size=30',
-      }[moduleName] || `size=${MAX_ASSOC_ITEMS}`)
+      const moduleLoaders = createCustomer360ModuleLoaders({
+        customerIdText,
+        maxAssocItems: MAX_ASSOC_ITEMS,
+        timedLoad,
+        toArray,
+      })
       const loadOneModule = async (moduleName) => {
         const now = Date.now()
-        const signature = buildCustomer360ModuleSignature(customerIdText, moduleName, moduleServerFilterSignature(moduleName))
+        const signature = buildCustomer360ModuleSignature(
+          customerIdText,
+          moduleName,
+          moduleServerFilterSignature(moduleName, MAX_ASSOC_ITEMS),
+        )
         const cacheEntry = moduleCacheRef.current.get(signature)
         const metaEntry = detailModuleMetaRef.current?.[moduleName]
         const moduleData = detailModulesRef.current?.[moduleName]
@@ -223,23 +200,22 @@ export default function useCustomer360Data({
           setDetailModuleMeta((prev) => ({ ...prev, [moduleName]: { ...(prev[moduleName] || {}), loading: false, error: message, signature, lastLoadedAt: Date.now() } }))
         }
       }
-      const primaryModules = requestedModules.filter((moduleName) => CUSTOMER360_PRIMARY_MODULES.includes(moduleName))
-      const secondaryModules = requestedModules.filter((moduleName) => CUSTOMER360_SECONDARY_MODULES.includes(moduleName))
-      const remainingModules = requestedModules.filter((moduleName) => !primaryModules.includes(moduleName) && !secondaryModules.includes(moduleName))
-      await Promise.all([...primaryModules, ...secondaryModules, ...remainingModules].map((moduleName) => loadOneModule(moduleName)))
+      const orderedModules = orderCustomer360Modules(
+        requestedModules,
+        CUSTOMER360_PRIMARY_MODULES,
+        CUSTOMER360_SECONDARY_MODULES,
+      )
+      await Promise.all(orderedModules.map((moduleName) => loadOneModule(moduleName)))
       if (import.meta.env.DEV) {
-        const next = new Set(adaptivePrefetchModulesRef.current)
-        CUSTOMER360_PREFETCH_MODULES.forEach((moduleName) => {
-          const stats = adaptiveModuleStatsRef.current[moduleName]
-          if (!stats || stats.total < CUSTOMER360_ADAPTIVE_WINDOW) return
-          const hitRate = stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0
-          const avgLatency = stats.latencyCount > 0 ? Math.round(stats.latencyTotal / stats.latencyCount) : 0
-          if (hitRate <= CUSTOMER360_PREFETCH_LOW_HIT && avgLatency <= CUSTOMER360_PREFETCH_HIGH_LATENCY) next.delete(moduleName)
-          else if (hitRate >= CUSTOMER360_PREFETCH_HIGH_HIT || avgLatency >= CUSTOMER360_PREFETCH_HIGH_LATENCY) next.add(moduleName)
-          adaptiveModuleStatsRef.current[moduleName] = { total: 0, hits: 0, latencyTotal: 0, latencyCount: 0 }
+        adaptivePrefetchModulesRef.current = rebalanceAdaptivePrefetchModules({
+          currentModules: adaptivePrefetchModulesRef.current,
+          preferredModules: CUSTOMER360_PREFETCH_MODULES,
+          statsRef: adaptiveModuleStatsRef,
+          adaptiveWindow: CUSTOMER360_ADAPTIVE_WINDOW,
+          lowHitThreshold: CUSTOMER360_PREFETCH_LOW_HIT,
+          highHitThreshold: CUSTOMER360_PREFETCH_HIGH_HIT,
+          highLatencyThreshold: CUSTOMER360_PREFETCH_HIGH_LATENCY,
         })
-        const normalized = CUSTOMER360_PREFETCH_MODULES.filter((moduleName) => next.has(moduleName))
-        adaptivePrefetchModulesRef.current = normalized.length ? normalized : [...CUSTOMER360_PREFETCH_MODULES]
         markCustomer360PrefetchModules?.(adaptivePrefetchModulesRef.current)
       }
     } finally {
@@ -277,24 +253,25 @@ export default function useCustomer360Data({
     abortPrefetchRequests()
     const controller = new AbortController()
     prefetchAbortRef.current = controller
-    const loadList = async (path, fallbackPath = '') => {
-      try { return toList(await api(path, { signal: controller.signal }, token, lang)) } catch {
-        if (!fallbackPath) return []
-        try { return toList(await api(fallbackPath, { signal: controller.signal }, token, lang)) } catch { return [] }
-      }
-    }
+    const loadList = createResilientListLoader({ api, controller, token, lang, toList })
+    const prefetchLoadersByModule = (customerIdText) => createCustomer360PrefetchLoaders({
+      customerIdText,
+      maxAssocItems: MAX_ASSOC_ITEMS,
+      loadList,
+      toArray,
+    })
     const prefetchModule = async (customerIdText, moduleName) => {
       activePrefetchModulesRef.current.add(moduleName)
       try {
-        const signature = buildCustomer360ModuleSignature(customerIdText, moduleName, moduleName === 'notifications' ? 'status=ALL:size=30' : moduleName === 'approvals' ? 'limit=30' : `size=${MAX_ASSOC_ITEMS}`)
+        const signature = buildCustomer360ModuleSignature(customerIdText, moduleName, getCustomer360PrefetchSignature(moduleName, MAX_ASSOC_ITEMS))
         const cacheEntry = moduleCacheRef.current.get(signature)
         const nowAt = Date.now()
         if (cacheEntry && cacheEntry.signature === signature && (nowAt - cacheEntry.at) <= CUSTOMER360_MODULE_TTL_MS) return
+        const prefetchLoaders = prefetchLoadersByModule(customerIdText)
+        const loadModule = prefetchLoaders[moduleName]
+        if (!loadModule) return
         let data = []
-        if (moduleName === 'contacts') data = toArray(await loadList(`/contacts/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS)
-        else if (moduleName === 'opportunities') data = toArray(await loadList(`/opportunities/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${MAX_ASSOC_ITEMS}`)).slice(0, MAX_ASSOC_ITEMS)
-        else if (moduleName === 'quotes') data = toArray(await loadList(`/v1/quotes?page=1&size=${MAX_ASSOC_ITEMS}&customerId=${encodeURIComponent(customerIdText)}`, '/v1/quotes?page=1&size=30')).filter((item) => String(item.customerId || item.customer?.id || '') === customerIdText).slice(0, MAX_ASSOC_ITEMS)
-        else if (moduleName === 'orders') data = toArray(await loadList(`/v1/orders?page=1&size=${MAX_ASSOC_ITEMS}&customerId=${encodeURIComponent(customerIdText)}`, '/v1/orders?page=1&size=30')).filter((item) => String(item.customerId || item.customer?.id || '') === customerIdText).slice(0, MAX_ASSOC_ITEMS)
+        data = await loadModule()
         if (controller.signal.aborted) return
         moduleCacheRef.current.set(signature, { at: Date.now(), signature, data })
         prefetchedSignaturesRef.current.add(signature)
@@ -322,23 +299,14 @@ export default function useCustomer360Data({
   }, [detailMode, prefetchNeighborModules])
 
   const customer360ViewModel = useMemo(() => {
-    const now = Date.now()
-    const timelineRows = toArray(timeline)
-    const followUpsRecent = timelineRows.filter((item) => {
-      const dt = new Date(item.time || item.createdAt || '').getTime()
-      if (!dt || Number.isNaN(dt)) return false
-      return now - dt <= THIRTY_DAYS_MS
+    return buildCustomer360ViewModel({
+      detailModules,
+      timeline,
+      t,
+      toArray,
+      toNumber,
+      thirtyDaysMs: THIRTY_DAYS_MS,
     })
-    const inFlightAmount = toArray(detailModules.opportunities).filter((item) => !String(item.stage || '').toLowerCase().includes('closed')).reduce((sum, item) => sum + toNumber(item.amount), 0)
-    const orderAmount = toArray(detailModules.orders).reduce((sum, item) => sum + toNumber(item.amount), 0)
-    const paymentReceived = toArray(detailModules.payments).filter((item) => ['RECEIVED', 'COMPLETED'].includes(String(item.status || '').toUpperCase())).reduce((sum, item) => sum + toNumber(item.amount), 0)
-    const pendingApprovals = toArray(detailModules.approvals).filter((item) => ['PENDING', 'WAITING', 'SUBMITTED'].includes(String(item.status || '').toUpperCase())).length
-    const paymentOutstanding = Math.max(orderAmount - paymentReceived, 0)
-    const riskTags = []
-    if (paymentOutstanding > 0) riskTags.push(t('paymentWarnings'))
-    if (pendingApprovals > 0) riskTags.push(t('pendingApprovals'))
-    if (followUpsRecent.length === 0) riskTags.push(t('overdueFollowUps'))
-    return { related: detailModules, timeline: timelineRows, metrics: { recentFollowUps30d: followUpsRecent.length, inFlightAmount, orderAmount, paymentReceived, paymentOutstanding, pendingApprovals }, riskTags }
   }, [detailModules, timeline, t])
 
   const navigateTo = useCallback((targetPage, payload = {}) => {

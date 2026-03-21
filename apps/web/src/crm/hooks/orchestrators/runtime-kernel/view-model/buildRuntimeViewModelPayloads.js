@@ -1,0 +1,103 @@
+import { buildRuntimePageModelConfig } from '../../runtime/buildRuntimePageModelConfig'
+import {
+  buildRuntimePageModelCustomerSection,
+  buildRuntimePageModelGovernanceSection,
+} from '../../runtime/buildRuntimePageModelSections'
+
+export function buildRuntimePageModelContextPayload(params) {
+  const customerPageModelSection = buildRuntimePageModelCustomerSection({
+    toggleTaskDone: params.toggleTaskDone,
+    crudDomainActions: params.crudDomainActions,
+    corePaginationActions: params.corePaginationActions,
+  })
+  const governancePageModelSection = buildRuntimePageModelGovernanceSection(params.domainActions)
+
+  return buildRuntimePageModelConfig({
+    runtime: params.runtime,
+    base: {
+      currentPageLabel: params.currentPageLabel,
+      lang: params.lang,
+      setLang: params.setLang,
+      refreshPage: params.refreshPage,
+      t: params.t,
+      canWrite: params.canWrite,
+      role: params.role,
+      canViewReports: params.canViewReports,
+      canViewAudit: params.canViewAudit,
+      canManagePermissions: params.canManagePermissions,
+      canManageUsers: params.canManageUsers,
+      canManageSalesAutomation: params.canManageSalesAutomation,
+      canDeleteCustomer: params.canDeleteCustomer,
+      canDeleteOpportunity: params.canDeleteOpportunity,
+      navigate: params.navigate,
+      performLogout: params.performLogout,
+      markCustomer360ActionResult: params.markCustomer360ActionResult,
+      markCustomer360ModuleRefreshLatency: params.markCustomer360ModuleRefreshLatency,
+      markCustomer360JumpHit: params.markCustomer360JumpHit,
+      markCustomer360ModuleCacheHit: params.markCustomer360ModuleCacheHit,
+      markCustomer360PrefetchHit: params.markCustomer360PrefetchHit,
+      markCustomer360PrefetchAbort: params.markCustomer360PrefetchAbort,
+      markCustomer360PrefetchModules: params.markCustomer360PrefetchModules,
+    },
+    reporting: {
+      hasInvalidAuditRange: params.hasInvalidAuditRange,
+      loadAudit: params.loadAudit,
+      loadExportJobs: params.loadExportJobs,
+      loadDesignerTemplates: params.loadDesignerTemplates,
+      loadCustomerTimeline: params.loadCustomerTimeline,
+      loadOpportunityTimeline: params.loadOpportunityTimeline,
+      loadReportExportJobs: params.loadReportExportJobs,
+    },
+    customer: customerPageModelSection,
+    commerceDomain: params.commerceDomain,
+    governance: governancePageModelSection,
+    approval: {
+      loadApprovalDetail: params.loadApprovalDetail,
+      loadApprovalTasks: params.loadApprovalTasks,
+      loadApprovalTemplates: params.loadApprovalTemplates,
+      loadNotificationJobs: params.loadNotificationJobs,
+    },
+  })
+}
+
+export function buildRuntimeShellPropsPayload(params) {
+  return {
+    auth: params.auth,
+    hasAuthToken: params.hasAuthToken,
+    isAuthRoute: params.isAuthRoute,
+    location: params.location,
+    apiContext: params.apiContext,
+    lang: params.lang,
+    setLang: params.setLang,
+    t: params.t,
+    navigate: params.navigate,
+    submitLogin: params.submitLogin,
+    loginForm: params.loginForm,
+    setLoginForm: params.setLoginForm,
+    formErrors: params.formErrors,
+    setFormErrors: params.setFormErrors,
+    submitSsoLogin: params.submitSsoLogin,
+    ssoConfig: params.ssoConfig,
+    ssoForm: params.ssoForm,
+    setSsoForm: params.setSsoForm,
+    oidcAuthorizing: params.oidcAuthorizing,
+    startOidcLogin: params.startOidcLogin,
+    loginError: params.loginError,
+    navGroups: params.navGroups,
+    activePage: params.activePage,
+    onNavigate: params.domainActions.onNavigate,
+    onPrefetch: params.domainActions.onPrefetch,
+    performLogout: params.performLogout,
+    devPerfEnabled: import.meta.env.DEV && params.perfEnabledByQuery,
+    perfMetrics: params.perfMetrics,
+    currentLoaderKey: params.currentLoaderKey,
+    lastRefreshReason: params.lastRefreshReason,
+    currentPageSignature: params.currentPageSignature,
+    currentSignatureHit: params.currentSignatureHit,
+    recentWorkbenchJump: params.recentWorkbenchJump,
+    domainLoadSource: params.domainLoadSource,
+    copyPerfSnapshot: params.copyPerfSnapshot,
+    lastPerfSnapshotAt: params.lastPerfSnapshotAt,
+    markRenderCommit: params.markRenderCommit,
+  }
+}

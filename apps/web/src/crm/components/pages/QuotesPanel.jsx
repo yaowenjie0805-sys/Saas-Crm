@@ -1,42 +1,15 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, formatMoney, translateStatus } from '../../shared'
+import { api, translateStatus } from '../../shared'
 import ListState from '../ListState'
 import { useBatchActions } from '../useBatchActions'
 import BatchResultModal from '../BatchResultModal'
 import VirtualListTable from '../VirtualListTable'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
+import { QuoteRow } from './quotes/QuotePanelRows'
+import { EMPTY_FORM, EMPTY_ROWS, formatRequestError, getQuoteStatusOptions, NOOP } from './quotes/quotePanelHelpers'
 
-const NOOP = () => {}
-const EMPTY_FORM = { id: '', customerId: '', opportunityId: '', owner: '', status: 'DRAFT', validUntil: '' }
-const EMPTY_ROWS = []
 const QuoteItemsSection = lazy(() => import('./quotes/QuoteItemsSection'))
 const QuoteEditorModal = lazy(() => import('./quotes/QuoteEditorModal'))
-const formatRequestError = (err, t) => {
-  const code = String(err?.code || '').trim().toLowerCase()
-  const message = code === 'quote_stage_gate_requires_approval'
-    ? t('quoteStageGateRequiresApproval')
-    : String(err?.message || 'request_failed')
-  const requestId = String(err?.requestId || '').trim()
-  return requestId ? `${message} [${requestId}]` : message
-}
-
-const QuoteRow = memo(function QuoteRow({ row, checked, onToggle, t, act, openEdit, setSelectedQuoteId, pending }) {
-  return (
-    <div className="table-row table-row-6">
-      <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
-      <span>{row.quoteNo}</span>
-      <span>{row.owner}</span>
-      <span>{translateStatus(t, row.status)}</span>
-      <span>{formatMoney(row.totalAmount)}</span>
-      <span>
-        <button className="mini-btn" onClick={() => { setSelectedQuoteId(row.id); openEdit(row) }}>{t('detail')}</button>
-        <button className="mini-btn" disabled={pending} onClick={() => act(row.id, 'submit')}>{t('submit')}</button>
-        <button className="mini-btn" disabled={pending} onClick={() => act(row.id, 'accept')}>{t('accept')}</button>
-        <button className="mini-btn" disabled={pending} onClick={() => act(row.id, 'to-order')}>{t('toOrder')}</button>
-      </span>
-    </div>
-  )
-})
 
 function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, prefill, onConsumePrefill, refreshPage, commerce }) {
   const quotes = commerce?.quotes || {}
@@ -63,6 +36,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
   const [batchStatus, setBatchStatus] = useState('')
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const itemAbortRef = useRef(null)
+  const statusOptions = useMemo(() => getQuoteStatusOptions(t), [t])
 
   const token = apiContext?.token
   const lang = apiContext?.lang || 'en'
@@ -243,10 +217,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
         />
         <select data-testid="quotes-status-filter" className="tool-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">{t('allStatuses')}</option>
-          <option value="DRAFT">{translateStatus(t, 'DRAFT')}</option>
-          <option value="SUBMITTED">{translateStatus(t, 'SUBMITTED')}</option>
-          <option value="APPROVED">{translateStatus(t, 'APPROVED')}</option>
-          <option value="REJECTED">{translateStatus(t, 'REJECTED')}</option>
+          {statusOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
       </div>
       <div className="filter-bar">
@@ -260,10 +231,7 @@ function QuotesPanel({ activePage, t, canWrite, apiContext, opportunityFilter, p
         <input className="tool-input" placeholder={t('batchOwnerPlaceholder')} value={batchOwner} onChange={(e) => setBatchOwner(e.target.value)} />
         <select className="tool-input" value={batchStatus} onChange={(e) => setBatchStatus(e.target.value)}>
           <option value="">{t('batchSetStatus')}</option>
-          <option value="DRAFT">{translateStatus(t, 'DRAFT')}</option>
-          <option value="SUBMITTED">{translateStatus(t, 'SUBMITTED')}</option>
-          <option value="APPROVED">{translateStatus(t, 'APPROVED')}</option>
-          <option value="REJECTED">{translateStatus(t, 'REJECTED')}</option>
+          {statusOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
         <button className="mini-btn" disabled={!canWrite} onClick={batchAssign}>{t('batchAssignOwner')}</button>
         <button className="mini-btn" disabled={!canWrite} onClick={batchChangeStatus}>{t('batchSetStatus')}</button>

@@ -1,324 +1,291 @@
-# CRM (Frontend/Backend Separated)
+# CRM
 
-A separated CRM system:
-- Frontend: React + Vite
-- Backend: Spring Boot 2.7 (JDK 8)
-- Database: MySQL 8
+<p align="center">
+  <strong>Enterprise-grade Customer Relationship Management System</strong>
+</p>
 
-## 1. Environment
-- JDK: 8 (current project built with JDK 8)
-- Maven: 3.9+
-- Node.js: 18+
-- MySQL: 8+
+<p align="center">
+  <strong>企业级客户关系管理系统</strong>
+</p>
 
-## 2. Database
-Backend uses local MySQL credentials:
-- user: `root`
-- password: `root`
-- db: `crm_local`
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-tech-stack">Tech Stack</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-api-reference">API</a> •
+  <a href="#-documentation">Docs</a>
+</p>
 
-Database create command:
+<p align="center">
+  <img src="https://img.shields.io/badge/Frontend-React%2019.2-61DAFB?logo=react" alt="Frontend">
+  <img src="https://img.shields.io/badge/Backend-Spring%20Boot%202.7-6DB33F?logo=springboot" alt="Backend">
+  <img src="https://img.shields.io/badge/Database-MySQL%208-4479A1?logo=mysql" alt="Database">
+  <img src="https://img.shields.io/badge/JDK-8-orange" alt="JDK">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js" alt="Node.js">
+</p>
+
+---
+
+## 📖 Overview | 项目简介
+
+A modern, full-stack CRM system with multi-tenant support, approval workflows, and comprehensive audit trails.
+
+一个现代化的全栈 CRM 系统，支持多租户、审批流程和完整的审计追踪。
+
+| Feature | Description |
+|---------|-------------|
+| 🏢 **Multi-tenant** | Complete data isolation between tenants 租户间数据完全隔离 |
+| ✅ **Approval Workflow** | Template-based approval with conditions and transfers 模板化审批，支持条件和转交 |
+| 📋 **Audit Trail** | Full operation logging with export and metrics 全操作日志，支持导出和指标 |
+| 🔐 **Role-based Access** | ADMIN / MANAGER / ANALYST / SALES hierarchy 角色分级权限控制 |
+| 🌐 **i18n Ready** | Chinese and English support 中英文双语支持 |
+| 📊 **Observability** | Health checks, SLO monitoring, Ops diagnostics 健康检查、SLO监控、运维诊断 |
+
+---
+
+## 🚀 Features | 功能特性
+
+<details>
+<summary><strong>Core Modules | 核心模块</strong></summary>
+
+| Module | 中文 | APIs |
+|--------|------|------|
+| Tenant Management | 租户管理 | `/api/v1/tenants` |
+| Approval Center | 审批中心 | `/api/v1/approval/*` |
+| Audit Logs | 审计日志 | `/api/audit-logs` |
+| Customer Management | 客户管理 | `/api/customers` |
+| Sales Pipeline | 销售管道 | `/api/opportunities`, `/api/tasks` |
+| Commerce | 商务中心 | `/api/v1/commerce/*` |
+| Reports | 报表分析 | `/api/v1/reports/*` |
+
+</details>
+
+<details>
+<summary><strong>Enterprise Features | 企业级特性</strong></summary>
+
+- **Authentication**: JWT + Session cookie, MFA, OIDC, Invitation flow
+- **Security**: Rate limiting, CORS, Tenant isolation, Input validation
+- **Performance**: Redis cache, Connection pooling, Query optimization
+- **Operations**: Health probes, SLO monitoring, Backup/Restore runbooks
+
+</details>
+
+---
+
+## 🛠 Tech Stack | 技术栈
+
+| Layer | Technology | Version |
+|-------|------------|---------|
+| **Frontend** | React + Vite + React Router + Zustand | 19.2 / 7.3 / 7.9 / 5.0 |
+| **Backend** | Spring Boot + Spring Data JPA | 2.7 (JDK 8) |
+| **Database** | MySQL + Flyway migrations | 8+ |
+| **Cache** | Redis | - |
+| **Message Queue** | RabbitMQ | - |
+| **Testing** | Playwright (E2E) + JUnit (Backend) | - |
+
+---
+
+## ⚡ Quick Start | 快速开始
+
+### Prerequisites | 环境要求
+
+| Requirement | Version |
+|-------------|---------|
+| JDK | 8 |
+| Maven | 3.9+ |
+| Node.js | 18+ |
+| MySQL | 8+ |
+
+### 1. Clone & Install | 克隆并安装
+
 ```bash
-mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS crm_local CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+git clone <repository-url>
+cd crm
+npm install
 ```
 
-Windows one-click init (create DB + Flyway migrate + seed data):
+### 2. Initialize Database | 初始化数据库
+
 ```bash
+# Windows
 npm run db:init
-```
 
-`db:init` now also applies dual-market demo seed (`scripts/seed-dual-market-demo.sql`), including:
-- `tenant_cn_demo` (`CN/CNY/Asia-Shanghai/STRICT`)
-- `tenant_global_demo` (`GLOBAL/USD/UTC/STAGE_GATE`)
-
-Linux/macOS:
-```bash
+# Linux/macOS
 bash scripts/init-db.sh root root crm_local
 ```
 
-## 3. Run Backend (Java)
-```bash
-mvn -f apps/api/pom.xml spring-boot:run
-```
-Windows recommended startup (auto cleanup invalid build folder + release 8080 + run):
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1
-```
-Backend URL:
-- `http://localhost:8080`
-- Health: `http://localhost:8080/api/health`
-- Liveness: `http://localhost:8080/api/health/live`
-- Readiness: `http://localhost:8080/api/health/ready`
-- Dependencies: `http://localhost:8080/api/health/deps`
+This creates the database, runs migrations, and seeds demo data including:
+- `tenant_cn_demo` (CN/CNY/Asia-Shanghai/STRICT)
+- `tenant_global_demo` (GLOBAL/USD/UTC/STAGE_GATE)
 
-## 4. Run Frontend (React)
-Install deps:
+### 3. Start Services | 启动服务
+
 ```bash
-npm install
-```
-Run:
-```bash
+# Terminal 1: Backend (port 8080)
+npm run dev:backend
+
+# Terminal 2: Frontend (port 5173)
 npm run dev
 ```
-Frontend URL:
-- `http://localhost:5173`
 
-Frontend calls backend via:
-- `VITE_API_BASE_URL` (default: `http://localhost:8080/api`)
-- browser session cookie (`HttpOnly`) with `credentials: include`
+### 4. Access | 访问地址
 
-## 5. Build
-Frontend:
-```bash
-npm run build
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8080/api |
+| Health Check | http://localhost:8080/api/health |
+
+### Demo Accounts | 演示账号
+
+| Username | Password | Role |
+|----------|----------|------|
+| admin | admin123 | ADMIN |
+| manager | manager123 | MANAGER |
+| sales | sales123 | SALES |
+| analyst | analyst123 | ANALYST |
+
+---
+
+## 📁 Project Structure | 项目结构
+
 ```
-Backend:
-```bash
-mvn -f apps/api/pom.xml clean package -DskipTests
+crm/
+├── apps/
+│   ├── api/                 # Spring Boot backend
+│   │   ├── src/main/java/com/yao/crm/
+│   │   │   ├── controller/  # REST controllers (34)
+│   │   │   ├── service/     # Business logic
+│   │   │   ├── entity/      # JPA entities (31)
+│   │   │   ├── repository/  # Data access
+│   │   │   └── security/    # Auth & permissions
+│   │   └── src/main/resources/
+│   │       └── db/migration/ # Flyway migrations
+│   └── web/                 # React frontend
+│       └── src/crm/
+│           ├── components/  # UI components
+│           ├── hooks/       # Custom hooks (32)
+│           ├── store/       # Zustand state
+│           └── i18n/        # Translations
+├── docs/
+│   └── operations/          # SRE runbooks (16)
+├── scripts/                 # DevOps scripts (34)
+├── infra/                   # Docker/Deploy configs
+└── logs/                    # Local logs (gitignored)
 ```
 
-API smoke test:
-```bash
-npm run test:api
+---
+
+## 📚 API Reference | API 参考
+
+### Legacy APIs (`/api/**`)
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/auth/login` | POST | Public | User login |
+| `/api/health` | GET | Public | Health check |
+| `/api/customers` | GET/POST | Auth | Customer CRUD |
+| `/api/opportunities` | GET/POST | Auth | Sales opportunities |
+| `/api/audit-logs` | GET | ADMIN/MANAGER | Audit logs |
+
+### Enterprise APIs (`/api/v1/**`)
+
+All v1 APIs require:
+- `Authorization: Bearer <token>`
+- `X-Tenant-Id: <tenantId>`
+
+| Module | Endpoints |
+|--------|-----------|
+| Tenants | `GET/POST/PATCH /api/v1/tenants` |
+| Auth | `POST /api/v1/auth/login`, `/mfa/verify`, `/invitations/accept` |
+| Approval | `/api/v1/approval/templates`, `/instances`, `/tasks` |
+| Commerce | `/api/v1/commerce/quotes`, `/contracts`, `/orders`, `/payments` |
+| Reports | `/api/v1/reports/overview`, `/export-jobs` |
+| Ops | `/api/v1/ops/health`, `/slo-snapshot` |
+
+### Error Format | 错误格式
+
+```json
+{
+  "code": "tenant_not_found",
+  "message": "...",
+  "requestId": "abc-123",
+  "details": {}
+}
 ```
 
-Browser-backed frontend E2E:
+---
+
+## 🧪 Testing | 测试
+
 ```bash
+# E2E tests (Playwright)
 npm run test:e2e
-```
 
-Performance quick smoke:
-```bash
-npm run perf:smoke
-```
-
-Performance baseline + gate:
-```bash
-npm run perf:baseline
-npm run perf:gate
-```
-
-Staging verification and supply-chain scan:
-```bash
-npm run staging:verify
-npm run security:scan
-```
-
-Staging deploy and rollback:
-```bash
-npm run staging:deploy -- --artifactVersion <commit_sha>
-npm run staging:rollback
-```
-
-Backend automated tests:
-```bash
+# Backend tests (JUnit)
 npm run test:backend
-```
 
-One command from DB creation to browser E2E + API smoke test:
-```bash
+# API smoke test
+npm run test:api
+
+# Full test suite (DB + E2E + API)
 npm run test:full
 ```
 
-Production preflight gate:
+---
+
+## 🔧 Useful Commands | 常用命令
+
+| Command | Description | 说明 |
+|---------|-------------|------|
+| `npm run dev` | Start frontend | 启动前端 |
+| `npm run dev:backend` | Start backend | 启动后端 |
+| `npm run build` | Build frontend | 构建前端 |
+| `npm run lint` | Lint frontend | 代码检查 |
+| `npm run db:init` | Initialize database | 初始化数据库 |
+| `npm run test:full` | Full test suite | 完整测试 |
+| `npm run perf:baseline` | Performance baseline | 性能基线 |
+| `npm run staging:verify` | Staging verification | 预发验证 |
+| `npm run security:scan` | Security scan | 安全扫描 |
+
+---
+
+## 📖 Documentation | 文档
+
+| Document | Description |
+|----------|-------------|
+| [Project Structure](docs/PROJECT_STRUCTURE.md) | Directory layout |
+| [Command Reference](docs/operations/command-reference.md) | All npm scripts |
+| [Environment Matrix](docs/operations/environment-matrix.md) | Env configurations |
+| [Release Strategy](docs/operations/release-strategy.md) | Deployment guide |
+| [SRE SLO Baseline](docs/operations/sre-slo-baseline.md) | Reliability targets |
+| [Backup/Restore](docs/operations/backup-restore-runbook.md) | Database runbook |
+
+All operations docs support **Chinese/English bilingual** format.
+
+---
+
+## 🤝 Contributing | 贡献
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Before submitting PR, ensure:
 ```bash
-npm run preflight:prod
+npm run lint && npm run build && npm run test:full
 ```
 
-SRE daily check:
-```bash
-npm run sre:daily-check
-```
+---
 
-SRE alert gate:
-```bash
-npm run sre:alert-check
-```
+## 📄 License | 许可证
 
-Drill commands:
-```bash
-npm run drill:backup-restore
-npm run drill:rollback
-```
+This project is licensed under the MIT License.
 
-Release snapshot mapping:
-```bash
-npm run release:snapshot
-```
+---
 
-## 6. API
-- `POST /api/auth/login` (public)
-- `GET /api/auth/session` (requires valid session)
-- `GET /api/health`
-- `GET /api/health/live`
-- `GET /api/health/ready`
-- `GET /api/health/deps`
-- `GET /api/dashboard`
-- `GET /api/reports/overview` (ADMIN/MANAGER/ANALYST)
-- `GET /api/audit-logs` (ADMIN/MANAGER)
-- `GET /api/audit-logs/search` (ADMIN/MANAGER/ANALYST, pagination/filter/sort, supports `username`/`role`/`action` + `from`/`to`)
-- `GET /api/audit-logs/export` (ADMIN/MANAGER/ANALYST, CSV export, supports `username`/`role`/`action` + `from`/`to`)
-- `GET /api/audit-logs/export-metrics` (ADMIN/MANAGER/ANALYST, export queue/failure/retry/latency snapshot)
-- `GET /api/customers`
-- `GET /api/customers/search` (with pagination/filter)
-- `POST /api/customers`
-- `PATCH /api/customers/{id}`
-- `DELETE /api/customers/{id}`
-- `GET /api/tasks`
-- `GET /api/tasks/search` (with pagination/filter/sort)
-- `POST /api/tasks`
-- `PATCH /api/tasks/{id}`
-- `GET /api/follow-ups/search` (with pagination/filter/sort)
-- `POST /api/follow-ups`
-- `PATCH /api/follow-ups/{id}`
-- `DELETE /api/follow-ups/{id}`
-- `GET /api/opportunities`
-- `GET /api/opportunities/search` (with pagination/filter)
-- `POST /api/opportunities`
-- `PATCH /api/opportunities/{id}`
-
-### v1 Enterprise APIs (`/api/v1/**`)
-- All protected `v1` APIs require:
-  - `Authorization: Bearer <token>`
-  - `X-Tenant-Id: <tenantId>` (must match token claim)
-- All `/api/v1/**` error responses are normalized:
-  - `{ "code": "...", "message": "...", "requestId": "...", "details": {} }`
-  - `code` uses lower snake_case.
-- Legacy `/api/**` is in compatibility transition mode:
-  - Keeps `message`
-  - Adds `code/requestId/details`
-  - Uses legacy-style upper-case code values (for backward compatibility)
-
-- Tenant / Auth:
-  - `GET /api/v1/tenants`
-  - `POST /api/v1/tenants`
-  - `PATCH /api/v1/tenants/{id}`
-  - `POST /api/v1/auth/login`
-  - `GET /api/v1/auth/session`
-  - `POST /api/v1/auth/mfa/verify`
-  - `POST /api/v1/auth/invitations/accept`
-  - `POST /api/v1/auth/oidc/callback`
-  - Success example (`POST /api/v1/auth/invitations/accept`, HTTP 201):
-    - `{ "code": "invitation_accepted", "message": "...", "requestId": "...", "details": {}, "tenantId": "...", "username": "...", "displayName": "..." }`
-  - Success example (`POST /api/v1/approval/templates`, HTTP 201):
-    - `{ "code": "approval_template_created", "message": "...", "requestId": "...", "details": {}, "id": "...", "tenantId": "...", "bizType": "...", "status": "PUBLISHED" }`
-  - Success example (`GET /api/v1/integrations/notifications/jobs`, HTTP 200):
-    - `{ "code": "notification_jobs_listed", "message": "...", "requestId": "...", "details": {}, "items": [], "page": 1, "size": 20, "totalPages": 1, "total": 0 }`
-
-- User Admin / Invitation:
-  - `GET /api/v1/admin/users`
-  - `PATCH /api/v1/admin/users/{id}`
-  - `POST /api/v1/admin/users/invite`
-
-- Approval:
-  - `POST /api/v1/approval/templates`
-  - `GET /api/v1/approval/templates`
-  - `PATCH /api/v1/approval/templates/{id}`
-  - `POST /api/v1/approval/instances/{bizType}/{bizId}/submit`
-  - `GET /api/v1/approval/instances`
-  - `GET /api/v1/approval/instances/{id}`
-  - `GET /api/v1/approval/tasks`
-  - `GET /api/v1/approval/stats`
-  - `POST /api/v1/approval/tasks/{taskId}/approve`
-  - `POST /api/v1/approval/tasks/{taskId}/reject`
-  - `POST /api/v1/approval/tasks/{taskId}/transfer`
-
-- Automation / Integrations:
-  - `POST /api/v1/automation/rules`
-  - `POST /api/v1/integrations/webhooks/wecom`
-  - `POST /api/v1/integrations/webhooks/dingtalk`
-
-- Reports:
-  - `GET /api/v1/reports/overview`
-  - `POST /api/v1/reports/export-jobs`
-- `GET /api/v1/reports/export-jobs`
-- `GET /api/v1/reports/export-jobs/{jobId}`
-- `POST /api/v1/reports/export-jobs/{jobId}/retry`
-- `GET /api/v1/reports/export-jobs/{jobId}/download`
-- `GET /api/v1/ops/slo-snapshot`
-- `GET /api/v1/ops/slo-snapshot`
-
-## 7. Notes
-- IDE startup quick troubleshooting:
-  - Maven Reload/Reimport project in IDEA.
-  - Ensure runtime classpath contains both `flyway-core` and `flyway-mysql`.
-  - Verify dependency tree includes MySQL extension:
-    - `mvn -f apps/api/pom.xml dependency:tree | findstr flyway`
-  - If you ever see `apps/api/${project.build.directory}`, delete it and rebuild:
-    - `mvn -f apps/api/pom.xml clean compile -DskipTests`
-  - If IDEA still throws `Unsupported Database: MySQL 8.0`, run once by Maven to sync runtime:
-    - `mvn -f apps/api/pom.xml spring-boot:run`
-  - If `8080` is in use, stop old process:
-    - `netstat -ano | findstr :8080`
-    - `taskkill /PID <pid> /F`
-- Backend schema is versioned by Flyway migrations (`apps/api/src/main/resources/db/migration/V*.sql`).
-- `dev/test/prod` are split by Spring profiles; `test/prod` do not allow schema drift by Hibernate DDL.
-- Backend startup includes Flyway state guard and will fail fast on invalid migration states.
-- Backend startup also performs datasource precheck and fails with readable error if DB is unreachable.
-- Backend auto seeds initial data when tables are empty (`APP_SEED_ENABLED`, `APP_SEED_DEMO_ENABLED`).
-- Backend also seeds users (dev/test seed by default):
-  - `admin / admin123` (role: `ADMIN`)
-  - `manager / manager123` (role: `MANAGER`)
-  - `sales / sales123` (role: `SALES`)
-  - `analyst / analyst123` (role: `ANALYST`)
-- All `/api/**` endpoints accept either `HttpOnly` session cookie or `Authorization: Bearer <token>` (transition mode).
-- Frontend no longer persists bearer token in `localStorage`.
-- All `/api/**` endpoints require authenticated session except:
-  - `/api/health`
-  - `/api/auth/login`
-- Permission rule:
-  - `DELETE /api/customers/{id}` is `ADMIN` or `MANAGER`.
-  - `PATCH /api/opportunities/{id}` for `amount` is `ADMIN` or `MANAGER`.
-- Audit log:
-  - Every login/create/update/delete operation is persisted in `audit_logs`.
-- API error i18n:
-  - Default response messages are English.
-  - Send `Accept-Language: zh` to receive Chinese error messages.
-- `/api/v1/**` error examples:
-  - `401`: `{ "code": "unauthorized", "message": "...", "requestId": "...", "details": {} }`
-  - `403`: `{ "code": "forbidden", "message": "...", "requestId": "...", "details": {} }`
-  - `404`: `{ "code": "tenant_not_found", "message": "...", "requestId": "...", "details": {} }`
-  - `409`: `{ "code": "username_exists", "message": "...", "requestId": "...", "details": {} }`
-- Legacy `/api/**` compatibility error example:
-  - `403`: `{ "message": "...", "code": "FORBIDDEN", "requestId": "...", "details": {} }`
-- Robustness baseline:
-  - Production profile includes security fail-fast checks for weak defaults (`AUTH_TOKEN_SECRET`, `SECURITY_MFA_STATIC_CODE`, `SECURITY_SSO_MODE`, `AUTH_BOOTSTRAP_DEFAULT_PASSWORD`).
-  - Global exception handling returns normalized JSON error bodies.
-  - Rate limiting is enabled on `/api/**` (except `OPTIONS`) and returns localized 429 errors.
-  - Endpoint-specific rate limits are applied for login/approval/batch-retry/export paths.
-  - Notification batch operations are protected by `integration.notifications.batch-max-size` (default `100`).
-  - Backend has datasource pool/timeouts and request timeouts configured.
-  - Ops diagnostics endpoints:
-    - `GET /api/v1/ops/health`
-    - `GET /api/v1/ops/metrics/summary`
-  - Release/ops runbooks:
-    - `docs/operations/backup-restore-runbook.md`
-    - `docs/operations/release-rollback-runbook.md`
-    - `docs/operations/audit-retention-policy.md`
-  - `docs/operations/release-strategy.md`
-  - `docs/operations/sre-slo-baseline.md`
-  - `docs/operations/perf-baseline.md`
-  - `docs/operations/error-budget-policy.md`
-  - `docs/operations/oncall-escalation-runbook.md`
-  - `docs/operations/weekly-oncall-alert-review-template.md`
-  - `docs/operations/change-control-checklist.md`
-  - `docs/operations/incident-postmortem-template.md`
-  - `docs/operations/staging-deploy-runbook.md`
-  - `logs/security/security-scan-latest.json`
-  - `logs/staging/staging-release-latest.json`
-  - `logs/sre/daily-*.json` (daily operational verdict)
-  - `logs/drills/backup-restore-*.json`, `logs/drills/rollback-*.json` (drill evidence)
-    - `docs/operations/environment-matrix.md`
-  - CI workflows:
-    - `.github/workflows/pr-gate.yml`
-    - `.github/workflows/main-gate.yml`
-  - Frontend API requests use timeout + retry for GET requests.
-  - Frontend includes a role permission matrix visualization.
-  - Backend request validation is enabled (`spring-boot-starter-validation` + DTO + `@Valid`).
-  - Task/Follow-up/Opportunity create APIs now use DTO validation with normalized validation error responses.
-
-
-## 8. Controller architecture
-- Controllers are split by domain (auth/health/dashboard/reports/customers/tasks/follow-ups/opportunities/audit).
-- Common controller helpers are centralized in `apps/api/src/main/java/com/yao/crm/controller/BaseApiController.java`.
-- Dashboard/report aggregation logic is moved to service layer (DashboardService, ReportService).
+<p align="center">
+  Made with ❤️ by the CRM Team
+</p>

@@ -1,5 +1,5 @@
-import { memo, useMemo, useState } from 'react'
-import { api, formatMoney, OPPORTUNITY_STAGE_OPTIONS, translateStage, translateStatus } from '../../shared'
+import { useMemo, useState } from 'react'
+import { api, translateStatus } from '../../shared'
 import ListState from '../ListState'
 import RowDetailDrawer from '../RowDetailDrawer'
 import ServerPager from '../ServerPager'
@@ -7,32 +7,8 @@ import { useBatchActions } from '../useBatchActions'
 import BatchResultModal from '../BatchResultModal'
 import VirtualListTable from '../VirtualListTable'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
-
-const OpportunityRow = memo(function OpportunityRow({
-  row,
-  checked,
-  onToggle,
-  t,
-  openDetail,
-  editOpportunity,
-  canDeleteOpportunity,
-  removeOpportunity,
-}) {
-  return (
-    <div className="table-row table-row-6">
-      <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
-      <span>{translateStage(t, row.stage)}</span>
-      <span>{row.owner}</span>
-      <span>{row.progress}%</span>
-      <span>{formatMoney(row.amount)}</span>
-      <span>
-        <button className="mini-btn" onClick={() => openDetail(row)}>{t('detail')}</button>
-        <button className="mini-btn" onClick={() => editOpportunity(row)}>{t('save')}</button>
-        {canDeleteOpportunity ? <button className="danger-btn" onClick={() => removeOpportunity(row.id)}>{t('delete')}</button> : null}
-      </span>
-    </div>
-  )
-})
+import { OpportunityRow } from './pipeline/PipelineRows'
+import { buildPipelineDetailRows, getPipelineStageOptions, sortPipelineRows } from './pipeline/pipelinePanelHelpers'
 
 function PipelinePanel({
   activePage,
@@ -69,6 +45,7 @@ function PipelinePanel({
   const [batchStage, setBatchStage] = useState('')
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [timelineLoading, setTimelineLoading] = useState(false)
+  const stageOptions = useMemo(() => getPipelineStageOptions(t), [t])
   const token = apiContext?.token
   const lang = apiContext?.lang || 'en'
   const { summary: batchSummary, toastMessage: batchMessage, runBatch, clearSummary } = useBatchActions({ t })
@@ -81,14 +58,7 @@ function PipelinePanel({
     })
   }
 
-  const rows = useMemo(() => {
-    const sorted = [...(opportunities || [])]
-    if (sortBy === 'amountDesc') sorted.sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
-    if (sortBy === 'amountAsc') sorted.sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0))
-    if (sortBy === 'progressDesc') sorted.sort((a, b) => Number(b.progress || 0) - Number(a.progress || 0))
-    if (sortBy === 'progressAsc') sorted.sort((a, b) => Number(a.progress || 0) - Number(b.progress || 0))
-    return sorted
-  }, [opportunities, sortBy])
+  const rows = useMemo(() => sortPipelineRows(opportunities, sortBy), [opportunities, sortBy])
 
   const page = pagination?.page || 1
   const totalPages = Math.max(1, pagination?.totalPages || 1)
@@ -167,7 +137,7 @@ function PipelinePanel({
       <div className="inline-tools filter-row" style={{ marginBottom: 10 }}>
         <select className={fieldErrors?.stage ? 'tool-input input-invalid' : 'tool-input'} value={opportunityForm.stage} onChange={(e) => setOpportunityForm((p) => ({ ...p, stage: e.target.value }))}>
           <option value="">{t('selectPlaceholder')}</option>
-          {OPPORTUNITY_STAGE_OPTIONS.map((stage) => <option key={stage} value={stage}>{translateStage(t, stage)}</option>)}
+          {stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
         </select>
         <input className={fieldErrors?.progress ? 'tool-input input-invalid' : 'tool-input'} placeholder={t('progress')} value={opportunityForm.progress} onChange={(e) => setOpportunityForm((p) => ({ ...p, progress: e.target.value }))} />
         <input className={fieldErrors?.amount ? 'tool-input input-invalid' : 'tool-input'} placeholder={t('amount')} value={opportunityForm.amount} onChange={(e) => setOpportunityForm((p) => ({ ...p, amount: e.target.value }))} />
@@ -184,7 +154,7 @@ function PipelinePanel({
       <div className="inline-tools filter-row" style={{ marginBottom: 8 }}>
         <select className="tool-input" value={oppStage} onChange={(e) => setOppStage(e.target.value)}>
           <option value="">{t('selectPlaceholder')}</option>
-          {OPPORTUNITY_STAGE_OPTIONS.map((stage) => <option key={stage} value={stage}>{translateStage(t, stage)}</option>)}
+          {stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
         </select>
       </div>
       <div className="inline-tools filter-bar" style={{ marginBottom: 10 }}>
@@ -198,7 +168,7 @@ function PipelinePanel({
         <input className="tool-input" placeholder={t('batchOwnerPlaceholder')} value={batchOwner} onChange={(e) => setBatchOwner(e.target.value)} />
         <select className="tool-input" value={batchStage} onChange={(e) => setBatchStage(e.target.value)}>
           <option value="">{t('batchSetStage')}</option>
-          {OPPORTUNITY_STAGE_OPTIONS.map((stage) => <option key={stage} value={stage}>{translateStage(t, stage)}</option>)}
+          {stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
         </select>
         <button className="mini-btn" disabled={!canWrite} onClick={batchAssign}>{t('batchAssignOwner')}</button>
         <button className="mini-btn" disabled={!canWrite} onClick={batchChangeStage}>{t('batchSetStage')}</button>
@@ -236,13 +206,7 @@ function PipelinePanel({
         />
       )}
       {!loading && rows.length > 0 && <ServerPager t={t} page={page} totalPages={totalPages} size={pagination?.size || 8} onPageChange={onPageChange} onSizeChange={onSizeChange} />}
-      <RowDetailDrawer open={!!detail} title={t('pipeline')} t={t} onClose={() => setDetail(null)} rows={[
-        { label: t('idLabel'), value: detail?.id },
-        { label: t('stage'), value: translateStage(t, detail?.stage) },
-        { label: t('owner'), value: detail?.owner },
-        { label: t('progress'), value: detail ? `${detail.progress}%` : '-' },
-        { label: t('amount'), value: detail ? formatMoney(detail.amount) : '-' },
-      ]} actions={[
+      <RowDetailDrawer open={!!detail} title={t('pipeline')} t={t} onClose={() => setDetail(null)} rows={buildPipelineDetailRows(t, detail)} actions={[
         { label: t('quickCreateQuote'), onClick: () => detail && createQuoteFromOpportunity && createQuoteFromOpportunity(detail) },
         { label: t('quickViewOrders'), onClick: () => detail && viewOrdersFromOpportunity && viewOrdersFromOpportunity(detail) },
         { label: t('quickCreateFollowUp'), onClick: () => detail && quickCreateFollowUp && quickCreateFollowUp(detail) },
