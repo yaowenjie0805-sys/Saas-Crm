@@ -1,4 +1,6 @@
-import { translateOwnerAlias, translateStatus } from '../../../shared'
+import { formatDateTime, translateOwnerAlias, translateStatus } from '../../../shared'
+
+export { formatDateTime }
 
 export function createOwnerAliasMap(t) {
   return {

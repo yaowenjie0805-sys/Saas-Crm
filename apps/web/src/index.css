@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 body {
   margin: 0;
   min-width: 360px;
@@ -31,4 +35,56 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* Error Boundary Styles */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 2rem;
+  background: var(--surface-card, rgba(17, 24, 39, 0.6));
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
+  border-radius: 0.5rem;
+  margin: 1rem;
+}
+
+.error-boundary-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error-boundary h2 {
+  color: var(--text-primary, #f8fafc);
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.error-boundary p {
+  color: var(--text-secondary, #cbd5e1);
+  margin: 0 0 1.5rem;
+}
+
+.error-details {
+  margin-top: 1.5rem;
+  text-align: left;
+  color: var(--text-muted, #64748b);
+  font-size: 0.875rem;
+}
+
+.error-details pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1rem;
+  border-radius: 0.25rem;
+  overflow-x: auto;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
 }

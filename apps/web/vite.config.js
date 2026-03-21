@@ -1,6 +1,84 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// 代码分割配置
+const CHUNK_GROUPS = {
+  vendor: [
+    { test: /node_modules\/react/, name: 'vendor-react' },
+    { test: /node_modules\/react-dom/, name: 'vendor-react' },
+    { test: /node_modules\/react-router/, name: 'vendor-router' },
+    { test: /node_modules\/zustand/, name: 'vendor-state' },
+    { test: /node_modules\//, name: 'vendor-misc' },
+  ],
+  appRuntime: [
+    'useCoreListDomainLoaders',
+    'useWorkbenchDomainLoaders',
+    'useCommerceDomainLoaders',
+    'useGovernanceDomainLoaders',
+    'useApprovalDomainLoaders',
+    'useReportingAuditDomainLoaders',
+    'useLeadImportDomainLoaders',
+    '/orchestrators/',
+  ],
+  routes: {
+    'DashboardPanel': 'route-dashboard',
+    'customer360': 'route-customers-detail',
+    'CustomersPanel': 'route-customers',
+    'CustomersPanelRuntime': 'route-customers',
+    'CustomersPanelContainer': 'route-customers',
+    'useBatchActions': 'route-customers',
+    'QuotesPanel': 'route-commerce',
+    'OrdersPanel': 'route-commerce',
+    'quotes': 'route-commerce-detail',
+    'orders': 'route-commerce-detail',
+    'PipelinePanel': 'route-pipeline',
+    'ApprovalsPageContainer': 'route-approvals',
+    'GovernancePageContainer': 'route-governance',
+    'ReportDesignerPanel': 'route-report-designer',
+    'reportDesigner': 'route-report-designer-detail',
+  },
+  i18n: {
+    'i18n/common/en': 'crm-i18n-en',
+    'i18n/common/zh': 'crm-i18n-zh',
+    'i18n/namespaces/market-dashboard': 'crm-i18n-ns-dashboard',
+    'i18n/namespaces/market-governance': 'crm-i18n-ns-governance',
+    'i18n/namespaces/opportunity-workbench': 'crm-i18n-ns-opportunity-workbench',
+    'i18n/namespaces/report-designer': 'crm-i18n-ns-report-designer',
+    'i18n/namespaces/': 'crm-i18n-ns',
+    'i18n.js': 'crm-i18n-core',
+  },
+  shell: ['/components/shell/', 'SidebarNav'],
+}
+
+function getChunkName(id) {
+  // 1. Vendor chunks
+  for (const { test, name } of CHUNK_GROUPS.vendor) {
+    if (test.test(id)) return name
+  }
+
+  // 2. App runtime core (avoid circular deps)
+  for (const pattern of CHUNK_GROUPS.appRuntime) {
+    if (id.includes(pattern)) return 'app-runtime-core'
+  }
+
+  // 3. Shell chunks
+  for (const pattern of CHUNK_GROUPS.shell) {
+    if (id.includes(pattern)) return 'app-shell'
+  }
+
+  // 4. Route chunks
+  for (const [pattern, name] of Object.entries(CHUNK_GROUPS.routes)) {
+    if (id.includes(pattern)) return name
+  }
+
+  // 5. i18n chunks
+  for (const [pattern, name] of Object.entries(CHUNK_GROUPS.i18n)) {
+    if (id.includes(pattern)) return name
+  }
+
+  return undefined
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -9,112 +87,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         chunkFileNames: 'assets/[name]-[hash].js',
-        manualChunks(id) {
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-            return 'vendor-react'
-          }
-          if (id.includes('node_modules/react-router')) {
-            return 'vendor-router'
-          }
-          if (id.includes('node_modules/zustand')) {
-            return 'vendor-state'
-          }
-          if (id.includes('node_modules')) {
-            return 'vendor-misc'
-          }
-          // Domain loaders share circular deps with orchestrators,
-          // so they must stay in the same chunk to avoid circular chunk warnings.
-          if (id.includes('/src/crm/hooks/useCoreListDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/useWorkbenchDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/useCommerceDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/useGovernanceDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/useApprovalDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/useReportingAuditDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/useLeadImportDomainLoaders')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/hooks/orchestrators/')) {
-            return 'app-runtime-core'
-          }
-          if (id.includes('/src/crm/components/shell/')) {
-            return 'app-shell'
-          }
-          if (id.includes('/src/crm/components/SidebarNav')) {
-            return 'app-shell'
-          }
-          if (id.includes('/src/crm/components/pages/DashboardPanel')) {
-            return 'route-dashboard'
-          }
-          if (id.includes('/src/crm/components/pages/customers/customer360/')) {
-            return 'route-customers-detail'
-          }
-          if (
-            id.includes('/src/crm/components/pages/CustomersPanel')
-            || id.includes('/src/crm/components/pages/customers/CustomersPanelContainer')
-            || id.includes('/src/crm/components/pages/customers/CustomersPanelRuntime')
-            || id.includes('/src/crm/hooks/useBatchActions')
-          ) {
-            return 'route-customers'
-          }
-          if (id.includes('/src/crm/components/pages/quotes/') || id.includes('/src/crm/components/pages/orders/')) {
-            return 'route-commerce-detail'
-          }
-          if (id.includes('/src/crm/components/pages/QuotesPanel') || id.includes('/src/crm/components/pages/OrdersPanel')) {
-            return 'route-commerce'
-          }
-          if (id.includes('/src/crm/components/pages/PipelinePanel')) {
-            return 'route-pipeline'
-          }
-          if (id.includes('/src/crm/components/pages/ApprovalsPageContainer')) {
-            return 'route-approvals'
-          }
-          if (id.includes('/src/crm/components/pages/GovernancePageContainer')) {
-            return 'route-governance'
-          }
-          if (id.includes('/src/crm/components/pages/ReportDesignerPanel')) {
-            return 'route-report-designer'
-          }
-          if (id.includes('/src/crm/components/pages/reportDesigner/')) {
-            return 'route-report-designer-detail'
-          }
-          if (id.includes('/src/crm/i18n/common/en')) {
-            return 'crm-i18n-en'
-          }
-          if (id.includes('/src/crm/i18n/common/zh')) {
-            return 'crm-i18n-zh'
-          }
-          if (id.includes('/src/crm/i18n/namespaces/market-dashboard')) {
-            return 'crm-i18n-ns-dashboard'
-          }
-          if (id.includes('/src/crm/i18n/namespaces/market-governance')) {
-            return 'crm-i18n-ns-governance'
-          }
-          if (id.includes('/src/crm/i18n/namespaces/opportunity-workbench')) {
-            return 'crm-i18n-ns-opportunity-workbench'
-          }
-          if (id.includes('/src/crm/i18n/namespaces/report-designer')) {
-            return 'crm-i18n-ns-report-designer'
-          }
-          if (id.includes('/src/crm/i18n/namespaces/')) {
-            return 'crm-i18n-ns'
-          }
-          if (id.includes('/src/crm/i18n.js')) {
-            return 'crm-i18n-core'
-          }
-          return undefined
-        },
+        manualChunks: getChunkName,
       },
     },
   },
