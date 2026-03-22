@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-03-21T16:48:44.531Z",
+  "duration": 2377,
+  "scores": {
+    "functional": 0,
+    "performance": 0,
+    "codeQuality": 67,
+    "ux": 67,
+    "security": 100,
+    "overall": 38
+  },
+  "metrics": {
+    "functional": {
+      "api_login": {
+        "value": false,
+        "passed": false,
+        "timestamp": "2026-03-21T16:48:42.613Z"
+      },
+      "frontend_login_page": {
+        "value": false,
+        "passed": false,
+        "timestamp": "2026-03-21T16:48:43.364Z"
+      }
+    },
+    "performance": {},
+    "codeQuality": {
+      "test_coverage": {
+        "value": "0%",
+        "passed": false,
+        "timestamp": "2026-03-21T16:48:43.497Z"
+      },
+      "eslint_errors": {
+        "value": "待检查",
+        "passed": true,
+        "timestamp": "2026-03-21T16:48:43.497Z"
+      },
+      "typescript_check": {
+        "value": "待检查",
+        "passed": true,
+        "timestamp": "2026-03-21T16:48:43.497Z"
+      }
+    },
+    "ux": {
+      "mobile_viewport": {
+        "value": true,
+        "passed": true,
+        "timestamp": "2026-03-21T16:48:44.141Z"
+      },
+      "mobile_login_form": {
+        "value": false,
+        "passed": false,
+        "timestamp": "2026-03-21T16:48:44.193Z"
+      },
+      "desktop_viewport": {
+        "value": true,
+        "passed": true,
+        "timestamp": "2026-03-21T16:48:44.242Z"
+      }
+    },
+    "security": {
+      "unauthorized_blocked": {
+        "value": true,
+        "passed": true,
+        "timestamp": "2026-03-21T16:48:44.356Z"
+      },
+      "invalid_token_rejected": {
+        "value": true,
+        "passed": true,
+        "timestamp": "2026-03-21T16:48:44.362Z"
+      }
+    }
+  }
+}

@@ -25,11 +25,11 @@ function TenantRowEditor({
           <input className="tool-input" placeholder={t('reportTimezone')} value={row.timezone || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, timezone: e.target.value } : x))} />
           <input className="tool-input" placeholder={t('reportCurrency')} value={row.currency || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, currency: e.target.value.toUpperCase() } : x))} />
           <select className="tool-input" value={row.marketProfile || 'CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? applyMarketDefaults(x, e.target.value) : x))}>
-            {MARKET_PROFILE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
+            {MARKET_PROFILE_OPTIONS.map((x) => <option key={x} value={x}>{t(x === 'GLOBAL' ? 'marketGlobal' : 'marketCN')}</option>)}
           </select>
           <input className="tool-input" placeholder={t('taxRule')} value={row.taxRule || 'VAT_CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, taxRule: e.target.value } : x))} />
           <select className="tool-input" value={row.approvalMode || 'STRICT'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, approvalMode: e.target.value } : x))}>
-            {TENANT_APPROVAL_MODE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
+            {TENANT_APPROVAL_MODE_OPTIONS.map((x) => <option key={x} value={x}>{t(x === 'STAGE_GATE' ? 'approvalModeStageGate' : 'approvalModeStrict')}</option>)}
           </select>
           <input className="tool-input" placeholder={t('channelsLabel')} value={row.channels || '["WECOM","DINGTALK"]'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, channels: e.target.value } : x))} />
           <input className="tool-input" placeholder={t('dataResidency')} value={row.dataResidency || 'CN'} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, dataResidency: e.target.value } : x))} />

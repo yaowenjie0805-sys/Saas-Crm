@@ -435,7 +435,21 @@ export const ZH = {
   "ownerSales": "\u9500\u552e",
   "ownerAnalyst": "\u5206\u6790\u5e08",
   "bizTypeContract": "\u5408\u540c",
-  "bizTypePayment": "\u56de\u6b3e"
+  "bizTypePayment": "\u56de\u6b3e",
+  "reportDesigner": "\u62a5\u8868\u8bbe\u8ba1\u5668",
+  "salesAutomation": "\u81ea\u52a8\u5316",
+  "adminTenants": "\u79df\u6237\u7ba1\u7406",
+  "marketProfile": "\u5e02\u573a\u6a21\u5f0f",
+  "marketCN": "\u4e2d\u56fd",
+  "marketGlobal": "\u56fd\u9645",
+  "pipelineHealth": "\u7ba1\u9053\u5065\u5eb7\u5ea6",
+  "arrLike": "\u5e74\u5316\u6536\u5165",
+  "taxRule": "\u7a0e\u89c4\u5219",
+  "channelsLabel": "\u6e20\u9053\u914d\u7f6e",
+  "dataResidency": "\u6570\u636e\u5c45\u7559\u5730",
+  "maskLevel": "\u8131\u654f\u7ea7\u522b",
+  "tenantConfigNotSyncedHint": "\u79df\u6237\u914d\u7f6e\u5c1a\u672a\u540c\u6b65",
+  "reportsLocalizedFallbackHint": "\u672c\u5730\u5316\u6307\u6807\u4f7f\u7528\u4e86\u9ed8\u8ba4\u503c"
 }
 
 export default ZH

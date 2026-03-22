@@ -8,6 +8,14 @@ import {
   translateStatus,
 } from '../../../shared'
 
+function toBarEntries(data) {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    return Object.entries(data).map(([label, value]) => ({ label, value }))
+  }
+  return []
+}
+
 /**
  * 报表图表部分
  */
@@ -33,13 +41,13 @@ function ReportsSection({
   const tenantConfigSynced = !!reports?.tenantConfigSynced
   const localizedFallback = !!reports?.localizedFallback
 
-  const ownerBars = (reports?.customerByOwner || [])
+  const ownerBars = toBarEntries(reports?.customerByOwner)
     .map((item) => ({ ...item, label: translateOwnerAlias(t, item.label) }))
-  const statusBars = (reports?.revenueByStatus || [])
+  const statusBars = toBarEntries(reports?.revenueByStatus)
     .map((item) => ({ ...item, label: translateStatus(t, item.label) }))
-  const stageBars = (reports?.opportunityByStage || [])
+  const stageBars = toBarEntries(reports?.opportunityByStage)
     .map((item) => ({ ...item, label: translateStage(t, item.label) }))
-  const channelBars = (reports?.followUpByChannel || [])
+  const channelBars = toBarEntries(reports?.followUpByChannel)
     .map((item) => ({ ...item, label: translateChannel(t, item.label) }))
 
   return (

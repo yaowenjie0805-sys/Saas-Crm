@@ -6,6 +6,31 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.crm360-kpis .kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.crm360-kpis .kpi:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-default);
+  transform: translateY(-2px);
+}
+
+.crm360-kpis .kpi:hover::before {
+  opacity: 1;
 }
 
 .crm360-kpis .kpi strong {
@@ -16,6 +41,7 @@
 .crm360-kpis .kpi span {
   font-size: 1rem;
   font-weight: 700;
+  color: var(--text-primary);
 }
 
 .crm360-risk-tags {
@@ -32,6 +58,20 @@
   border-radius: 999px;
   padding: 2px 10px;
   background: rgba(255, 107, 107, 0.1);
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: all var(--transition-base);
+  animation: tagPulse 2s ease-in-out infinite;
+}
+
+@keyframes tagPulse {
+  0%, 100% { background: rgba(255, 107, 107, 0.1); }
+  50% { background: rgba(255, 107, 107, 0.2); }
+}
+
+.crm360-risk-tag:hover {
+  background: rgba(255, 107, 107, 0.25);
+  transform: scale(1.05);
 }
 
 .crm360-grid {
@@ -45,6 +85,24 @@
   border-radius: var(--radius-md);
   padding: var(--space-2);
   background: rgba(255, 255, 255, 0.02);
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.crm360-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+.crm360-section:hover {
+  border-color: var(--border-default);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .crm360-section-head {
@@ -57,6 +115,7 @@
 .crm360-section-head h4 {
   margin: 0;
   font-size: 0.95rem;
+  color: var(--text-primary);
 }
 
 .crm360-section-item {
@@ -65,10 +124,16 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: background var(--transition-fast);
+  border-radius: var(--radius-sm);
 }
 
 .crm360-section-item:first-of-type {
   border-top: none;
+}
+
+.crm360-section-item:hover {
+  background: rgba(0, 212, 255, 0.05);
 }
 
 .crm360-section-item small {

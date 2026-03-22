@@ -71,11 +71,11 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
         <input className="tool-input" placeholder={t('reportTimezone')} value={tenants.form.timezone} onChange={(e) => tenants.setForm((p) => ({ ...p, timezone: e.target.value }))} />
         <input className="tool-input" placeholder={t('reportCurrency')} value={tenants.form.currency} onChange={(e) => tenants.setForm((p) => ({ ...p, currency: e.target.value }))} />
         <select className="tool-input" value={tenants.form.marketProfile || 'CN'} onChange={(e) => tenants.setForm((p) => applyMarketDefaults(p, e.target.value))}>
-          {MARKET_PROFILE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
+          {MARKET_PROFILE_OPTIONS.map((x) => <option key={x} value={x}>{t(x === 'GLOBAL' ? 'marketGlobal' : 'marketCN')}</option>)}
         </select>
         <input className="tool-input" placeholder={t('taxRule')} value={tenants.form.taxRule || 'VAT_CN'} onChange={(e) => tenants.setForm((p) => ({ ...p, taxRule: e.target.value }))} />
         <select className="tool-input" value={tenants.form.approvalMode || 'STRICT'} onChange={(e) => tenants.setForm((p) => ({ ...p, approvalMode: e.target.value }))}>
-          {TENANT_APPROVAL_MODE_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
+          {TENANT_APPROVAL_MODE_OPTIONS.map((x) => <option key={x} value={x}>{t(x === 'STAGE_GATE' ? 'approvalModeStageGate' : 'approvalModeStrict')}</option>)}
         </select>
         <input className="tool-input" placeholder={t('channelsLabel')} value={tenants.form.channels || '["WECOM","DINGTALK"]'} onChange={(e) => tenants.setForm((p) => ({ ...p, channels: e.target.value }))} />
         <input className="tool-input" placeholder={t('dataResidency')} value={tenants.form.dataResidency || 'CN'} onChange={(e) => tenants.setForm((p) => ({ ...p, dataResidency: e.target.value }))} />

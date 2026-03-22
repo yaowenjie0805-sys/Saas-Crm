@@ -62,6 +62,18 @@
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Additional accent colors */
+  --accent-blue: #3b82f6;
+  --accent-blue-glow: rgba(59, 130, 246, 0.4);
+  --accent-indigo: #6366f1;
+  --accent-indigo-glow: rgba(99, 102, 241, 0.4);
+  --accent-orange: #f97316;
+  --accent-orange-glow: rgba(249, 115, 22, 0.4);
+  --accent-green: #22c55e;
+  --accent-green-glow: rgba(34, 197, 94, 0.4);
+  --accent-pink: #ec4899;
+  --accent-pink-glow: rgba(236, 72, 153, 0.4);
 }
 
 * {
@@ -246,11 +258,20 @@ body::after {
   font-size: 0.95rem;
   color: var(--text-primary);
   transition: all var(--transition-base);
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .login-card input::placeholder,
-.tool-input::placeholder {
+.tool-input::placeholder,
+.mini-form select option {
   color: var(--text-dim);
+}
+
+.tool-input option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: var(--space-2);
 }
 
 .login-card input:hover,
@@ -264,9 +285,32 @@ body::after {
   outline: none;
   border-color: var(--accent-cyan);
   background: var(--surface-glass-hover);
-  box-shadow: 
+  box-shadow:
     0 0 0 3px rgba(0, 212, 255, 0.15),
     0 0 20px rgba(0, 212, 255, 0.1);
+}
+
+/* Enhanced select dropdown */
+.tool-input:focus,
+.mini-form select:focus {
+  border-color: var(--accent-cyan);
+  box-shadow:
+    0 0 0 3px rgba(0, 212, 255, 0.15),
+    0 0 20px rgba(0, 212, 255, 0.1);
+}
+
+/* Select arrow styling */
+.mini-form select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+.mini-form select:hover {
+  border-color: var(--border-strong);
+  background-color: var(--surface-glass-hover);
 }
 
 .language-switch {
@@ -339,6 +383,12 @@ body::after {
     transparent 76%
   );
   pointer-events: none;
+  animation: sidebarGlow 4s ease-in-out infinite;
+}
+
+@keyframes sidebarGlow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .sidebar::after {
@@ -354,6 +404,12 @@ body::after {
     transparent 70%
   );
   pointer-events: none;
+  animation: sidebarGlowBottom 5s ease-in-out infinite;
+}
+
+@keyframes sidebarGlowBottom {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
 }
 
 .sidebar-head {
@@ -506,6 +562,20 @@ body::after {
   cursor: pointer;
   transition: all var(--transition-base);
   position: relative;
+  overflow: hidden;
+}
+
+.menu button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.1), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.menu button:hover::after {
+  opacity: 1;
 }
 
 .menu-icon {
@@ -521,6 +591,8 @@ body::after {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   transition: all var(--transition-base);
+  position: relative;
+  z-index: 1;
 }
 
 .menu button:hover {
@@ -534,11 +606,12 @@ body::after {
   border-color: rgba(0, 212, 255, 0.3);
   color: var(--accent-cyan);
   box-shadow: 0 0 15px var(--accent-cyan-glow);
+  transform: scale(1.05);
 }
 
 .menu button.active {
   color: var(--text-primary);
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.15), transparent);
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.18), transparent);
   font-weight: 600;
 }
 
@@ -552,6 +625,12 @@ body::after {
   background: var(--accent-cyan);
   border-radius: var(--radius-full);
   box-shadow: 0 0 15px var(--accent-cyan-glow);
+  animation: activeBarPulse 2s ease-in-out infinite;
+}
+
+@keyframes activeBarPulse {
+  0%, 100% { box-shadow: 0 0 15px var(--accent-cyan-glow); }
+  50% { box-shadow: 0 0 25px var(--accent-cyan-glow); }
 }
 
 .menu button.active .menu-icon {
@@ -962,7 +1041,27 @@ body::after {
   position: relative;
   overflow: hidden;
   transition: all var(--transition-base);
+  animation: fadeInUp 0.5s ease-out forwards;
+  opacity: 0;
 }
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-card:nth-child(1) { animation-delay: 0.1s; }
+.stat-card:nth-child(2) { animation-delay: 0.2s; }
+.stat-card:nth-child(3) { animation-delay: 0.3s; }
+.stat-card:nth-child(4) { animation-delay: 0.4s; }
+.stat-card:nth-child(5) { animation-delay: 0.5s; }
+.stat-card:nth-child(6) { animation-delay: 0.6s; }
 
 .stat-card::before {
   content: '';
@@ -992,7 +1091,7 @@ body::after {
 .stat-card:hover {
   transform: translateY(-4px);
   border-color: var(--accent-cyan);
-  box-shadow: 
+  box-shadow:
     var(--shadow-lg),
     0 0 30px var(--accent-cyan-glow);
 }
@@ -1000,4 +1099,33 @@ body::after {
 .stat-card:hover::before,
 .stat-card:hover::after {
   opacity: 1;
+}
+
+/* Stat card accent variants */
+.stat-card.accent-purple:hover {
+  border-color: var(--accent-purple);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 30px var(--accent-purple-glow);
+}
+
+.stat-card.accent-emerald:hover {
+  border-color: var(--accent-emerald);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 30px var(--accent-emerald-glow);
+}
+
+.stat-card.accent-rose:hover {
+  border-color: var(--accent-rose);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 30px var(--accent-rose-glow);
+}
+
+.stat-card.accent-amber:hover {
+  border-color: var(--accent-amber);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 30px var(--accent-amber-glow);
 }
