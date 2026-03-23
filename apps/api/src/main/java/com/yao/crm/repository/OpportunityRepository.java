@@ -63,4 +63,13 @@ public interface OpportunityRepository extends JpaRepository<Opportunity, String
 
     @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.createdAt between :from and :to group by o.stage")
     List<Object[]> countByStageGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("select coalesce(sum(o.amount), 0) from Opportunity o where o.tenantId = :tenantId and o.stage = :stage")
+    Long sumAmountByTenantIdAndStage(@Param("tenantId") String tenantId, @Param("stage") String stage);
+
+    @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and o.stage = :stage")
+    long countByStageAndTenantId(@Param("stage") String stage, @Param("tenantId") String tenantId);
+
+    @Query("select coalesce(sum(o.amount), 0), o.stage from Opportunity o where o.tenantId = :tenantId and o.stage not in :stages group by o.stage")
+    List<Object[]> sumAmountByTenantIdAndStageNotIn(@Param("tenantId") String tenantId, @Param("stages") Collection<String> stages);
 }

@@ -11,4 +11,5 @@ public interface ApprovalEventRepository extends JpaRepository<ApprovalEvent, St
     List<ApprovalEvent> findByInstanceIdAndTenantIdOrderByCreatedAtAsc(String instanceId, String tenantId);
     Optional<ApprovalEvent> findTopByTenantIdAndTaskIdAndEventTypeOrderByCreatedAtDesc(String tenantId, String taskId, String eventType);
     long countByTenantIdAndTaskIdAndEventTypeAndCreatedAtBetween(String tenantId, String taskId, String eventType, LocalDateTime from, LocalDateTime to);
+    List<ApprovalEvent> findByTaskIdOrderByCreatedAtDesc(String taskId);
 }

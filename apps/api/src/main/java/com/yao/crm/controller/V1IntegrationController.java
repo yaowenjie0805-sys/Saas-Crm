@@ -31,6 +31,11 @@ public class V1IntegrationController extends BaseApiController {
         return acceptWebhook(request, "DINGTALK", payload);
     }
 
+    @PostMapping("/feishu")
+    public ResponseEntity<?> feishu(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+        return acceptWebhook(request, "FEISHU", payload);
+    }
+
     private ResponseEntity<?> acceptWebhook(HttpServletRequest request, String provider, Map<String, Object> payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));

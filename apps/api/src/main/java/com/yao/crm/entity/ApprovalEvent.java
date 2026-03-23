@@ -36,6 +36,15 @@ public class ApprovalEvent {
     @Column(length = 80)
     private String requestId;
 
+    @Column(length = 64)
+    private String actorId;
+
+    @Column(length = 64)
+    private String targetId;
+
+    @Column(length = 500)
+    private String description;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -65,6 +74,12 @@ public class ApprovalEvent {
     public void setDetail(String detail) { this.detail = detail; }
     public String getRequestId() { return requestId; }
     public void setRequestId(String requestId) { this.requestId = requestId; }
+    public String getActorId() { return actorId; }
+    public void setActorId(String actorId) { this.actorId = actorId; }
+    public String getTargetId() { return targetId; }
+    public void setTargetId(String targetId) { this.targetId = targetId; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

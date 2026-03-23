@@ -20,17 +20,20 @@ public class NotificationJobService {
     private final NotificationJobRepository jobRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private final IntegrationWebhookService integrationWebhookService;
     private final int maxRetries;
     private final String providers;
 
     public NotificationJobService(NotificationJobRepository jobRepository,
                                   AuditLogService auditLogService,
                                   ObjectMapper objectMapper,
+                                  IntegrationWebhookService integrationWebhookService,
                                   @Value("${integration.notifications.max-retries:5}") int maxRetries,
                                   @Value("${integration.webhooks.providers:WECOM,DINGTALK}") String providers) {
         this.jobRepository = jobRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
+        this.integrationWebhookService = integrationWebhookService;
         this.maxRetries = Math.max(1, maxRetries);
         this.providers = providers == null ? "" : providers;
     }
@@ -227,10 +230,11 @@ public class NotificationJobService {
     }
 
     private boolean dispatch(NotificationJob job) {
-        // This stage keeps delivery internal and auditable; actual external HTTP can be plugged here.
         String payload = job.getPayload() == null ? "{}" : job.getPayload();
-        auditLogService.record("system", "SYSTEM", "WEBHOOK_DISPATCH", job.getTarget(), job.getId(), payload, job.getTenantId());
-        return true;
+        boolean sent = integrationWebhookService.sendEvent(job.getTarget(), job.getTenantId(), job.getEventType(), payload, job.getId());
+        auditLogService.record("system", "SYSTEM", "WEBHOOK_DISPATCH", job.getTarget(), job.getId(),
+                "sent=" + sent + ", payload=" + payload, job.getTenantId());
+        return sent;
     }
 
     private void moveToRetry(NotificationJob job) {

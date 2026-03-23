@@ -23,6 +23,9 @@ export LEAD_IMPORT_MQ_DECLARE_ENABLED="false"
 export LEAD_IMPORT_MQ_PUBLISH_ENABLED="false"
 
 echo "[db:init] Running Flyway migrations + seed data ..."
+# NOTE:
+# If connecting to an existing database whose applied Flyway versions were edited locally,
+# run Flyway repair + migrate first to sync schema history checksums before init.
 mvn -f apps/api/pom.xml -DskipTests spring-boot:run \
   "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.init-only=true"
 

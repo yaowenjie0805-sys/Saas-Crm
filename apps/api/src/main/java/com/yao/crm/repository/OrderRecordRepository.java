@@ -66,4 +66,7 @@ public interface OrderRecordRepository extends JpaRepository<OrderRecord, String
 
     @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.createdAt between :from and :to group by o.status")
     List<Object[]> countByStatusGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and upper(o.status) = upper(:status) and o.createdAt between :from and :to")
+    Long sumAmountByTenantIdAndStatusAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("status") String status, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

@@ -1,110 +1,80 @@
 # CRM
 
-<p align="center">
-  <strong>Enterprise-grade Customer Relationship Management System</strong>
-</p>
+企业级 CRM 单体仓库（前后端分目录），覆盖销售流程、审批流、协作、报表、导入导出、租户治理与审计运维。
 
-<p align="center">
-  <strong>企业级客户关系管理系统</strong>
-</p>
+## 1. 项目现状（你可以先看这个）
 
-<p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-api-reference">API</a> •
-  <a href="#-documentation">Docs</a>
-</p>
+- 架构：`React + Vite`（前端）+ `Spring Boot 2.7`（后端）+ `MySQL + Flyway`。
+- 运行模式：本地默认 `dev`，数据库默认 `crm_local`。
+- 多租户：核心接口按 `X-Tenant-Id` 做租户隔离。
+- 集成能力：支持企业微信/钉钉 webhook；飞书支持 webhook 和 App ID/App Secret 直连（tenant_access_token + 消息接口）。
+- 迁移状态：当前 migration 版本到 `V17`。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Frontend-React%2019.2-61DAFB?logo=react" alt="Frontend">
-  <img src="https://img.shields.io/badge/Backend-Spring%20Boot%202.7-6DB33F?logo=springboot" alt="Backend">
-  <img src="https://img.shields.io/badge/Database-MySQL%208-4479A1?logo=mysql" alt="Database">
-  <img src="https://img.shields.io/badge/JDK-8-orange" alt="JDK">
-  <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js" alt="Node.js">
-</p>
+## 2. 目录结构
 
----
+```text
+crm/
+  apps/
+    api/                      # Spring Boot 后端
+      src/main/java/com/yao/crm/
+        controller/           # REST 控制器
+        service/              # 业务服务
+        entity/               # JPA 实体
+        repository/           # 数据访问
+        config/               # Spring 配置
+        security/             # 鉴权与安全相关
+      src/main/resources/
+        db/migration/         # Flyway 脚本 V1~V17
+    web/                      # React 前端
+      src/crm/components/     # 页面与业务组件
+  scripts/                    # 启动、DB、修复、巡检脚本
+  docs/                       # 运维与治理文档
+```
 
-## 📖 Overview | 项目简介
+## 3. 核心功能模块
 
-A modern, full-stack CRM system with multi-tenant support, approval workflows, and comprehensive audit trails.
+### 3.1 业务模块
 
-一个现代化的全栈 CRM 系统，支持多租户、审批流程和完整的审计追踪。
+- 客户与联系人：客户、联系人、跟进、任务
+- 销售流程：线索、商机、报价、订单、回款、合同
+- 审批中心：模板、实例、任务、转审、催办、SLA
+- 协作与权限：评论、活动共享、字段权限、团队
+- 报表与分析：仪表盘、报表模板、导出任务
+- 工作流：节点、执行、调度、通知
+- 导入导出：批量导入、失败重试、导出作业
 
-| Feature | Description |
-|---------|-------------|
-| 🏢 **Multi-tenant** | Complete data isolation between tenants 租户间数据完全隔离 |
-| ✅ **Approval Workflow** | Template-based approval with conditions and transfers 模板化审批，支持条件和转交 |
-| 📋 **Audit Trail** | Full operation logging with export and metrics 全操作日志，支持导出和指标 |
-| 🔐 **Role-based Access** | ADMIN / MANAGER / ANALYST / SALES hierarchy 角色分级权限控制 |
-| 🌐 **i18n Ready** | Chinese and English support 中英文双语支持 |
-| 📊 **Observability** | Health checks, SLO monitoring, Ops diagnostics 健康检查、SLO监控、运维诊断 |
+### 3.2 典型接口前缀
 
----
+- 基础接口：`/api/**`
+- 租户业务接口：`/api/v1/**`
+- 配置/治理接口：`/api/v2/**`
 
-## 🚀 Features | 功能特性
+常见控制器可在目录查看：
+`apps/api/src/main/java/com/yao/crm/controller`
 
-<details>
-<summary><strong>Core Modules | 核心模块</strong></summary>
+## 4. 技术栈
 
-| Module | 中文 | APIs |
-|--------|------|------|
-| Tenant Management | 租户管理 | `/api/v1/tenants` |
-| Approval Center | 审批中心 | `/api/v1/approval/*` |
-| Audit Logs | 审计日志 | `/api/audit-logs` |
-| Customer Management | 客户管理 | `/api/customers` |
-| Sales Pipeline | 销售管道 | `/api/opportunities`, `/api/tasks` |
-| Commerce | 商务中心 | `/api/v1/commerce/*` |
-| Reports | 报表分析 | `/api/v1/reports/*` |
+- 前端：React 19、Vite、React Router、Zustand
+- 后端：Spring Boot 2.7、Spring Data JPA、Flyway、Redis、RabbitMQ
+- 数据库：MySQL 8+
+- 测试：JUnit（后端）、Playwright（前端 E2E）
 
-</details>
+## 5. 本地开发快速开始
 
-<details>
-<summary><strong>Enterprise Features | 企业级特性</strong></summary>
+### 5.1 环境要求
 
-- **Authentication**: JWT + Session cookie, MFA, OIDC, Invitation flow
-- **Security**: Rate limiting, CORS, Tenant isolation, Input validation
-- **Performance**: Redis cache, Connection pooling, Query optimization
-- **Operations**: Health probes, SLO monitoring, Backup/Restore runbooks
+- JDK 8
+- Maven 3.9+
+- Node.js 18+
+- MySQL 8+
 
-</details>
-
----
-
-## 🛠 Tech Stack | 技术栈
-
-| Layer | Technology | Version |
-|-------|------------|---------|
-| **Frontend** | React + Vite + React Router + Zustand | 19.2 / 7.3 / 7.9 / 5.0 |
-| **Backend** | Spring Boot + Spring Data JPA | 2.7 (JDK 8) |
-| **Database** | MySQL + Flyway migrations | 8+ |
-| **Cache** | Redis | - |
-| **Message Queue** | RabbitMQ | - |
-| **Testing** | Playwright (E2E) + JUnit (Backend) | - |
-
----
-
-## ⚡ Quick Start | 快速开始
-
-### Prerequisites | 环境要求
-
-| Requirement | Version |
-|-------------|---------|
-| JDK | 8 |
-| Maven | 3.9+ |
-| Node.js | 18+ |
-| MySQL | 8+ |
-
-### 1. Clone & Install | 克隆并安装
+### 5.2 安装依赖
 
 ```bash
-git clone <repository-url>
-cd crm
 npm install
 ```
 
-### 2. Initialize Database | 初始化数据库
+### 5.3 初始化数据库（首次）
 
 ```bash
 # Windows
@@ -114,180 +84,152 @@ npm run db:init
 bash scripts/init-db.sh root root crm_local
 ```
 
-This creates the database, runs migrations, and seeds demo data including:
-- `tenant_cn_demo` (CN/CNY/Asia-Shanghai/STRICT)
-- `tenant_global_demo` (GLOBAL/USD/UTC/STAGE_GATE)
-
-### 3. Start Services | 启动服务
+### 5.4 启动服务
 
 ```bash
-# Terminal 1: Backend (port 8080)
+# 后端
 npm run dev:backend
 
-# Terminal 2: Frontend (port 5173)
+# 或更稳定的后端启动脚本
+npm run dev:backend:stable
+
+# 前端
 npm run dev
 ```
 
-### 4. Access | 访问地址
+默认地址：
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:8080/api |
-| Health Check | http://localhost:8080/api/health |
+- 前端：`http://localhost:5173`
+- 后端：`http://localhost:8080`
+- 健康检查：`http://localhost:8080/api/health`
 
-### Demo Accounts | 演示账号
+## 6. 数据库迁移与修复
 
-| Username | Password | Role |
-|----------|----------|------|
-| admin | admin123 | ADMIN |
-| manager | manager123 | MANAGER |
-| sales | sales123 | SALES |
-| analyst | analyst123 | ANALYST |
+### 6.1 正常迁移
 
----
+后端启动时会自动 Flyway migrate（`validate-on-migrate=true`）。
 
-## 📁 Project Structure | 项目结构
+### 6.2 如果遇到 checksum mismatch / failed migration
 
-```
-crm/
-├── apps/
-│   ├── api/                 # Spring Boot backend
-│   │   ├── src/main/java/com/yao/crm/
-│   │   │   ├── controller/  # REST controllers (34)
-│   │   │   ├── service/     # Business logic (24)
-│   │   │   ├── entity/      # JPA entities (31)
-│   │   │   ├── repository/  # Data access (33)
-│   │   │   ├── dto/        # Request/Response DTOs
-│   │   │   ├── config/      # Spring configs (12)
-│   │   │   └── security/    # Auth & permissions (17)
-│   │   └── src/main/resources/
-│   │       └── db/migration/ # Flyway migrations
-│   └── web/                 # React frontend
-│       └── src/crm/
-│           ├── components/  # UI components (74)
-│           ├── hooks/      # Custom hooks (123)
-│           ├── store/       # Zustand state
-│           └── i18n/       # Translations
-├── docs/
-│   └── operations/          # SRE runbooks (18)
-├── scripts/                # DevOps scripts (34)
-├── infra/                  # Docker/Deploy configs
-└── logs/                  # Local logs (gitignored)
-```
-
----
-
-## 📚 API Reference | API 参考
-
-### Legacy APIs (`/api/**`)
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/api/auth/login` | POST | Public | User login |
-| `/api/health` | GET | Public | Health check |
-| `/api/customers` | GET/POST | Auth | Customer CRUD |
-| `/api/opportunities` | GET/POST | Auth | Sales opportunities |
-| `/api/audit-logs` | GET | ADMIN/MANAGER | Audit logs |
-
-### Enterprise APIs (`/api/v1/**`)
-
-All v1 APIs require:
-- `Authorization: Bearer <token>`
-- `X-Tenant-Id: <tenantId>`
-
-| Module | Endpoints |
-|--------|-----------|
-| Tenants | `GET/POST/PATCH /api/v1/tenants` |
-| Auth | `POST /api/v1/auth/login`, `/mfa/verify`, `/invitations/accept` |
-| Approval | `/api/v1/approval/templates`, `/instances`, `/tasks` |
-| Commerce | `/api/v1/commerce/quotes`, `/contracts`, `/orders`, `/payments` |
-| Reports | `/api/v1/reports/overview`, `/export-jobs` |
-| Ops | `/api/v1/ops/health`, `/slo-snapshot` |
-
-### Error Format | 错误格式
-
-```json
-{
-  "code": "tenant_not_found",
-  "message": "...",
-  "requestId": "abc-123",
-  "details": {}
-}
-```
-
----
-
-## 🧪 Testing | 测试
+使用仓库脚本做“先备份再修复”：
 
 ```bash
-# E2E tests (Playwright)
-npm run test:e2e
+npm run db:flyway:repair
+```
 
-# Backend tests (JUnit)
+该脚本会：
+
+1. 备份当前数据库到 `backups/`
+2. 执行 `flyway repair`
+3. 执行 `flyway migrate`
+4. 输出最新版本与失败记录数
+
+## 7. 集成配置（重点）
+
+### 7.1 配置文件加载规则
+
+后端命令会自动读取根目录 `.env.backend.local`（若存在）。
+
+- 读取逻辑在：`scripts/run-maven.mjs`
+- 模板文件：`.env.backend.local.example`
+
+### 7.2 飞书（App 模式，推荐）
+
+在 `.env.backend.local` 配置：
+
+```env
+INTEGRATION_WEBHOOK_PROVIDERS=WECOM,DINGTALK,FEISHU
+INTEGRATION_FEISHU_APP_ID=cli_xxx
+INTEGRATION_FEISHU_APP_SECRET=xxx
+INTEGRATION_FEISHU_RECEIVE_ID=oc_xxx
+INTEGRATION_FEISHU_RECEIVE_ID_TYPE=chat_id
+INTEGRATION_FEISHU_BASE_URL=https://open.feishu.cn
+```
+
+说明：
+
+- `RECEIVE_ID_TYPE` 支持：`chat_id` / `open_id` / `user_id` / `union_id`
+- 飞书会优先走 App API 直连，未配置时才回退 webhook。
+
+### 7.3 企业微信/钉钉 webhook（可选）
+
+```env
+INTEGRATION_WECOM_WEBHOOK_URL=
+INTEGRATION_DINGTALK_WEBHOOK_URL=
+INTEGRATION_DINGTALK_SECRET=
+```
+
+### 7.4 真机连通性测试
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/test-webhooks.ps1
+```
+
+脚本会同时检查：
+
+- WECOM webhook
+- DINGTALK webhook
+- FEISHU webhook
+- FEISHU App 模式
+
+## 8. 常用命令
+
+```bash
+# 前端构建
+npm run build
+
+# 后端测试
 npm run test:backend
 
-# API smoke test
-npm run test:api
+# 前端 E2E
+npm run test:e2e
 
-# Full test suite (DB + E2E + API)
+# 全链路本地验证
 npm run test:full
+
+# 环境校验
+npm run validate:env
 ```
 
----
+## 9. 常见问题
 
-## 🔧 Useful Commands | 常用命令
+### 9.1 启动时报 Flyway 校验失败
 
-| Command | Description | 说明 |
-|---------|-------------|------|
-| `npm run dev` | Start frontend | 启动前端 |
-| `npm run dev:backend` | Start backend | 启动后端 |
-| `npm run build` | Build frontend | 构建前端 |
-| `npm run lint` | Lint frontend | 代码检查 |
-| `npm run db:init` | Initialize database | 初始化数据库 |
-| `npm run test:full` | Full test suite | 完整测试 |
-| `npm run perf:baseline` | Performance baseline | 性能基线 |
-| `npm run staging:verify` | Staging verification | 预发验证 |
-| `npm run security:scan` | Security scan | 安全扫描 |
+先执行：`npm run db:flyway:repair`。
 
----
+### 9.2 后端起来了但飞书发不出去
 
-## 📖 Documentation | 文档
+优先检查：
 
-| Document | Description |
-|----------|-------------|
-| [Project Structure](docs/PROJECT_STRUCTURE.md) | Directory layout |
-| [Command Reference](docs/operations/command-reference.md) | All npm scripts |
-| [Environment Matrix](docs/operations/environment-matrix.md) | Env configurations |
-| [Release Strategy](docs/operations/release-strategy.md) | Deployment guide |
-| [SRE SLO Baseline](docs/operations/sre-slo-baseline.md) | Reliability targets |
-| [Backup/Restore](docs/operations/backup-restore-runbook.md) | Database runbook |
+1. `.env.backend.local` 是否存在且键名正确
+2. `INTEGRATION_FEISHU_RECEIVE_ID` 是否可用
+3. 应用权限是否包含消息发送相关 scope
 
-All operations docs support **Chinese/English bilingual** format.
+### 9.3 本地改了配置但不生效
+
+确认你是通过 `npm run dev:backend` 或 `npm run dev:backend:stable` 启动（两者都会走 `run-maven.mjs` 读取本地 env）。
+
+## 10. 相关阅读
+
+- 目录说明：`docs/PROJECT_STRUCTURE.md`
+- 全景调用图：`docs/PROJECT_FLOW_MAP.md`
+- 运维文档索引：`docs/README.md`
+- 命令参考：`docs/operations/command-reference.md`
+- 环境矩阵：`docs/operations/environment-matrix.md`
 
 ---
 
-## 🤝 Contributing | 贡献
+如果你要继续扩展这个项目，建议从这三条线并行推进：
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. 把三方集成配置做成租户后台可维护（而不是仅环境变量）
+2. 给通知链路加失败告警与可视化重试面板
+3. 完善“接口-页面-数据库”对照文档，降低接手成本
 
-Before submitting PR, ensure:
-```bash
-npm run lint && npm run build && npm run test:full
-```
+## 11. 二开快速入口
 
----
-
-## 📄 License | 许可证
-
-This project is licensed under the MIT License.
-
----
-
-<p align="center">
-  Made with ❤️ by the CRM Team
-</p>
+- 热点文件地图：`docs/DEVELOPMENT_HOTSPOTS.md`
+- 全景调用图：`docs/PROJECT_FLOW_MAP.md`
+- 故障定位手册：`docs/PROJECT_TROUBLESHOOTING.md`
+- 功能模块矩阵：`docs/MODULE_CAPABILITY_MATRIX.md`
+- 接口分组清单：`docs/API_ENDPOINT_CATALOG.md`
+- Postman 联调包：`docs/postman/crm-api.postman_collection.json` + `docs/postman/crm-local.postman_environment.json`

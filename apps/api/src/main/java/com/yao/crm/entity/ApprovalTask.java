@@ -22,6 +22,9 @@ public class ApprovalTask {
     @Column(nullable = false, length = 64)
     private String instanceId;
 
+    @Column(length = 64)
+    private String templateId;
+
     @Column(nullable = false, length = 40)
     private String approverRole;
 
@@ -46,6 +49,18 @@ public class ApprovalTask {
     @Column
     private LocalDateTime deadlineAt;
 
+    @Column
+    private LocalDateTime slaDeadline;
+
+    @Column
+    private Integer priority;
+
+    @Column(length = 64)
+    private String parentTaskId;
+
+    @Column(length = 20)
+    private String addSignType;
+
     @Column(length = 200)
     private String escalateToRoles;
 
@@ -54,6 +69,21 @@ public class ApprovalTask {
 
     @Column(length = 64)
     private String escalationSourceTaskId;
+
+    @Column(length = 64)
+    private String assigneeId;
+
+    @Column(length = 64)
+    private String delegatedFrom;
+
+    @Column
+    private LocalDateTime transferredAt;
+
+    @Column
+    private LocalDateTime delegatedAt;
+
+    @Column(length = 500)
+    private String transferHistory;
 
     @Column
     private LocalDateTime notifiedAt;
@@ -85,6 +115,8 @@ public class ApprovalTask {
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getInstanceId() { return instanceId; }
     public void setInstanceId(String instanceId) { this.instanceId = instanceId; }
+    public String getTemplateId() { return templateId; }
+    public void setTemplateId(String templateId) { this.templateId = templateId; }
     public String getApproverRole() { return approverRole; }
     public void setApproverRole(String approverRole) { this.approverRole = approverRole; }
     public String getApproverUser() { return approverUser; }
@@ -101,6 +133,14 @@ public class ApprovalTask {
     public void setSlaMinutes(Integer slaMinutes) { this.slaMinutes = slaMinutes; }
     public LocalDateTime getDeadlineAt() { return deadlineAt; }
     public void setDeadlineAt(LocalDateTime deadlineAt) { this.deadlineAt = deadlineAt; }
+    public LocalDateTime getSlaDeadline() { return slaDeadline; }
+    public void setSlaDeadline(LocalDateTime slaDeadline) { this.slaDeadline = slaDeadline; }
+    public Integer getPriority() { return priority; }
+    public void setPriority(Integer priority) { this.priority = priority; }
+    public String getParentTaskId() { return parentTaskId; }
+    public void setParentTaskId(String parentTaskId) { this.parentTaskId = parentTaskId; }
+    public String getAddSignType() { return addSignType; }
+    public void setAddSignType(String addSignType) { this.addSignType = addSignType; }
     public String getEscalateToRoles() { return escalateToRoles; }
     public void setEscalateToRoles(String escalateToRoles) { this.escalateToRoles = escalateToRoles; }
     public Integer getEscalationLevel() { return escalationLevel; }
@@ -109,6 +149,16 @@ public class ApprovalTask {
     public void setEscalationSourceTaskId(String escalationSourceTaskId) { this.escalationSourceTaskId = escalationSourceTaskId; }
     public LocalDateTime getNotifiedAt() { return notifiedAt; }
     public void setNotifiedAt(LocalDateTime notifiedAt) { this.notifiedAt = notifiedAt; }
+    public String getAssigneeId() { return assigneeId; }
+    public void setAssigneeId(String assigneeId) { this.assigneeId = assigneeId; }
+    public String getDelegatedFrom() { return delegatedFrom; }
+    public void setDelegatedFrom(String delegatedFrom) { this.delegatedFrom = delegatedFrom; }
+    public LocalDateTime getTransferredAt() { return transferredAt; }
+    public void setTransferredAt(LocalDateTime transferredAt) { this.transferredAt = transferredAt; }
+    public LocalDateTime getDelegatedAt() { return delegatedAt; }
+    public void setDelegatedAt(LocalDateTime delegatedAt) { this.delegatedAt = delegatedAt; }
+    public String getTransferHistory() { return transferHistory; }
+    public void setTransferHistory(String transferHistory) { this.transferHistory = transferHistory; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

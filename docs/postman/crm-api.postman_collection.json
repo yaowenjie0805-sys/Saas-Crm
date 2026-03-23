@@ -1,0 +1,323 @@
+﻿{
+  "info": {
+    "_postman_id": "6f9d6f3b-63da-4e92-a07a-f6a2ca31fef8",
+    "name": "CRM API Local",
+    "description": "CRM local API collection for quick smoke and integration testing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          }
+        },
+        {
+          "name": "GET /api/health/live",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health/live", "host": ["{{baseUrl}}"], "path": ["api", "health", "live"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Auth",
+      "item": [
+        {
+          "name": "POST /api/auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const token = json.token || json.accessToken || json.data?.token;",
+                  "if (token) pm.environment.set('token', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "GET /api/auth/session",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/session", "host": ["{{baseUrl}}"], "path": ["api", "auth", "session"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Core CRM",
+      "item": [
+        {
+          "name": "GET /api/customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "customers"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/opportunities",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/opportunities?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "opportunities"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Leads",
+      "item": [
+        {
+          "name": "GET /api/v1/leads",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/leads?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "leads"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/leads/import-template",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/leads/import-template", "host": ["{{baseUrl}}"], "path": ["api", "v1", "leads", "import-template"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Commerce",
+      "item": [
+        {
+          "name": "GET /api/v1/products",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/quotes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/quotes?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "quotes"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Approval & Collaboration",
+      "item": [
+        {
+          "name": "GET /api/v1/approval/templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/approval/templates", "host": ["{{baseUrl}}"], "path": ["api", "v1", "approval", "templates"] }
+          }
+        },
+        {
+          "name": "GET /api/v2/collaboration/discussions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v2/collaboration/discussions", "host": ["{{baseUrl}}"], "path": ["api", "v2", "collaboration", "discussions"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Search, Filters, Charts, Workflow",
+      "item": [
+        {
+          "name": "GET /api/v2/search",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/search?keyword=test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "search"],
+              "query": [{ "key": "keyword", "value": "test" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v2/filters/quick",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/filters/quick?entityType=customer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "filters", "quick"],
+              "query": [{ "key": "entityType", "value": "customer" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v2/charts/templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v2/charts/templates", "host": ["{{baseUrl}}"], "path": ["api", "v2", "charts", "templates"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Integrations",
+      "item": [
+        {
+          "name": "POST /api/v1/integrations/webhooks/feishu",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"CRM Postman 集成测试消息\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/integrations/webhooks/feishu", "host": ["{{baseUrl}}"], "path": ["api", "v1", "integrations", "webhooks", "feishu"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/integrations/notifications/jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Tenant-Id", "value": "{{tenantId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/integrations/notifications/jobs?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "integrations", "notifications", "jobs"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "username", "value": "admin" },
+    { "key": "password", "value": "admin123" },
+    { "key": "token", "value": "" },
+    { "key": "tenantId", "value": "1" }
+  ]
+}
