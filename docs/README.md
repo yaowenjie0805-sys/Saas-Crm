@@ -1,53 +1,59 @@
-# 文档索引 | Docs Index
+# 文档索引（Docs Index）
+
+本目录存放项目运维、发布、质量与治理文档。
+
+## 快速入口
+
+- 项目根文档：`README.md`
+- 结构说明：`docs/PROJECT_STRUCTURE.md`
+- 全景调用图：`docs/PROJECT_FLOW_MAP.md`
+- 命令总览：`docs/operations/command-reference.md`
+- 环境配置：`docs/operations/environment-matrix.md`
+
+## 运维文档（operations）
+
+### 发布与环境
+
+- `docs/operations/release-strategy.md`
+- `docs/operations/release-window-policy.md`
+- `docs/operations/staging-deploy-runbook.md`
+- `docs/operations/release-rollback-runbook.md`
+- `docs/operations/environment-matrix.md`
+
+### 可靠性与性能
+
+- `docs/operations/sre-slo-baseline.md`
+- `docs/operations/error-budget-policy.md`
+- `docs/operations/perf-baseline.md`
+- `docs/operations/perf-bundle-budget.json`
+
+### 安全与审计
+
+- `docs/operations/audit-retention-policy.md`
+- `docs/operations/backup-restore-runbook.md`
+- `docs/operations/oncall-escalation-runbook.md`
+
+### 模板与清单
+
+- `docs/operations/change-control-checklist.md`
+- `docs/operations/change-request-template.md`
+- `docs/operations/incident-postmortem-template.md`
+- `docs/operations/weekly-oncall-alert-review-template.md`
+
+## 历史归档
+
+- `docs/operations/archive/`
 
 ---
 
-## 快速开始 | Fast Start
+建议从 `README.md` 的“快速开始”和“迁移修复”章节开始，再按需要深入 `docs/operations`。
 
-| 中文 | English |
-|------|---------|
-| 项目结构: `docs/PROJECT_STRUCTURE.md` | Project layout: `docs/PROJECT_STRUCTURE.md` |
-| 命令参考: `docs/operations/command-reference.md` | Commands: `docs/operations/command-reference.md` |
+## 新增导航
 
----
-
-## 运维文档 (活跃) | Operations (Active)
-
-### 环境与发布 | Environment and Release
-
-| 中文 | English |
-|------|---------|
-| `docs/operations/environment-matrix.md` - 环境矩阵 | Environment matrix |
-| `docs/operations/release-strategy.md` - 发布策略 | Release strategy |
-| `docs/operations/release-window-policy.md` - 发布窗口策略 | Release window policy |
-| `docs/operations/staging-deploy-runbook.md` - 预发部署手册 | Staging deploy runbook |
-| `docs/operations/release-rollback-runbook.md` - 发布回滚手册 | Release/rollback runbook |
-
-### 质量与可靠性 | Quality and Reliability
-
-| 中文 | English |
-|------|---------|
-| `docs/operations/perf-baseline.md` - 性能基线 | Performance baseline |
-| `docs/operations/perf-bundle-budget.json` - 性能包预算 | Perf bundle budget |
-| `docs/operations/sre-slo-baseline.md` - SRE SLO 基线 | SRE SLO baseline |
-| `docs/operations/error-budget-policy.md` - 错误预算策略 | Error budget policy |
-| `docs/operations/oncall-escalation-runbook.md` - 值班升级手册 | Oncall escalation runbook |
-| `docs/operations/audit-retention-policy.md` - 审计保留策略 | Audit retention policy |
-| `docs/operations/backup-restore-runbook.md` - 备份恢复手册 | Backup/restore runbook |
-
-### 清单与模板 | Checklists and Templates
-
-| 中文 | English |
-|------|---------|
-| `docs/operations/change-control-checklist.md` - 变更控制清单 | Change control checklist |
-| `docs/operations/change-request-template.md` - 变更请求模板 | Change request template |
-| `docs/operations/incident-postmortem-template.md` - 事故复盘模板 | Incident postmortem template |
-| `docs/operations/weekly-oncall-alert-review-template.md` - 值班告警周审 | Weekly oncall alert review |
-
----
-
-## 归档 | Archive
-
-| 中文 | English |
-|------|---------|
-| 历史执行记录: `docs/operations/archive/` | Historical execution records: `docs/operations/archive/` |
+- `docs/DEVELOPMENT_HOTSPOTS.md`：二开时“改哪里”的热点地图。
+- `docs/PROJECT_FLOW_MAP.md`：页面/API/数据表的全景调用关系。
+- `docs/PROJECT_TROUBLESHOOTING.md`：启动失败、集成失败等常见故障处理。
+- `docs/MODULE_CAPABILITY_MATRIX.md`：页面、接口、实体三层功能矩阵。
+- `docs/API_ENDPOINT_CATALOG.md`：按 Controller 分组的接口清单（含示例请求）。
+- `docs/postman/crm-api.postman_collection.json`：本地联调 Collection。
+- `docs/postman/crm-local.postman_environment.json`：本地联调 Environment。

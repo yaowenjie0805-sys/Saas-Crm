@@ -1,0 +1,317 @@
+package com.yao.crm.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yao.crm.entity.WorkflowConnection;
+import com.yao.crm.entity.WorkflowDefinition;
+import com.yao.crm.entity.WorkflowExecution;
+import com.yao.crm.entity.WorkflowNode;
+import com.yao.crm.repository.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * 工作流执行引擎单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+class WorkflowExecutionServiceTest {
+
+    @Mock
+    private WorkflowDefinitionRepository workflowRepository;
+
+    @Mock
+    private WorkflowNodeRepository nodeRepository;
+
+    @Mock
+    private WorkflowConnectionRepository connectionRepository;
+
+    @Mock
+    private WorkflowExecutionRepository executionRepository;
+
+    @Mock
+    private ApprovalNodeRepository approvalNodeRepository;
+
+    private WorkflowExecutionService executionService;
+    private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void setUp() {
+        objectMapper = new ObjectMapper();
+        objectMapper.findAndRegisterModules();
+        executionService = spy(new WorkflowExecutionService(
+                workflowRepository,
+                nodeRepository,
+                connectionRepository,
+                executionRepository,
+                approvalNodeRepository,
+                objectMapper
+        ));
+    }
+
+    @Test
+    void testStartExecution_Success() {
+        // Given
+        String workflowId = "wf_test_123";
+        String tenantId = "tenant_1";
+
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId(workflowId);
+        workflow.setStatus("ACTIVE");
+        workflow.setVersion(1);
+        workflow.setExecutionCount(0);
+
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(workflowRepository.save(any())).thenReturn(workflow);
+        when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(executionService).executeAsync(anyString());
+
+        // When
+        WorkflowExecution execution = executionService.startExecution(
+                workflowId, "MANUAL", "user123", null, null
+        );
+
+        // Then
+        assertNotNull(execution);
+        assertEquals(workflowId, execution.getWorkflowId());
+        assertEquals("RUNNING", execution.getStatus());
+        verify(workflowRepository).save(any());
+    }
+
+    @Test
+    void testStartExecution_WorkflowNotFound() {
+        // Given
+        String workflowId = "wf_nonexistent";
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThrows(IllegalArgumentException.class, () ->
+                executionService.startExecution(workflowId, "MANUAL", null, null, null)
+        );
+    }
+
+    @Test
+    void testStartExecution_WorkflowNotActive() {
+        // Given
+        String workflowId = "wf_draft";
+
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId(workflowId);
+        workflow.setStatus("DRAFT"); // Not ACTIVE
+
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+
+        // When & Then
+        assertThrows(IllegalStateException.class, () ->
+                executionService.startExecution(workflowId, "MANUAL", null, null, null)
+        );
+    }
+
+    @Test
+    void testExecuteNextNodes_WithTriggerNode() {
+        // Given
+        String executionId = "exec_123";
+        String workflowId = "wf_123";
+        String triggerNodeId = "node_trigger";
+
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(executionId);
+        execution.setWorkflowId(workflowId);
+        execution.setStatus("RUNNING");
+
+        WorkflowNode triggerNode = new WorkflowNode();
+        triggerNode.setId(triggerNodeId);
+        triggerNode.setWorkflowId(workflowId);
+        triggerNode.setNodeType("TRIGGER");
+        triggerNode.setNodeSubtype("MANUAL");
+        triggerNode.setConfigJson("{}");
+
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(nodeRepository.findByWorkflowIdAndNodeType(workflowId, "TRIGGER"))
+                .thenReturn(Collections.singletonList(triggerNode));
+        when(nodeRepository.findById(triggerNodeId)).thenReturn(Optional.of(triggerNode));
+        when(connectionRepository.findBySourceNodeId(triggerNodeId))
+                .thenReturn(Collections.emptyList());
+
+        // When
+        executionService.executeNextNodes(executionId);
+
+        // Then
+        verify(executionRepository, atLeastOnce()).save(any());
+    }
+
+    @Test
+    void testCancelExecution_Success() {
+        // Given
+        String executionId = "exec_123";
+
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(executionId);
+        execution.setStatus("RUNNING");
+
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // When
+        executionService.cancelExecution(executionId, "user123");
+
+        // Then
+        verify(executionRepository).save(argThat(exec ->
+                "CANCELLED".equals(exec.getStatus())
+        ));
+    }
+
+    @Test
+    void testCancelExecution_NotRunning() {
+        // Given
+        String executionId = "exec_123";
+
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(executionId);
+        execution.setStatus("COMPLETED");
+
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+
+        // When & Then
+        assertThrows(IllegalStateException.class, () ->
+                executionService.cancelExecution(executionId, "user123")
+        );
+    }
+
+    @Test
+    void testRetryExecution_Success() {
+        // Given
+        String oldExecutionId = "exec_old";
+        String workflowId = "wf_123";
+
+        WorkflowExecution oldExecution = new WorkflowExecution();
+        oldExecution.setId(oldExecutionId);
+        oldExecution.setWorkflowId(workflowId);
+        oldExecution.setStatus("FAILED");
+        oldExecution.setTriggerType("MANUAL");
+
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId(workflowId);
+        workflow.setStatus("ACTIVE");
+        workflow.setVersion(1);
+        workflow.setExecutionCount(0);
+
+        when(executionRepository.findById(oldExecutionId)).thenReturn(Optional.of(oldExecution));
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(workflowRepository.save(any())).thenReturn(workflow);
+        when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        doNothing().when(executionService).executeAsync(anyString());
+
+        // When
+        WorkflowExecution newExecution = executionService.retryExecution(oldExecutionId);
+
+        // Then
+        assertNotNull(newExecution);
+        assertEquals(workflowId, newExecution.getWorkflowId());
+        assertEquals("RUNNING", newExecution.getStatus());
+    }
+
+    @Test
+    void testRetryExecution_NotFailed() {
+        // Given
+        String executionId = "exec_123";
+
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(executionId);
+        execution.setStatus("RUNNING");
+
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+
+        // When & Then
+        assertThrows(IllegalStateException.class, () ->
+                executionService.retryExecution(executionId)
+        );
+    }
+
+    @Test
+    void testGetExecutionDetail() {
+        // Given
+        String executionId = "exec_123";
+        String workflowId = "wf_123";
+
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(executionId);
+        execution.setWorkflowId(workflowId);
+        execution.setStatus("RUNNING");
+        execution.setExecutionContext("{}");
+
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId(workflowId);
+        workflow.setName("Test Workflow");
+
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+
+        // When
+        Map<String, Object> detail = executionService.getExecutionDetail(executionId);
+
+        // Then
+        assertNotNull(detail);
+        assertNotNull(detail.get("execution"));
+        assertNotNull(detail.get("workflow"));
+    }
+
+    @Test
+    void testGetExecutionHistory() {
+        // Given
+        String workflowId = "wf_123";
+
+        List<WorkflowExecution> executions = Arrays.asList(
+                createExecution("exec_1", "COMPLETED"),
+                createExecution("exec_2", "RUNNING"),
+                createExecution("exec_3", "FAILED")
+        );
+
+        when(executionRepository.findByWorkflowIdOrderByStartedAtDesc(eq(workflowId), any(Pageable.class)))
+                .thenReturn(executions);
+
+        // When
+        List<WorkflowExecution> result = executionService.getExecutionHistory(workflowId, null, 0, 20);
+
+        // Then
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testGetExecutionHistory_WithStatus() {
+        // Given
+        String workflowId = "wf_123";
+        String status = "FAILED";
+
+        List<WorkflowExecution> executions = Collections.singletonList(
+                createExecution("exec_1", status)
+        );
+
+        when(executionRepository.findByWorkflowIdAndStatusOrderByStartedAtDesc(eq(workflowId), eq(status), any(Pageable.class)))
+                .thenReturn(executions);
+
+        // When
+        List<WorkflowExecution> result = executionService.getExecutionHistory(workflowId, status, 0, 20);
+
+        // Then
+        assertEquals(1, result.size());
+        assertEquals(status, result.get(0).getStatus());
+    }
+
+    private WorkflowExecution createExecution(String id, String status) {
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(id);
+        execution.setStatus(status);
+        execution.setWorkflowId("wf_123");
+        return execution;
+    }
+}

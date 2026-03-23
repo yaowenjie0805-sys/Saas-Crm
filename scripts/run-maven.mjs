@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 
@@ -8,6 +8,34 @@ const cwd = process.cwd()
 const repo = process.env.MAVEN_REPO || `${cwd}${IS_WIN ? '\\' : '/'}\.m2repo`
 const projectGlobalSettings = resolve(cwd, '.mvn', 'global-settings.xml')
 const projectUserSettings = resolve(cwd, '.mvn', 'settings.xml')
+const localBackendEnv = resolve(cwd, '.env.backend.local')
+
+function loadLocalBackendEnv(filePath) {
+  if (!existsSync(filePath)) return null
+
+  const raw = readFileSync(filePath, 'utf8')
+  const lines = raw.split(/\r?\n/)
+  let loaded = 0
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const idx = trimmed.indexOf('=')
+    if (idx <= 0) continue
+    const key = trimmed.slice(0, idx).trim()
+    let value = trimmed.slice(idx + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    if (!key) continue
+    if (process.env[key] == null || process.env[key] === '') {
+      process.env[key] = value
+      loaded += 1
+    }
+  }
+  return loaded
+}
+
+const loadedLocalEnvCount = loadLocalBackendEnv(localBackendEnv)
 
 const mavenArgs = [`-Dmaven.repo.local=${repo}`]
 
@@ -34,6 +62,9 @@ const commandLine = `${command} ${args.join(' ')}`
 
 console.log(`[run-maven] platform=${process.platform} node=${process.version}`)
 console.log(`[run-maven] repo=${repo}`)
+if (loadedLocalEnvCount != null) {
+  console.log(`[run-maven] loaded local env from .env.backend.local (keys=${loadedLocalEnvCount})`)
+}
 console.log(`[run-maven] command=${commandLine}`)
 
 const child = spawn(command, args, {

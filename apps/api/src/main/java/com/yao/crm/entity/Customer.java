@@ -34,6 +34,24 @@ public class Customer {
     @Column(nullable = false, length = 64)
     private String tenantId;
 
+    @Column(length = 120)
+    private String industry;
+
+    @Column(length = 40)
+    private String scale;
+
+    @Column(length = 40)
+    private String phone;
+
+    @Column(length = 255)
+    private String website;
+
+    @Column(length = 500)
+    private String address;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -67,6 +85,18 @@ public class Customer {
     public void setStatus(String status) { this.status = status; }
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
+    public String getIndustry() { return industry; }
+    public void setIndustry(String industry) { this.industry = industry; }
+    public String getScale() { return scale; }
+    public void setScale(String scale) { this.scale = scale; }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+    public String getWebsite() { return website; }
+    public void setWebsite(String website) { this.website = website; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

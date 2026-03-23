@@ -11,6 +11,7 @@
     "dev:backend": "node scripts/run-maven.mjs -f apps/api/pom.xml spring-boot:run",
     "dev:backend:stable": "powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1",
     "db:init": "powershell -ExecutionPolicy Bypass -File scripts/init-db.ps1",
+    "db:flyway:repair": "powershell -ExecutionPolicy Bypass -File scripts/flyway-repair-dev.ps1",
     "validate:env": "node scripts/validate-env.mjs",
     "validate:env:staging": "node scripts/validate-env.mjs staging",
     "validate:env:prod": "node scripts/validate-env.mjs prod",

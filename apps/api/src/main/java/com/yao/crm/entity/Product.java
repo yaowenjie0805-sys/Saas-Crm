@@ -6,6 +6,7 @@ import javax.persistence.Id;
 import javax.persistence.PrePersist;
 import javax.persistence.PreUpdate;
 import javax.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -103,5 +104,9 @@ public class Product {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    // Java 8 兼容：添加 setPrice 方法接受 BigDecimal
+    public void setPrice(BigDecimal price) {
+        this.standardPrice = price != null ? price.longValue() : 0L;
+    }
 }
 

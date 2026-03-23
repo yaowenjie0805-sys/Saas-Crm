@@ -39,6 +39,7 @@ public class V2IntegrationConnectorController extends BaseApiController {
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         items.add(item("WECOM", cn, cn ? "ACTIVE" : "PLANNED", "CN"));
         items.add(item("DINGTALK", cn, cn ? "ACTIVE" : "PLANNED", "CN"));
+        items.add(item("FEISHU", cn, cn ? "ACTIVE" : "PLANNED", "CN"));
         items.add(item("SALESFORCE", !cn, "PLANNED", "GLOBAL"));
         items.add(item("HUBSPOT", !cn, "PLANNED", "GLOBAL"));
 

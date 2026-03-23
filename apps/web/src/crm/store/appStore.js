@@ -82,6 +82,7 @@ export const useAppStore = create((set, get) => ({
   reportingDomain: { data: {}, forms: {}, query: {}, ui: {} },
   leadImportDomain: { data: {}, forms: {}, query: {}, ui: {} },
   perfDomain: { data: {}, forms: {}, query: {}, ui: {} },
+  searchDomain: { data: {}, forms: {}, query: {}, ui: {} },
   loading: {
     auth: createLoadingState(),
     ui: createLoadingState(),
@@ -93,6 +94,7 @@ export const useAppStore = create((set, get) => ({
     reportingDomain: createLoadingState(),
     leadImportDomain: createLoadingState(),
     perfDomain: createLoadingState(),
+    searchDomain: createLoadingState(),
   },
 
   setLang: (lang) => {
@@ -134,6 +136,7 @@ export const useAppStore = create((set, get) => ({
   setReportingDomainState: createDomainSetter(set, 'reportingDomain'),
   setLeadImportDomainState: createDomainSetter(set, 'leadImportDomain'),
   setPerfDomainState: createDomainSetter(set, 'perfDomain'),
+  setSearchDomainState: createDomainSetter(set, 'searchDomain'),
   initSliceField: (sliceName, section, field, initialValue) => {
     set((state) => {
       const slice = state[sliceName] || {}
@@ -208,6 +211,7 @@ export const selectApprovalDomainSlice = (state) => state.approvalDomain
 export const selectReportingDomainSlice = (state) => state.reportingDomain
 export const selectLeadImportDomainSlice = (state) => state.leadImportDomain
 export const selectPerfDomainSlice = (state) => state.perfDomain
+export const selectSearchDomainSlice = (state) => state.searchDomain
 export const selectLoadingSlice = (state) => state.loading
 
 export const selectLang = (state) => state.auth.lang
