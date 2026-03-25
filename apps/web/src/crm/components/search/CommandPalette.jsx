@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAppStore, selectSearchDomainSlice } from '../../store/appStore'
 
 /**
@@ -15,8 +15,8 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
 
   // 搜索结果
   const searchDomain = useAppStore(selectSearchDomainSlice)
-  const searchResults = searchDomain?.data?.results || {}
   const searchHistory = searchDomain?.data?.history || []
+  const flatResults = useMemo(() => flattenSearchResults(results), [results])
 
   // 搜索处理
   const handleSearch = useCallback(async (keyword) => {
@@ -49,12 +49,13 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
 
   // 防抖搜索
   useEffect(() => {
+    if (!isOpen) return undefined
     const timer = setTimeout(() => {
       handleSearch(query)
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [query, handleSearch])
+  }, [isOpen, query, handleSearch])
 
   // 聚焦输入框
   useEffect(() => {
@@ -63,18 +64,20 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
     }
   }, [isOpen])
 
+  useEffect(() => {
+    setSelectedIndex((prev) => clampSelectedIndex(prev, flatResults.length))
+  }, [flatResults.length])
+
   // 键盘导航
   const handleKeyDown = (e) => {
-    const flatResults = flattenResults(results)
-
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault()
-        setSelectedIndex((prev) => Math.min(prev + 1, flatResults.length - 1))
+        setSelectedIndex((prev) => clampSelectedIndex(prev + 1, flatResults.length))
         break
       case 'ArrowUp':
         e.preventDefault()
-        setSelectedIndex((prev) => Math.max(prev - 1, 0))
+        setSelectedIndex((prev) => clampSelectedIndex(prev - 1, flatResults.length))
         break
       case 'Enter':
         e.preventDefault()
@@ -84,31 +87,25 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
         break
       case 'Escape':
         e.preventDefault()
-        onClose()
+        handleClose()
         break
     }
   }
 
   // 扁平化搜索结果
-  const flattenResults = (results) => {
-    const flat = []
-    Object.entries(results).forEach(([type, items]) => {
-      items.forEach((item) => {
-        flat.push({ ...item, type })
-      })
-    })
-    return flat
-  }
+  const handleClose = useCallback(() => {
+    setQuery('')
+    setResults({})
+    setSelectedIndex(0)
+    onClose?.()
+  }, [onClose])
 
   // 选择结果
   const handleSelect = (item) => {
     if (onResultSelect) {
       onResultSelect(item)
     }
-    onClose()
-    setQuery('')
-    setResults({})
-    setSelectedIndex(0)
+    handleClose()
   }
 
   // 获取类型标签
@@ -143,14 +140,12 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
 
   if (!isOpen) return null
 
-  const flatResults = flattenResults(results)
-
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
       {/* 背景遮罩 */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* 搜索面板 */}
@@ -171,7 +166,7 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
             <div className="animate-spin text-gray-400">⏳</div>
           )}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="ml-3 px-2 py-1 text-sm text-gray-500 bg-gray-100 rounded"
           >
             ESC
@@ -188,12 +183,14 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
 
           {flatResults.length > 0 && (
             <div className="py-2">
-              {Object.entries(results).map(([type, items]) => (
+              {Object.entries(results).map(([type, items]) => {
+                const safeItems = Array.isArray(items) ? items : []
+                return (
                 <div key={type}>
                   <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50">
-                    {getTypeLabel(type)} ({items.length})
+                    {getTypeLabel(type)} ({safeItems.length})
                   </div>
-                  {items.map((item, index) => {
+                  {safeItems.map((item, index) => {
                     const globalIndex = flatResults.findIndex(
                       (r) => r.id === item.id && r.type === type
                     )
@@ -225,7 +222,7 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
                     )
                   })}
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
@@ -266,6 +263,21 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
 /**
  * 搜索钩子
  */
+export function clampSelectedIndex(selectedIndex, flatResultsLength) {
+  if (flatResultsLength <= 0) return 0
+  return Math.min(Math.max(selectedIndex, 0), flatResultsLength - 1)
+}
+
+export function flattenSearchResults(results) {
+  const flat = []
+  Object.entries(results || {}).forEach(([type, items]) => {
+    ;(Array.isArray(items) ? items : []).forEach((item) => {
+      flat.push({ ...item, type })
+    })
+  })
+  return flat
+}
+
 export function useGlobalSearch() {
   const [isOpen, setIsOpen] = useState(false)
 

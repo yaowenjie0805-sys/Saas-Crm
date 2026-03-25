@@ -195,6 +195,9 @@ public class V1AuthController extends BaseApiController {
         }
 
         String tenantId = isBlank(payload.getTenantId()) ? "tenant_default" : payload.getTenantId().trim();
+        if (!tenantRepository.findById(tenantId).isPresent()) {
+            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+        }
         Optional<UserAccount> existing = userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(identity.getUsername(), tenantId);
         UserAccount user;
         if (existing.isPresent()) {

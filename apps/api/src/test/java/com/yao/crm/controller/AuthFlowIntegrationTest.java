@@ -14,6 +14,7 @@ import com.yao.crm.repository.LeadImportJobChunkRepository;
 import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.PaymentRecordRepository;
+import com.yao.crm.repository.UserAccountRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -60,6 +61,8 @@ class AuthFlowIntegrationTest {
     private ApprovalEventRepository approvalEventRepository;
     @Autowired
     private ApprovalTaskRepository approvalTaskRepository;
+    @Autowired
+    private UserAccountRepository userAccountRepository;
 
 
     @Test
@@ -966,6 +969,38 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.details").isMap())
                 .andExpect(jsonPath("$.token").isString())
                 .andExpect(jsonPath("$.tenantId").value("tenant_default"));
+    }
+
+    @Test
+    void ssoLoginShouldRejectUnknownTenantAndAvoidAutoProvision() throws Exception {
+        String tenantId = "tenant_missing_" + System.currentTimeMillis();
+        String username = "sso_missing_" + System.currentTimeMillis();
+
+        mockMvc.perform(post("/api/auth/sso/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"" + tenantId + "\",\"username\":\"" + username + "\",\"displayName\":\"Missing Tenant\",\"code\":\"SSO-ACCESS\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TENANT_NOT_FOUND"));
+
+        org.junit.jupiter.api.Assertions.assertFalse(
+                userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId).isPresent()
+        );
+    }
+
+    @Test
+    void v1OidcCallbackShouldRejectUnknownTenantAndAvoidAutoProvision() throws Exception {
+        String tenantId = "tenant_missing_" + System.currentTimeMillis();
+        String username = "oidc_missing_" + System.currentTimeMillis();
+
+        mockMvc.perform(post("/api/v1/auth/oidc/callback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantId\":\"" + tenantId + "\",\"username\":\"" + username + "\",\"displayName\":\"Missing Tenant\",\"code\":\"SSO-ACCESS\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("tenant_not_found"));
+
+        org.junit.jupiter.api.Assertions.assertFalse(
+                userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId).isPresent()
+        );
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.yao.crm.dto.request.RegisterRequest;
 import com.yao.crm.dto.request.SsoLoginRequest;
 import com.yao.crm.entity.UserAccount;
 import com.yao.crm.repository.UserAccountRepository;
+import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.security.LoginRiskService;
 import com.yao.crm.security.MfaService;
 import com.yao.crm.security.SessionCookieService;
@@ -34,6 +35,7 @@ import java.util.Optional;
 public class AuthController extends BaseApiController {
 
     private final UserAccountRepository userAccountRepository;
+    private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final AuditLogService auditLogService;
@@ -43,6 +45,7 @@ public class AuthController extends BaseApiController {
     private final SessionCookieService sessionCookieService;
 
     public AuthController(UserAccountRepository userAccountRepository,
+                          TenantRepository tenantRepository,
                           PasswordEncoder passwordEncoder,
                           TokenService tokenService,
                           AuditLogService auditLogService,
@@ -53,6 +56,7 @@ public class AuthController extends BaseApiController {
                           I18nService i18nService) {
         super(i18nService);
         this.userAccountRepository = userAccountRepository;
+        this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
         this.auditLogService = auditLogService;
@@ -158,6 +162,9 @@ public class AuthController extends BaseApiController {
 
         String username = identity.getUsername();
         String tenantId = isBlank(payload.getTenantId()) ? "tenant_default" : payload.getTenantId().trim();
+        if (!tenantRepository.findById(tenantId).isPresent()) {
+            return ResponseEntity.status(404).body(singleMessage(request, "tenant_not_found", "NOT_FOUND", null));
+        }
         Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId);
         UserAccount user;
         if (optional.isPresent()) {
