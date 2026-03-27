@@ -25,13 +25,13 @@ public interface SearchIndexRepository extends JpaRepository<SearchIndex, String
             @Param("entityType") String entityType,
             @Param("entityId") String entityId);
 
-    @Query(value = "SELECT * FROM search_index WHERE tenant_id = :tenantId AND MATCH(search_content, pinyin_content) AGAINST(:keyword IN BOOLEAN MODE) LIMIT :limit", nativeQuery = true)
+    @Query(value = "SELECT id, tenant_id, entity_type, entity_id, search_content, pinyin_content, updated_at FROM search_index WHERE tenant_id = :tenantId AND MATCH(search_content, pinyin_content) AGAINST(:keyword IN BOOLEAN MODE) LIMIT :limit", nativeQuery = true)
     List<SearchIndex> fullTextSearch(
             @Param("tenantId") String tenantId,
             @Param("keyword") String keyword,
             @Param("limit") int limit);
 
-    @Query(value = "SELECT * FROM search_index WHERE tenant_id = :tenantId AND (search_content LIKE %:keyword% OR pinyin_content LIKE %:keyword%) LIMIT :limit", nativeQuery = true)
+    @Query(value = "SELECT id, tenant_id, entity_type, entity_id, search_content, pinyin_content, updated_at FROM search_index WHERE tenant_id = :tenantId AND (search_content LIKE %:keyword% OR pinyin_content LIKE %:keyword%) LIMIT :limit", nativeQuery = true)
     List<SearchIndex> fuzzySearch(
             @Param("tenantId") String tenantId,
             @Param("keyword") String keyword,

@@ -6,7 +6,6 @@ import {
   Input,
   Button,
   Space,
-  Dropdown,
   Modal,
   message,
   Tag,
@@ -20,19 +19,47 @@ import {
   MessageOutlined,
   EditOutlined,
   DeleteOutlined,
-  MoreOutlined,
-  AtSignOutlined,
   TagOutlined,
   SendOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
+import { api } from '../../../shared';
 
 dayjs.extend(relativeTime);
 dayjs.locale('zh-cn');
 
 const { TextArea } = Input;
+const PAGE_SIZE = 20;
+const REQUEST_CANCEL_ERRORS = new Set(['AbortError', 'CanceledError']);
+
+const commentActionStyle = {
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4
+};
+
+const replyCommentStyle = {
+  marginLeft: 24,
+  background: '#fafafa',
+  padding: 12,
+  borderRadius: 8
+};
+
+const commentBodyStyle = { lineHeight: 1.8 };
+const replyBodyStyle = { lineHeight: 1.6 };
+const inlineTagStyle = {
+  background: '#e6f7ff',
+  color: '#1890ff',
+  padding: '0 6px',
+  borderRadius: 4,
+  margin: '0 2px'
+};
+const inlineTagStyleString = Object.entries(inlineTagStyle)
+  .map(([key, value]) => `${key.replace(/[A-Z]/g, match => `-${match.toLowerCase()}`)}: ${value}`)
+  .join('; ');
 
 const parseCommentTags = (tags) => {
   if (!tags) {
@@ -51,10 +78,45 @@ const parseCommentTags = (tags) => {
   }
 };
 
-/**
- * 协作评论组件
- * 支持评论、回复、@提及、#标签#、点赞等功能
- */
+const isRequestCanceled = (error) => REQUEST_CANCEL_ERRORS.has(error?.name);
+
+const escapeHtml = (text) => {
+  if (!text) return '';
+
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const renderInlineFormatting = (content) => {
+  if (!content) return null;
+
+  const safe = escapeHtml(content);
+  const withMentions = safe.replace(/@([a-zA-Z0-9_]+)/g, (_, username) => {
+    return `<span style="color: #1890ff; cursor: pointer;">@${username}</span>`;
+  });
+
+  const withTags = withMentions.replace(/#([^#]+)#/g, (_, tag) => {
+    return `<span style="${inlineTagStyleString}">#${tag}#</span>`;
+  });
+
+  return <span dangerouslySetInnerHTML={{ __html: withTags }} />;
+};
+
+const makeAction = (icon, label, onClick, extraStyle = {}) => (
+  <span onClick={onClick} style={{ ...commentActionStyle, ...extraStyle }}>
+    {icon}
+    <span>{label}</span>
+  </span>
+);
+
+const getInitial = (name) => name?.[0] || 'U';
+
+const shouldShowError = (error) => !isRequestCanceled(error);
+
 export function CollaborationCommentSection({
   entityType,
   entityId,
@@ -71,184 +133,186 @@ export function CollaborationCommentSection({
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [editingComment, setEditingComment] = useState(null);
-  const commentInputRef = useRef(null);
+  const [newCommentContent, setNewCommentContent] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [replyContent, setReplyContent] = useState('');
 
-  const pageSize = 20;
+  const abortControllerRef = useRef(null);
+  const requestSeqRef = useRef(0);
 
-  // 加载评论
-  const loadComments = useCallback(async (pageNum = 0, append = false) => {
+  const loadStats = useCallback(async () => {
     if (!entityType || !entityId) return;
 
-    setLoading(true);
     try {
-      const response = await fetch(
-        `/api/v2/collaboration/entities/${entityType}/${entityId}/comments?page=${pageNum}&size=${pageSize}&includeReplies=true`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'X-Tenant-Id': localStorage.getItem('tenantId')
-          }
-        }
-      );
-      const data = await response.json();
-
+      const data = await api(`/v2/collaboration/entities/${entityType}/${entityId}/comments/stats`);
       if (data.success) {
-        if (append) {
-          setComments(prev => [...prev, ...data.comments]);
-        } else {
-          setComments(data.comments);
+        setStats(data.stats);
+      }
+    } catch (error) {
+      if (shouldShowError(error)) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+  }, [entityType, entityId]);
+
+  const loadComments = useCallback(
+    async (pageNum = 0, append = false) => {
+      if (!entityType || !entityId) return;
+
+      const requestId = ++requestSeqRef.current;
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      setLoading(true);
+
+      try {
+        const data = await api(
+          `/v2/collaboration/entities/${entityType}/${entityId}/comments?page=${pageNum}&size=${PAGE_SIZE}&includeReplies=true`,
+          { signal: controller.signal }
+        );
+
+        if (!data.success || requestSeqRef.current !== requestId) {
+          return;
         }
-        setHasMore((pageNum + 1) * pageSize < data.total);
+
+        setComments(prev => (append ? [...prev, ...(data.comments || [])] : (data.comments || [])));
+        setHasMore((pageNum + 1) * PAGE_SIZE < data.total);
         setPage(pageNum);
 
         if (showStats && data.total !== undefined) {
           loadStats();
         }
-      }
-    } catch (error) {
-      console.error('Failed to load comments:', error);
-    } finally {
-      setLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId, showStats]);
-
-  // 加载统计
-  const loadStats = async () => {
-    try {
-      const response = await fetch(
-        `/api/v2/collaboration/entities/${entityType}/${entityId}/comments/stats`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'X-Tenant-Id': localStorage.getItem('tenantId')
-          }
+      } catch (error) {
+        if (shouldShowError(error)) {
+          console.error('Failed to load comments:', error);
         }
-      );
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.stats);
+      } finally {
+        if (requestSeqRef.current === requestId) {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-    }
-  };
+    },
+    [entityType, entityId, loadStats, showStats]
+  );
 
   useEffect(() => {
     loadComments();
+
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [loadComments]);
 
-  // 提交评论
-  const handleSubmit = async (values) => {
-    if (!values.content?.trim()) {
+  const postComment = useCallback(
+    async (url, payload, successMessage, failureMessage, onSuccess) => {
+      setSubmitting(true);
+
+      try {
+        const data = await api(url, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        if (data.success) {
+          message.success(successMessage);
+          onSuccess?.(data);
+        } else {
+          message.error(data.message || failureMessage);
+        }
+
+        return data;
+      } catch {
+        message.error(failureMessage);
+        return null;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    []
+  );
+
+  const handleSubmit = async (content) => {
+    const trimmedContent = content?.trim();
+    if (!trimmedContent) {
       message.warning('请输入评论内容');
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const response = await fetch('/api/v2/collaboration/comments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'X-Tenant-Id': localStorage.getItem('tenantId')
-        },
-        body: JSON.stringify({
-          entityType,
-          entityId,
-          authorId: currentUser?.id,
-          authorName: currentUser?.name,
-          content: values.content
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        message.success('评论成功');
+    await postComment(
+      '/v2/collaboration/comments',
+      {
+        entityType,
+        entityId,
+        authorId: currentUser?.id,
+        authorName: currentUser?.name,
+        content
+      },
+      '评论成功',
+      '评论失败',
+      (data) => {
+        setNewCommentContent('');
         loadComments();
         onCommentAdded?.(data.comment);
-      } else {
-        message.error(data.message || '评论失败');
       }
-    } catch (_error) {
-      message.error('评论失败');
-    } finally {
-      setSubmitting(false);
-    }
+    );
   };
 
-  // 回复评论
   const handleReply = async (parentCommentId, content) => {
-    if (!content?.trim()) {
+    const trimmedContent = content?.trim();
+    if (!trimmedContent) {
       message.warning('请输入回复内容');
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const response = await fetch(`/api/v2/collaboration/comments/${parentCommentId}/reply`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'X-Tenant-Id': localStorage.getItem('tenantId')
-        },
-        body: JSON.stringify({
-          authorId: currentUser?.id,
-          authorName: currentUser?.name,
-          content
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        message.success('回复成功');
+    await postComment(
+      `/v2/collaboration/comments/${parentCommentId}/reply`,
+      {
+        authorId: currentUser?.id,
+        authorName: currentUser?.name,
+        content
+      },
+      '回复成功',
+      '回复失败',
+      () => {
+        setReplyContent('');
+        setMentioning(null);
         loadComments();
-      } else {
-        message.error(data.message || '回复失败');
       }
-    } catch (_error) {
-      message.error('回复失败');
-    } finally {
-      setSubmitting(false);
-    }
+    );
   };
 
-  // 点赞评论
   const handleLike = async (commentId) => {
     try {
-      const response = await fetch(
-        `/api/v2/collaboration/comments/${commentId}/like?userId=${currentUser?.id}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'X-Tenant-Id': localStorage.getItem('tenantId')
-          }
-        }
-      );
+      const data = await api(`/v2/collaboration/comments/${commentId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: currentUser?.id })
+      });
 
-      const data = await response.json();
       if (data.success) {
-        // 更新本地状态
-        setComments(prev => prev.map(c => {
-          if (c.id === commentId) {
+        setComments(prev =>
+          prev.map(comment => {
+            if (comment.id !== commentId) {
+              return comment;
+            }
+
             return {
-              ...c,
-              likeCount: data.isLiked ? c.likeCount + 1 : c.likeCount - 1,
+              ...comment,
+              likeCount: data.isLiked ? comment.likeCount + 1 : comment.likeCount - 1,
               isLiked: data.isLiked
             };
-          }
-          return c;
-        }));
+          })
+        );
       }
-    } catch (_error) {
+    } catch {
       message.error('操作失败');
     }
   };
 
-  // 删除评论
   const handleDelete = async (commentId) => {
     Modal.confirm({
       title: '确认删除',
@@ -258,18 +322,11 @@ export function CollaborationCommentSection({
       cancelText: '取消',
       onOk: async () => {
         try {
-          const response = await fetch(
-            `/api/v2/collaboration/comments/${commentId}?userId=${currentUser?.id}`,
-            {
-              method: 'DELETE',
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                'X-Tenant-Id': localStorage.getItem('tenantId')
-              }
-            }
-          );
+          const data = await api(`/v2/collaboration/comments/${commentId}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ userId: currentUser?.id })
+          });
 
-          const data = await response.json();
           if (data.success) {
             message.success('删除成功');
             loadComments();
@@ -277,120 +334,113 @@ export function CollaborationCommentSection({
           } else {
             message.error(data.message || '删除失败');
           }
-        } catch (_error) {
+        } catch {
           message.error('删除失败');
         }
       }
     });
   };
 
-  // 编辑评论
   const handleEdit = async (commentId, newContent) => {
+    if (!newContent?.trim()) {
+      message.warning('评论内容不能为空');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/v2/collaboration/comments/${commentId}`, {
+      const data = await api(`/v2/collaboration/comments/${commentId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'X-Tenant-Id': localStorage.getItem('tenantId')
-        },
         body: JSON.stringify({
           userId: currentUser?.id,
           newContent
         })
       });
 
-      const data = await response.json();
       if (data.success) {
         message.success('编辑成功');
         setEditingComment(null);
+        setNewCommentContent('');
         loadComments();
       } else {
         message.error(data.message || '编辑失败');
       }
-    } catch (_error) {
+    } catch {
       message.error('编辑失败');
     }
   };
 
-  // 解析评论内容，渲染@提及和#标签#
-  const renderContent = (content) => {
-    if (!content) return null;
-
-    // 替换@提及
-    let rendered = content.replace(/@([a-zA-Z0-9_]+)/g, (match, username) => {
-      return `<span style="color: #1890ff; cursor: pointer;">@${username}</span>`;
-    });
-
-    // 替换#标签#
-    rendered = rendered.replace(/#([^#]+)#/g, (match, tag) => {
-      return `<span style="background: #e6f7ff; color: #1890ff; padding: 0 6px; border-radius: 4px; margin: 0 2px;">#${tag}#</span>`;
-    });
-
-    return <span dangerouslySetInnerHTML={{ __html: rendered }} />;
+  const startEditing = (comment) => {
+    setEditingComment(comment);
+    setEditContent(comment.content);
   };
 
-  // 渲染单个评论
+  const cancelEditing = () => {
+    setEditingComment(null);
+    setEditContent('');
+  };
+
+  const startReplying = (comment) => {
+    setMentioning(comment.id);
+    setReplyContent('');
+  };
+
+  const cancelReplying = () => {
+    setMentioning(null);
+    setReplyContent('');
+  };
+
+  const renderCommentActions = (comment, isReply = false) => {
+    const items = [
+      makeAction(
+        comment.isLiked ? <LikeFilled style={{ color: '#eb2f96' }} /> : <LikeOutlined />,
+        comment.likeCount || 0,
+        () => handleLike(comment.id)
+      )
+    ];
+
+    if (!isReply) {
+      items.push(
+        makeAction(<MessageOutlined />, '回复', () => startReplying(comment)),
+        comment.authorId === currentUser?.id &&
+          makeAction(<EditOutlined />, '编辑', () => startEditing(comment)),
+        comment.authorId === currentUser?.id &&
+          makeAction(<DeleteOutlined />, '删除', () => handleDelete(comment.id), { color: '#ff4d4f' })
+      );
+    }
+
+    return items.filter(Boolean);
+  };
+
   const renderComment = (comment) => (
     <Comment
       key={comment.id}
-      actions={[
-        <span onClick={() => handleLike(comment.id)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          {comment.isLiked ? <LikeFilled style={{ color: '#eb2f96' }} /> : <LikeOutlined />}
-          <span>{comment.likeCount || 0}</span>
-        </span>,
-        <span onClick={() => setMentioning(comment.id)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <MessageOutlined />
-          <span>回复</span>
-        </span>,
-        comment.authorId === currentUser?.id && (
-          <span onClick={() => setEditingComment(comment)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <EditOutlined />
-            <span>编辑</span>
-          </span>
-        ),
-        comment.authorId === currentUser?.id && (
-          <span onClick={() => handleDelete(comment.id)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, color: '#ff4d4f' }}>
-            <DeleteOutlined />
-            <span>删除</span>
-          </span>
-        )
-      ]}
+      actions={renderCommentActions(comment)}
       author={
         <Space>
           <span style={{ fontWeight: 500 }}>{comment.authorName}</span>
-          {comment.editedAt && <Tag color="default" style={{ fontSize: 10 }}>已编辑</Tag>}
+          {comment.editedAt && (
+            <Tag color="default" style={{ fontSize: 10 }}>
+              已编辑
+            </Tag>
+          )}
         </Space>
       }
-      avatar={<Avatar style={{ backgroundColor: '#1890ff' }}>{comment.authorName?.[0] || 'U'}</Avatar>}
+      avatar={<Avatar style={{ backgroundColor: '#1890ff' }}>{getInitial(comment.authorName)}</Avatar>}
       content={
         editingComment?.id === comment.id ? (
           <div>
-            <TextArea
-              defaultValue={comment.content}
-              rows={3}
-              id={`edit-${comment.id}`}
-            />
+            <TextArea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} />
             <Space style={{ marginTop: 8 }}>
-              <Button
-                type="primary"
-                size="small"
-                onClick={() => {
-                  const newContent = document.getElementById(`edit-${comment.id}`).value;
-                  handleEdit(comment.id, newContent);
-                }}
-              >
+              <Button type="primary" size="small" onClick={() => handleEdit(comment.id, editContent)}>
                 保存
               </Button>
-              <Button size="small" onClick={() => setEditingComment(null)}>
+              <Button size="small" onClick={cancelEditing}>
                 取消
               </Button>
             </Space>
           </div>
         ) : (
-          <div style={{ lineHeight: 1.8 }}>
-            {renderContent(comment.content)}
-          </div>
+          <div style={commentBodyStyle}>{renderInlineFormatting(comment.content)}</div>
         )
       }
       datetime={
@@ -399,38 +449,31 @@ export function CollaborationCommentSection({
         </Tooltip>
       }
     >
-      {/* 渲染标签 */}
       {parseCommentTags(comment.tags).map(tag => (
         <Tag key={tag} color="blue" style={{ marginTop: 8 }}>
           <TagOutlined /> {tag}
         </Tag>
       ))}
 
-      {/* 渲染回复 */}
       {comment.replies?.map(reply => (
         <Comment
           key={reply.id}
-          style={{ marginLeft: 24, background: '#fafafa', padding: 12, borderRadius: 8 }}
-          actions={[
-            <span onClick={() => handleLike(reply.id)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              {reply.isLiked ? <LikeFilled style={{ color: '#eb2f96' }} /> : <LikeOutlined />}
-              <span>{reply.likeCount || 0}</span>
-            </span>
-          ]}
+          style={replyCommentStyle}
+          actions={renderCommentActions(reply, true)}
           author={<span style={{ fontWeight: 500 }}>{reply.authorName}</span>}
-          avatar={<Avatar size="small" style={{ backgroundColor: '#52c41a' }}>{reply.authorName?.[0] || 'U'}</Avatar>}
-          content={<div style={{ lineHeight: 1.6 }}>{renderContent(reply.content)}</div>}
+          avatar={<Avatar size="small" style={{ backgroundColor: '#52c41a' }}>{getInitial(reply.authorName)}</Avatar>}
+          content={<div style={replyBodyStyle}>{renderInlineFormatting(reply.content)}</div>}
           datetime={<span>{dayjs(reply.createdAt).fromNow()}</span>}
         />
       ))}
 
-      {/* 回复输入框 */}
       {mentioning === comment.id && (
         <div style={{ marginTop: 12, marginLeft: 24 }}>
           <TextArea
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
             placeholder={`回复 @${comment.authorName}...（输入 @ 提及用户）`}
             rows={2}
-            id={`reply-${comment.id}`}
           />
           <Space style={{ marginTop: 8 }}>
             <Button
@@ -438,15 +481,11 @@ export function CollaborationCommentSection({
               size="small"
               icon={<SendOutlined />}
               loading={submitting}
-              onClick={() => {
-                const content = document.getElementById(`reply-${comment.id}`).value;
-                handleReply(comment.id, content);
-                setMentioning(false);
-              }}
+              onClick={() => handleReply(comment.id, replyContent)}
             >
               发送
             </Button>
-            <Button size="small" onClick={() => setMentioning(false)}>
+            <Button size="small" onClick={cancelReplying}>
               取消
             </Button>
           </Space>
@@ -457,7 +496,6 @@ export function CollaborationCommentSection({
 
   return (
     <div className="collaboration-comment-section" style={{ padding: '0 16px' }}>
-      {/* 统计信息 */}
       {showStats && stats && (
         <div style={{ marginBottom: 16, padding: '12px 16px', background: '#fafafa', borderRadius: 8 }}>
           <Space size="large">
@@ -474,23 +512,19 @@ export function CollaborationCommentSection({
         </div>
       )}
 
-      {/* 评论输入 */}
       <div style={{ marginBottom: 24 }}>
         <Comment
-          avatar={<Avatar style={{ backgroundColor: '#1890ff' }}>{currentUser?.name?.[0] || 'U'}</Avatar>}
+          avatar={<Avatar style={{ backgroundColor: '#1890ff' }}>{getInitial(currentUser?.name)}</Avatar>}
           content={
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const content = commentInputRef.current?.resizableTextArea?.textArea?.value;
-              if (content) {
-                handleSubmit({ content });
-                if (commentInputRef.current) {
-                  commentInputRef.current.resizableTextArea.textArea.value = '';
-                }
-              }
-            }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSubmit(newCommentContent);
+              }}
+            >
               <TextArea
-                ref={commentInputRef}
+                value={newCommentContent}
+                onChange={(e) => setNewCommentContent(e.target.value)}
                 rows={3}
                 placeholder="发表评论...（使用 @ 提及用户，#标签# 添加标签）"
               />
@@ -500,6 +534,7 @@ export function CollaborationCommentSection({
                   htmlType="submit"
                   icon={<SendOutlined />}
                   loading={submitting}
+                  disabled={!newCommentContent.trim()}
                 >
                   发表
                 </Button>
@@ -509,17 +544,12 @@ export function CollaborationCommentSection({
         />
       </div>
 
-      {/* 评论列表 */}
       <Spin spinning={loading && page === 0}>
         {comments.length === 0 && !loading ? (
           <Empty description="暂无评论" style={{ margin: '40px 0' }} />
         ) : (
           <>
-            <List
-              dataSource={comments}
-              renderItem={renderComment}
-              locale={{ emptyText: '暂无评论' }}
-            />
+            <List dataSource={comments} renderItem={renderComment} locale={{ emptyText: '暂无评论' }} />
 
             {hasMore && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>

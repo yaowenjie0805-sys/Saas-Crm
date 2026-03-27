@@ -47,11 +47,33 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(traceIdInterceptor).addPathPatterns("/api/**");
-        registry.addInterceptor(apiDiagnosticsInterceptor).addPathPatterns("/api/**");
-        registry.addInterceptor(rateLimitInterceptor).addPathPatterns("/api/**");
-        registry.addInterceptor(authInterceptor).addPathPatterns("/api/**");
-        registry.addInterceptor(dashboardCacheInvalidationInterceptor).addPathPatterns("/api/**");
+        // 追踪和诊断拦截器：所有 API 路径
+        registry.addInterceptor(traceIdInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/health/**", "/api/actuator/**");
+        
+        registry.addInterceptor(apiDiagnosticsInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/health/**", "/api/actuator/**");
+        
+        // 限流和认证拦截器：仅需要认证的路径
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/**");
+        
+        registry.addInterceptor(authInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/oidc/callback",
+                        "/api/v1/auth/session",
+                        "/api/v1/health/**",
+                        "/api/health/**",
+                        "/api/actuator/**"
+                );
+        
+        registry.addInterceptor(dashboardCacheInvalidationInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/health/**", "/api/actuator/**");
     }
 
     private String[] splitCsv(String csv) {

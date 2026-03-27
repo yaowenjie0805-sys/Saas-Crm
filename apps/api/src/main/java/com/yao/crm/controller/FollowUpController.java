@@ -63,7 +63,7 @@ public class FollowUpController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<String>(Arrays.asList("customerId", "author", "summary", "channel", "result", "nextActionDate", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("customerId", "author", "summary", "channel", "result", "nextActionDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -89,11 +89,11 @@ public class FollowUpController extends BaseApiController {
                 Predicate scopeAuthor = cb.equal(root.get("author"), ownerScope);
                 predicates.add(cb.or(selfAuthor, scopeAuthor));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
 
         Page<FollowUp> result = followUpRepository.findAll(spec, pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);

@@ -4,19 +4,21 @@ import com.yao.crm.entity.SavedSearch;
 import com.yao.crm.repository.SavedSearchRepository;
 import com.yao.crm.service.GlobalSearchService;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.util.*;
 
-/**
- * 全局搜索控制器
- * 提供搜索API、搜索历史、搜索建议等功能
- */
 @RestController
 @RequestMapping("/api/v2/search")
 public class SearchController {
+
+    private static final int MAX_SEARCH_LIMIT = 100;
+    private static final int MAX_SUGGESTION_LIMIT = 20;
+    private static final int MAX_HISTORY_LIMIT = 100;
 
     private final GlobalSearchService globalSearchService;
     private final SavedSearchRepository savedSearchRepository;
@@ -26,9 +28,6 @@ public class SearchController {
         this.savedSearchRepository = savedSearchRepository;
     }
 
-    /**
-     * 全局搜索
-     */
     @GetMapping
     public ResponseEntity<?> search(
             @RequestHeader("X-Tenant-Id") String tenantId,
@@ -42,12 +41,13 @@ public class SearchController {
             return ResponseEntity.badRequest().body(error);
         }
 
-        GlobalSearchService.SearchResult result = globalSearchService.search(tenantId, q.trim(), limit);
+        int safeLimit = clampLimit(limit, 20, MAX_SEARCH_LIMIT);
+        GlobalSearchService.SearchResult result = globalSearchService.search(tenantId, q.trim(), safeLimit);
 
-        // 如果指定了类型，只返回该类型的结果
         Map<String, Object> response = new HashMap<>();
         if (type != null && !type.isEmpty()) {
-            List<GlobalSearchService.SearchResult.Item> filtered = result.getResults().getOrDefault(type, Collections.emptyList());
+            List<GlobalSearchService.SearchResult.Item> filtered =
+                    result.getResults().getOrDefault(type, Collections.emptyList());
             response.put("results", filtered);
             response.put("total", filtered.size());
         } else {
@@ -56,56 +56,57 @@ public class SearchController {
         }
 
         response.put("query", q);
-        response.put("limit", limit);
-
+        response.put("limit", safeLimit);
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 获取搜索建议（自动补全）
-     */
     @GetMapping("/suggestions")
     public ResponseEntity<List<String>> suggestions(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String q,
             @RequestParam(defaultValue = "5") int limit) {
 
-        if (q == null || q.trim().isEmpty()) {
+        int safeLimit = clampLimit(limit, 5, MAX_SUGGESTION_LIMIT);
+        if (q == null || q.trim().isEmpty() || safeLimit <= 0) {
             return ResponseEntity.ok(Collections.emptyList());
         }
 
-        // TODO: 实现搜索建议逻辑
-        // 目前返回空列表，后续可以基于历史搜索提供建议
+        // TODO: implement suggestion logic; keep existing behavior for now.
         return ResponseEntity.ok(Collections.emptyList());
     }
 
-    /**
-     * 获取搜索历史
-     */
     @GetMapping("/history")
-    public ResponseEntity<List<SavedSearch>> getSearchHistory(
+    public ResponseEntity<?> getSearchHistory(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
-            @RequestParam String owner,
+            @RequestParam(required = false) String owner,
             @RequestParam(defaultValue = "10") int limit) {
 
+        String currentUser = resolveCurrentUser(httpRequest, owner);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        int safeLimit = clampLimit(limit, 10, MAX_HISTORY_LIMIT);
         List<SavedSearch> history = savedSearchRepository.findByTenantIdAndOwnerOrderByLastUsedAtDesc(
-                tenantId, owner, PageRequest.of(0, limit));
-
+                tenantId, currentUser, PageRequest.of(0, safeLimit));
         return ResponseEntity.ok(history);
     }
 
-    /**
-     * 保存搜索
-     */
     @PostMapping("/saved")
-    public ResponseEntity<SavedSearch> saveSearch(
+    public ResponseEntity<?> saveSearch(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody SaveSearchRequest request) {
+
+        String currentUser = resolveCurrentUser(httpRequest, request.owner);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         SavedSearch saved = new SavedSearch();
         saved.setId(UUID.randomUUID().toString());
         saved.setTenantId(tenantId);
-        saved.setOwner(request.owner);
+        saved.setOwner(currentUser);
         saved.setName(request.name);
         saved.setSearchType(request.searchType != null ? request.searchType : "GLOBAL");
         saved.setQueryJson(request.queryJson);
@@ -116,59 +117,69 @@ public class SearchController {
         saved.setUpdatedAt(LocalDateTime.now());
 
         savedSearchRepository.save(saved);
-
         return ResponseEntity.ok(saved);
     }
 
-    /**
-     * 获取保存的搜索列表
-     */
     @GetMapping("/saved")
-    public ResponseEntity<List<SavedSearch>> getSavedSearches(
+    public ResponseEntity<?> getSavedSearches(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
-            @RequestParam String owner) {
+            @RequestParam(required = false) String owner) {
 
-        List<SavedSearch> saved = savedSearchRepository.findByTenantIdAndOwner(tenantId, owner);
+        String currentUser = resolveCurrentUser(httpRequest, owner);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<SavedSearch> saved = savedSearchRepository.findByTenantIdAndOwner(tenantId, currentUser);
         return ResponseEntity.ok(saved);
     }
 
-    /**
-     * 删除保存的搜索
-     */
     @DeleteMapping("/saved/{id}")
     public ResponseEntity<?> deleteSavedSearch(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
+            @RequestParam(required = false) String owner,
             @PathVariable String id) {
 
-        savedSearchRepository.deleteById(id);
+        String currentUser = resolveCurrentUser(httpRequest, owner);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        long deletedCount = savedSearchRepository.deleteByIdAndTenantIdAndOwner(id, tenantId, currentUser);
+        if (deletedCount == 0) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * 更新搜索使用次数
-     */
     @PostMapping("/saved/{id}/use")
     public ResponseEntity<?> incrementUsage(
+            HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @RequestParam(required = false) String owner,
             @PathVariable String id) {
 
-        Optional<SavedSearch> savedOpt = savedSearchRepository.findById(id);
-        if (savedOpt.isPresent()) {
-            SavedSearch saved = savedOpt.get();
-            saved.setUsageCount(saved.getUsageCount() + 1);
-            saved.setLastUsedAt(LocalDateTime.now());
-            savedSearchRepository.save(saved);
+        String currentUser = resolveCurrentUser(httpRequest, owner);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
         }
+        Optional<SavedSearch> savedOpt = savedSearchRepository.findByIdAndTenantIdAndOwner(id, tenantId, currentUser);
+        if (savedOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        SavedSearch saved = savedOpt.get();
+        saved.setUsageCount(saved.getUsageCount() + 1);
+        saved.setLastUsedAt(LocalDateTime.now());
+        savedSearchRepository.save(saved);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * 保存搜索请求
-     */
     public static class SaveSearchRequest {
         public String owner;
         public String name;
@@ -176,5 +187,21 @@ public class SearchController {
         public String queryJson;
         public Boolean isShared;
         public String shareWithRoles;
+    }
+
+    private static int clampLimit(int raw, int fallback, int max) {
+        if (raw <= 0) return fallback;
+        return Math.min(raw, max);
+    }
+
+    private String resolveCurrentUser(HttpServletRequest request, String legacyUserId) {
+        Object authUsername = request == null ? null : request.getAttribute("authUsername");
+        if (authUsername != null && !String.valueOf(authUsername).trim().isEmpty()) {
+            return String.valueOf(authUsername).trim();
+        }
+        if (legacyUserId != null && !legacyUserId.trim().isEmpty()) {
+            return legacyUserId.trim();
+        }
+        return null;
     }
 }

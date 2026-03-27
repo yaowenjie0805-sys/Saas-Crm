@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 
-const AppContainer = lazy(() => import('./AppContainer'))
+const AppContainer = lazy(() => import('./AppContainerImpl'))
 
 function App() {
   return (

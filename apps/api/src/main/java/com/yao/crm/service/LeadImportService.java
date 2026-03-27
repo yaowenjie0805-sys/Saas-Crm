@@ -41,7 +41,7 @@ import java.util.Set;
 @Service
 public class LeadImportService {
 
-    private static final Set<String> LEAD_STATUSES = new HashSet<String>(Arrays.asList("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED"));
+    private static final Set<String> LEAD_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
     private static final int DEDUPE_BATCH_SIZE = 500;
     private static final int SAVE_BATCH_SIZE = 100;
 
@@ -178,7 +178,7 @@ public class LeadImportService {
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (LeadImportJob row : rows.getContent()) items.add(toView(row));
 
-        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("items", items);
         out.put("page", finalPage);
         out.put("size", finalSize);
@@ -242,7 +242,7 @@ public class LeadImportService {
 
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (LeadImportJobItem row : rows.getContent()) {
-            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            Map<String, Object> item = new LinkedHashMap<>();
             item.put("lineNo", row.getLineNo());
             item.put("rawLine", row.getRawLine());
             item.put("errorCode", row.getErrorCode());
@@ -250,7 +250,7 @@ public class LeadImportService {
             items.add(item);
         }
 
-        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("items", items);
         out.put("page", finalPage);
         out.put("size", finalSize);
@@ -260,7 +260,7 @@ public class LeadImportService {
     }
 
     public Map<String, Object> toView(LeadImportJob job) {
-        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", job.getId());
         out.put("tenantId", job.getTenantId());
         out.put("fileName", job.getFileName());
@@ -277,7 +277,7 @@ public class LeadImportService {
         out.put("createdAt", job.getCreatedAt());
         out.put("updatedAt", job.getUpdatedAt());
         out.put("taskStats", buildTaskStats(job));
-        Map<String, Object> failureSummary = new LinkedHashMap<String, Object>();
+        Map<String, Object> failureSummary = new LinkedHashMap<>();
         failureSummary.put("failedRows", job.getFailCount() == null ? 0 : job.getFailCount());
         failureSummary.put("errorMessage", job.getErrorMessage());
         out.put("failureSummary", failureSummary);
@@ -545,7 +545,7 @@ public class LeadImportService {
         }
         out.add(current.toString().trim());
         while (out.size() < 7) out.add("");
-        return out.toArray(new String[0]);
+        return out.toArray(String[]::new);
     }
 
     private Row parseRow(String[] cols) {
@@ -607,7 +607,7 @@ public class LeadImportService {
     }
 
     private Map<String, Object> buildTaskStats(LeadImportJob job) {
-        Map<String, Object> stats = new LinkedHashMap<String, Object>();
+        Map<String, Object> stats = new LinkedHashMap<>();
         if (job == null || isBlank(job.getTenantId()) || isBlank(job.getId())) {
             stats.put("totalChunks", 0);
             stats.put("pendingChunks", 0);

@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { api } from '../shared';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { api, apiDownload, apiUpload, STORAGE_KEYS } from '../shared';
 
 /**
  * API请求Hook封装
@@ -9,10 +9,21 @@ import { api } from '../shared';
 export function useApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const inFlightRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const request = useCallback(async (url, options = {}) => {
-    setLoading(true);
-    setError(null);
+    inFlightRef.current += 1;
+    if (isMountedRef.current) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       // 移除 url 中可能的 /api 前缀，因为 api 函数会自动添加
@@ -20,10 +31,15 @@ export function useApi() {
       const data = await api(path, options);
       return data;
     } catch (err) {
-      setError(err.message);
+      if (isMountedRef.current) {
+        setError(err.message);
+      }
       throw err;
     } finally {
-      setLoading(false);
+      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+      if (isMountedRef.current) {
+        setLoading(inFlightRef.current > 0);
+      }
     }
   }, []);
 
@@ -357,19 +373,15 @@ export function useTeam() {
 
 /**
  * 数据导入导出API Hook
- * 注意：文件上传/下载操作需要特殊处理 headers
+ * 使用 shared.js 的 apiUpload 和 apiDownload 统一处理文件操作
  */
 export function useImportExport() {
   const { request, loading, error } = useApi();
 
-  // 创建导入任务（FormData 不需要设置 Content-Type）
+  // 创建导入任务（FormData 使用统一的 apiUpload）
   const createImportJob = useCallback(async (formData) => {
-    // 移除 url 中可能的 /api 前缀
-    const path = '/api/v2/import/jobs'.replace(/^\/api/, '');
-    return api(path, {
-      method: 'POST',
-      body: formData
-    });
+    // apiUpload 会自动处理租户头和认证
+    return apiUpload('/api/v2/import/jobs', formData);
   }, []);
 
   // 获取导入任务状态
@@ -384,18 +396,12 @@ export function useImportExport() {
     });
   }, [request]);
 
-  // 获取导入模板（返回 blob）
+  // 获取导入模板（统一使用 apiDownload）
   const getImportTemplate = useCallback(async (entityType, format = 'xlsx') => {
-    // 移除 url 中可能的 /api 前缀
-    const path = `/api/v2/import/templates/${entityType}?format=${format}`.replace(/^\/api/, '');
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}${path}`, {
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-        'X-Tenant-Id': localStorage.getItem('tenantId') || ''
-      }
-    });
-    return response.blob();
+    const path = `/api/v2/import/templates/${entityType}?format=${format}`;
+    const filename = `import_template_${entityType}.${format}`;
+    // apiDownload 自动处理租户头和认证，并触发浏览器下载
+    return apiDownload(path, filename);
   }, []);
 
   // 创建导出任务
@@ -411,18 +417,11 @@ export function useImportExport() {
     return request(`/api/v2/export/jobs/${jobId}`);
   }, [request]);
 
-  // 下载导出文件（返回 blob）
-  const downloadExportFile = useCallback(async (jobId) => {
-    // 移除 url 中可能的 /api 前缀
-    const path = `/api/v2/export/jobs/${jobId}/download`.replace(/^\/api/, '');
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}${path}`, {
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-        'X-Tenant-Id': localStorage.getItem('tenantId') || ''
-      }
-    });
-    return response.blob();
+  // 下载导出文件（统一使用 apiDownload）
+  const downloadExportFile = useCallback(async (jobId, filename = 'export') => {
+    const path = `/api/v2/export/jobs/${jobId}/download`;
+    // apiDownload 自动处理租户头和认证，并触发浏览器下载
+    return apiDownload(path, filename);
   }, []);
 
   return {

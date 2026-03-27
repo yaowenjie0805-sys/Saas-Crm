@@ -3,6 +3,17 @@ import { useActivePagePolling } from '../../useActivePagePolling'
 import { useLoaderOrchestrator } from '../../useLoaderOrchestrator'
 import { REFRESH_REASONS } from './routeConfig'
 
+// ============================================
+// 轮询间隔常量（毫秒）
+// Polling interval constants in milliseconds
+// ============================================
+const POLL_INTERVALS = {
+  AUDIT_EXPORT: 1800,        // 审计导出任务轮询
+  REPORT_EXPORT: 1800,        // 报表导出任务轮询
+  LEAD_IMPORT: 3000,         // 线索导入任务轮询
+  LEAD_IMPORT_EXPORT: 2500,  // 线索导入导出任务轮询
+};
+
 /**
  * Composes loader orchestration and polling side effects for runtime pages.
  */
@@ -120,7 +131,7 @@ export function useRuntimeLoaders({
   const activePollers = useMemo(() => ([
     {
       id: 'audit-export-jobs',
-      intervalMs: 1800,
+      intervalMs: POLL_INTERVALS.AUDIT_EXPORT,
       canRun: () => !!authToken && activePage === 'audit' && autoRefreshJobs && exportJobs.some((j) => ['PENDING', 'RUNNING'].includes(j.status)),
       run: async (signal) => {
         if (signal.aborted) return
@@ -129,7 +140,7 @@ export function useRuntimeLoaders({
     },
     {
       id: 'report-export-jobs',
-      intervalMs: 1800,
+      intervalMs: POLL_INTERVALS.REPORT_EXPORT,
       canRun: () => !!authToken && ['dashboard', 'reports'].includes(activePage) && autoRefreshReportJobs && reportExportJobs.some((j) => ['PENDING', 'RUNNING'].includes(j.status)),
       run: async (signal) => {
         if (signal.aborted) return
@@ -138,7 +149,7 @@ export function useRuntimeLoaders({
     },
     {
       id: 'lead-import-jobs',
-      intervalMs: 3000,
+      intervalMs: POLL_INTERVALS.LEAD_IMPORT,
       canRun: () => !!authToken && activePage === 'leads' && (leadImportJobs || []).some((j) => ['PENDING', 'RUNNING'].includes(String(j.status || '').toUpperCase())),
       run: async (signal) => {
         if (signal.aborted) return
@@ -147,7 +158,7 @@ export function useRuntimeLoaders({
     },
     {
       id: 'lead-import-export-jobs',
-      intervalMs: 2500,
+      intervalMs: POLL_INTERVALS.LEAD_IMPORT_EXPORT,
       canRun: () => !!authToken && activePage === 'leads' && !!leadImportJobId && (leadImportExportJobs || []).some((j) => ['PENDING', 'RUNNING'].includes(String(j.status || '').toUpperCase())),
       run: async () => {
         await refreshPage('leads', 'panel_action')

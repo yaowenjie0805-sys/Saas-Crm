@@ -8,6 +8,13 @@ on:
         required: false
         default: "master"
 
+concurrency:
+  group: staging-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   staging-release:
     runs-on: windows-latest
@@ -51,6 +58,7 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "8"
+          cache: "maven"
 
       - name: Install Frontend Dependencies
         run: npm ci
@@ -67,13 +75,10 @@ jobs:
       - name: Backend Package
         run: mvn -f apps/api/pom.xml -DskipTests package
 
-      - name: Performance Baseline
-        run: npm run perf:baseline
-        env:
-          PERF_REQUIRE_K6: "true"
-
       - name: Performance Gate
         run: npm run perf:gate
+        env:
+          PERF_REQUIRE_K6: "true"
 
       - name: SRE Daily Check
         run: npm run sre:daily-check
@@ -117,4 +122,3 @@ jobs:
             logs/preflight/**
             logs/security/**
             logs/staging/**
-

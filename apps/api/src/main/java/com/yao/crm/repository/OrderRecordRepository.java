@@ -43,28 +43,33 @@ public interface OrderRecordRepository extends JpaRepository<OrderRecord, String
     @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId")
     Long sumAmountByTenantId(@Param("tenantId") String tenantId);
 
-    @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and lower(o.owner) in :owners")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and o.owner in :owners")
     Long sumAmountByTenantIdAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and o.createdAt between :from and :to")
     Long sumAmountByTenantIdAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.createdAt between :from and :to")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and o.owner in :owners and o.createdAt between :from and :to")
     Long sumAmountByTenantIdAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select count(o) from OrderRecord o where o.tenantId = :tenantId and lower(o.owner) in :owners and upper(o.status) = upper(:status)")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select count(o) from OrderRecord o where o.tenantId = :tenantId and o.owner in :owners and upper(o.status) = upper(:status)")
     long countByTenantIdAndOwnerInAndStatus(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("status") String status);
 
     @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId group by o.status")
     List<Object[]> countByStatusGrouped(@Param("tenantId") String tenantId);
 
-    @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId and lower(o.owner) in :owners group by o.status")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId and o.owner in :owners group by o.status")
     List<Object[]> countByStatusGroupedAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId and o.createdAt between :from and :to group by o.status")
     List<Object[]> countByStatusGroupedAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.createdAt between :from and :to group by o.status")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select o.status, count(o) from OrderRecord o where o.tenantId = :tenantId and o.owner in :owners and o.createdAt between :from and :to group by o.status")
     List<Object[]> countByStatusGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select coalesce(sum(o.amount), 0) from OrderRecord o where o.tenantId = :tenantId and upper(o.status) = upper(:status) and o.createdAt between :from and :to")

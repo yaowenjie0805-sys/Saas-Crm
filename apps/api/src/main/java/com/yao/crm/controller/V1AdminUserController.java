@@ -21,8 +21,8 @@ import java.util.*;
 @RequestMapping("/api/v1/admin/users")
 public class V1AdminUserController extends BaseApiController {
 
-    private static final Set<String> ROLES = new HashSet<String>(Arrays.asList("ADMIN", "MANAGER", "SALES", "ANALYST"));
-    private static final Set<String> DATA_SCOPES = new HashSet<String>(Arrays.asList("SELF", "DEPARTMENT", "GLOBAL"));
+    private static final Set<String> ROLES = Set.of("ADMIN", "MANAGER", "SALES", "ANALYST");
+    private static final Set<String> DATA_SCOPES = Set.of("SELF", "DEPARTMENT", "GLOBAL");
 
     private final UserAccountRepository userAccountRepository;
     private final UserInvitationRepository userInvitationRepository;

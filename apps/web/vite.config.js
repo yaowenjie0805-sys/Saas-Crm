@@ -87,12 +87,62 @@ function getChunkName(id) {
 export default defineConfig({
   plugins: [react()],
   build: {
+    // 生产环境禁用 sourcemap
     sourcemap: false,
+    // 目标浏览�?
+    target: 'es2015',
+    // 代码压缩
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,    // 生产环境移除 console
+        drop_debugger: true,   // 移除 debugger
+      },
+    },
+    // 分包配置
     rollupOptions: {
       output: {
         chunkFileNames: 'assets/[name]-[hash].js',
-        manualChunks: getChunkName,
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        manualChunks(id) {
+          const byRule = getChunkName(id)
+          if (byRule) return byRule
+          // 大型库单独分�?
+          if (id.includes('node_modules/antd') || id.includes('node_modules/@ant-design')) {
+            return 'vendor-antd'
+          }
+          if (id.includes('node_modules/echarts')) {
+            return 'vendor-charts'
+          }
+          return undefined
+        },
+      },
+    },
+    // CSS 代码分割
+    cssCodeSplit: true,
+    // 启用chunk分层
+    chunkSizeWarningLimit: 500,
+  },
+  // 开发服务器优化
+  server: {
+    port: 5173,
+    // 代理配置
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
       },
     },
   },
-})
+  // 预览服务器配�?
+  preview: {
+    port: 4173,
+  },
+  // 路径解析优化
+  resolve: {
+    alias: {
+      '@': '/src',
+    },
+  },
+});
+

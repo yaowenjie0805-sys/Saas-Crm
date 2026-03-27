@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.*;
@@ -55,7 +54,6 @@ public class CacheService {
     /**
      * 获取缓存值
      */
-    @Transactional(readOnly = true)
     public <T> Optional<T> get(String key, Class<T> type) {
         try {
             String value = redisTemplate.opsForValue().get(PREFIX + key);
@@ -72,7 +70,6 @@ public class CacheService {
     /**
      * 获取缓存值（支持泛型）
      */
-    @Transactional(readOnly = true)
     public <T> Optional<T> get(String key, java.lang.reflect.Type type) {
         try {
             String value = redisTemplate.opsForValue().get(PREFIX + key);
@@ -91,7 +88,6 @@ public class CacheService {
     /**
      * 设置缓存值
      */
-    @Transactional(timeout = 30)
     public void set(String key, Object value) {
         set(key, value, DEFAULT_TTL);
     }
@@ -99,7 +95,6 @@ public class CacheService {
     /**
      * 设置缓存值（指定TTL）
      */
-    @Transactional(timeout = 30)
     public void set(String key, Object value, Duration ttl) {
         try {
             String json = objectMapper.writeValueAsString(value);
@@ -165,7 +160,6 @@ public class CacheService {
     /**
      * 检查缓存是否存在
      */
-    @Transactional(readOnly = true)
     public boolean exists(String key) {
         Boolean exists = redisTemplate.hasKey(PREFIX + key);
         return exists != null && exists;
@@ -311,7 +305,6 @@ public class CacheService {
     /**
      * 获取缓存统计信息
      */
-    @Transactional(readOnly = true)
     public Map<String, Object> getCacheStats() {
         Map<String, Object> stats = new HashMap<>();
 

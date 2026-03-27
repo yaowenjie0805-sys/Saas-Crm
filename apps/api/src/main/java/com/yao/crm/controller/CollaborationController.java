@@ -7,6 +7,7 @@ import com.yao.crm.service.ApprovalDelegationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +37,7 @@ public class CollaborationController {
      */
     @PostMapping("/comments")
     public ResponseEntity<?> addComment(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody AddCommentRequest request) {
 
@@ -43,7 +45,7 @@ public class CollaborationController {
                 tenantId,
                 request.entityType,
                 request.entityId,
-                request.authorId,
+                resolveCurrentUser(httpRequest, request.authorId),
                 request.authorName,
                 request.content,
                 request.parentCommentId,
@@ -61,16 +63,17 @@ public class CollaborationController {
      */
     @PostMapping("/comments/{commentId}/reply")
     public ResponseEntity<?> replyToComment(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String commentId,
-            @RequestBody ReplyCommentRequest request) {
+            @RequestBody ReplyCommentRequest replyRequest) {
 
         Comment reply = collaborationService.replyToComment(
                 tenantId,
                 commentId,
-                request.authorId,
-                request.authorName,
-                request.content
+                resolveCurrentUser(httpRequest, replyRequest.authorId),
+                replyRequest.authorName,
+                replyRequest.content
         );
 
         Map<String, Object> result = new HashMap<>();
@@ -84,10 +87,11 @@ public class CollaborationController {
      */
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> deleteComment(
+            HttpServletRequest httpRequest,
             @PathVariable String commentId,
-            @RequestParam String userId) {
+            @RequestParam(required = false) String userId) {
 
-        boolean deleted = collaborationService.deleteComment(commentId, userId);
+        boolean deleted = collaborationService.deleteComment(commentId, resolveCurrentUser(httpRequest, userId));
         Map<String, Object> result = new HashMap<>();
         result.put("success", deleted);
         return ResponseEntity.ok(result);
@@ -98,10 +102,11 @@ public class CollaborationController {
      */
     @PostMapping("/comments/{commentId}/like")
     public ResponseEntity<?> likeComment(
+            HttpServletRequest httpRequest,
             @PathVariable String commentId,
-            @RequestParam String userId) {
+            @RequestParam(required = false) String userId) {
 
-        boolean isLiked = collaborationService.likeComment(commentId, userId);
+        boolean isLiked = collaborationService.likeComment(commentId, resolveCurrentUser(httpRequest, userId));
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("isLiked", isLiked);
@@ -113,13 +118,14 @@ public class CollaborationController {
      */
     @PutMapping("/comments/{commentId}")
     public ResponseEntity<?> editComment(
+            HttpServletRequest httpRequest,
             @PathVariable String commentId,
-            @RequestBody EditCommentRequest request) {
+            @RequestBody EditCommentRequest editRequest) {
 
         Comment comment = collaborationService.editComment(
                 commentId,
-                request.userId,
-                request.newContent
+                resolveCurrentUser(httpRequest, editRequest.userId),
+                editRequest.newContent
         );
 
         Map<String, Object> result = new HashMap<>();
@@ -159,12 +165,14 @@ public class CollaborationController {
      */
     @GetMapping("/mentions")
     public ResponseEntity<?> getMentions(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        List<Comment> mentions = collaborationService.getMentions(tenantId, userId, page, size);
+        List<Comment> mentions = collaborationService.getMentions(
+                tenantId, resolveCurrentUser(httpRequest, userId), page, size);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("mentions", mentions);
@@ -176,12 +184,14 @@ public class CollaborationController {
      */
     @GetMapping("/discussions")
     public ResponseEntity<?> getMyDiscussions(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String userId,
             @RequestParam(defaultValue = "20") int limit) {
 
         List<CollaborationService.DiscussionSummary> discussions =
-                collaborationService.getMyDiscussions(tenantId, userId, limit);
+                collaborationService.getMyDiscussions(
+                        tenantId, resolveCurrentUser(httpRequest, userId), limit);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -231,6 +241,7 @@ public class CollaborationController {
      */
     @PostMapping("/teams")
     public ResponseEntity<?> createTeam(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody CreateTeamRequest request) {
 
@@ -238,7 +249,7 @@ public class CollaborationController {
                 tenantId,
                 request.name,
                 request.description,
-                request.leaderId,
+                resolveCurrentUser(httpRequest, request.leaderId),
                 request.memberIds
         );
 
@@ -253,14 +264,16 @@ public class CollaborationController {
      */
     @GetMapping("/teams")
     public ResponseEntity<?> getTeams(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam(required = false) String userId) {
 
         List<Team> teams;
-        if (userId != null && !userId.isEmpty()) {
-            teams = collaborationService.getUserTeams(tenantId, userId);
+        String currentUser = resolveCurrentUser(httpRequest, userId);
+        if (currentUser != null) {
+            teams = collaborationService.getUserTeams(tenantId, currentUser);
         } else {
-            // 返回所有团队（需要实现）
+            // 杩斿洖鎵€鏈夊洟闃燂紙闇€瑕佸疄鐜帮級
             teams = new ArrayList<>();
         }
 
@@ -269,10 +282,6 @@ public class CollaborationController {
         result.put("teams", teams);
         return ResponseEntity.ok(result);
     }
-
-    /**
-     * 获取团队详情
-     */
     @GetMapping("/teams/{teamId}")
     public ResponseEntity<?> getTeam(@PathVariable String teamId) {
         // 需要实现 TeamRepository.findById
@@ -319,12 +328,13 @@ public class CollaborationController {
      */
     @PostMapping("/approval/tasks/{taskId}/delegate")
     public ResponseEntity<?> delegateTask(
+            HttpServletRequest httpRequest,
             @PathVariable String taskId,
             @RequestBody DelegateRequest request) {
 
         ApprovalDelegationService.DelegationResult result = delegationService.delegateTask(
                 taskId,
-                request.fromUserId,
+                resolveCurrentUser(httpRequest, request.fromUserId),
                 request.toUserId,
                 request.reason
         );
@@ -340,12 +350,13 @@ public class CollaborationController {
      */
     @PostMapping("/approval/tasks/{taskId}/add-sign")
     public ResponseEntity<?> addSign(
+            HttpServletRequest httpRequest,
             @PathVariable String taskId,
             @RequestBody AddSignRequest request) {
 
         ApprovalDelegationService.AddSignResult result = delegationService.addSign(
                 taskId,
-                request.approverId,
+                resolveCurrentUser(httpRequest, request.approverId),
                 request.addSignUserId,
                 request.reason,
                 request.type
@@ -362,12 +373,13 @@ public class CollaborationController {
      */
     @PostMapping("/approval/tasks/{taskId}/transfer")
     public ResponseEntity<?> transferTask(
+            HttpServletRequest httpRequest,
             @PathVariable String taskId,
             @RequestBody TransferRequest request) {
 
         ApprovalDelegationService.TransferResult result = delegationService.transferTask(
                 taskId,
-                request.fromUserId,
+                resolveCurrentUser(httpRequest, request.fromUserId),
                 request.toUserId,
                 request.reason
         );
@@ -411,10 +423,11 @@ public class CollaborationController {
      */
     @PostMapping("/approval/delegations/{delegationId}/recall")
     public ResponseEntity<?> recallDelegation(
+            HttpServletRequest httpRequest,
             @PathVariable String delegationId,
             @RequestParam String userId) {
 
-        boolean recalled = delegationService.recallDelegation(delegationId, userId);
+        boolean recalled = delegationService.recallDelegation(delegationId, resolveCurrentUser(httpRequest, userId));
         Map<String, Object> result = new HashMap<>();
         result.put("success", recalled);
         return ResponseEntity.ok(result);
@@ -425,10 +438,12 @@ public class CollaborationController {
      */
     @GetMapping("/approval/tasks/delegatable-users")
     public ResponseEntity<?> getDelegatableUsers(
+            HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String currentUserId) {
 
-        List<Map<String, String>> users = delegationService.getDelegatableUsers(tenantId, currentUserId);
+        List<Map<String, String>> users = delegationService.getDelegatableUsers(
+                tenantId, resolveCurrentUser(httpRequest, currentUserId));
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("users", users);
@@ -488,4 +503,16 @@ public class CollaborationController {
         public String toUserId;
         public String reason;
     }
+
+    private String resolveCurrentUser(HttpServletRequest request, String legacyUserId) {
+        Object authUsername = request == null ? null : request.getAttribute("authUsername");
+        if (authUsername != null && !String.valueOf(authUsername).trim().isEmpty()) {
+            return String.valueOf(authUsername).trim();
+        }
+        if (legacyUserId != null && !legacyUserId.trim().isEmpty()) {
+            return legacyUserId.trim();
+        }
+        return null;
+    }
 }
+

@@ -47,11 +47,7 @@ public class MfaChallengeService {
 
     private void cleanup() {
         LocalDateTime now = LocalDateTime.now();
-        for (Map.Entry<String, Challenge> entry : challenges.entrySet()) {
-            if (entry.getValue().expireAt.isBefore(now)) {
-                challenges.remove(entry.getKey());
-            }
-        }
+        challenges.values().removeIf(c -> c.expireAt.isBefore(now));
     }
 
     @PreDestroy

@@ -1,4 +1,55 @@
-﻿export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
+﻿// ============================================
+// API 配置 | API Configuration
+// ============================================
+
+// 优化：根据环境自动选择 API 基础路径
+const getApiBase = () => {
+  const env = import.meta.env.MODE || 'development';
+  
+  if (env === 'production') {
+    // 生产环境使用相对路径，通过反向代理访问
+    return '/api';
+  }
+  
+  // 开发/测试环境使用配置的 URL
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+};
+
+export const API_BASE = getApiBase();
+
+// API 请求缓存配置 | API Request Cache Configuration
+export const API_CACHE_CONFIG = {
+  enabled: true,
+  ttl: 60 * 1000,        // 缓存 TTL: 60秒
+  maxSize: 100,           // 最大缓存条目数
+};
+
+// 内部请求缓存（按 URL + method + body 哈希）
+const requestCache = new Map();
+const requestCacheMeta = new Map();
+
+/**
+ * 生成请求缓存 key
+ */
+const getCacheKey = (path, options) => {
+  const method = options.method || 'GET';
+  const body = options.body ? JSON.stringify(options.body) : '';
+  return `${method}:${path}:${body}`;
+};
+
+/**
+ * 清理过期缓存
+ */
+const cleanExpiredCache = () => {
+  const now = Date.now();
+  for (const [key, meta] of requestCacheMeta.entries()) {
+    if (now > meta.expiresAt) {
+      requestCache.delete(key);
+      requestCacheMeta.delete(key);
+    }
+  }
+};
+
 export const FILTERS_KEY = 'crm_filters_v2'
 export const LANG_KEY = 'crm_lang'
 export const OIDC_STATE_KEY = 'crm_oidc_state'
@@ -248,6 +299,211 @@ export async function api(path, options = {}, token, lang = 'en') {
   }
 
   return requestPromise
+}
+
+/**
+ * 缓存清理定时器
+ */
+let cacheCleanupInterval = null;
+
+/**
+ * 初始化缓存清理
+ */
+const initCacheCleanup = () => {
+  if (!cacheCleanupInterval && API_CACHE_CONFIG.enabled) {
+    cacheCleanupInterval = setInterval(cleanExpiredCache, API_CACHE_CONFIG.ttl);
+  }
+};
+
+/**
+ * API 请求函数（带缓存支持）
+ * @param {string} path - API 路径
+ * @param {object} options - 请求选项
+ * @param {string} token - 认证 token
+ * @param {string} lang - 语言
+ * @param {boolean} useCache - 是否使用缓存（仅 GET 请求生效）
+ */
+export async function apiCached(path, options = {}, token, lang = 'en', useCache = true) {
+  const method = (options.method || 'GET').toUpperCase();
+  const isCacheable = useCache && method === 'GET' && API_CACHE_CONFIG.enabled;
+  const cacheKey = getCacheKey(path, options);
+  
+  // 检查缓存
+  if (isCacheable) {
+    initCacheCleanup();
+    
+    const cached = requestCache.get(cacheKey);
+    if (cached && Date.now() < requestCacheMeta.get(cacheKey)?.expiresAt) {
+      return { ...cached, fromCache: true };
+    }
+  }
+  
+  // 执行请求
+  const result = await api(path, options, token, lang);
+  
+  // 存入缓存
+  if (isCacheable && result) {
+    if (requestCache.size >= API_CACHE_CONFIG.maxSize) {
+      cleanExpiredCache();
+    }
+    requestCache.set(cacheKey, result);
+    requestCacheMeta.set(cacheKey, {
+      expiresAt: Date.now() + API_CACHE_CONFIG.ttl
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * 清除指定路径的缓存
+ */
+export const invalidateApiCache = (pathPrefix = null) => {
+  if (pathPrefix) {
+    for (const key of requestCache.keys()) {
+      if (key.includes(pathPrefix)) {
+        requestCache.delete(key);
+        requestCacheMeta.delete(key);
+      }
+    }
+  } else {
+    requestCache.clear();
+    requestCacheMeta.clear();
+  }
+};
+
+// ============================================
+// Storage Keys | 本地存储 Key 统一管理
+// ============================================
+export const STORAGE_KEYS = {
+  AUTH: 'crm_auth',
+  LAST_TENANT: 'crm_last_tenant',
+  FILTERS: 'crm_filters_v2',
+  LANG: 'crm_lang',
+  OIDC_STATE: 'crm_oidc_state',
+  TOKEN: 'token',
+  TENANT_ID: 'tenantId',
+};
+
+/**
+ * 获取认证信息
+ */
+const getAuth = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.AUTH) || 'null');
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * 获取认证 Token
+ */
+const getToken = () => {
+  return localStorage.getItem(STORAGE_KEYS.TOKEN) || '';
+};
+
+/**
+ * 获取租户 ID
+ */
+const getTenantId = () => {
+  try {
+    const auth = getAuth();
+    const tenantFromAuth = String(auth?.tenantId || '').trim();
+    if (tenantFromAuth) return tenantFromAuth;
+  } catch {
+    // ignore
+  }
+  const lastTenant = String(localStorage.getItem(STORAGE_KEYS.LAST_TENANT) || '').trim();
+  if (lastTenant) return lastTenant;
+  return 'tenant_default';
+};
+
+/**
+ * 获取语言设置
+ */
+export const getLang = () => {
+  return localStorage.getItem(STORAGE_KEYS.LANG) || 'en';
+};
+
+/**
+ * 获取通用请求 headers
+ */
+const getCommonHeaders = (lang = 'en') => {
+  const headers = { 'Accept-Language': lang };
+  const tenantId = getTenantId();
+  if (tenantId) headers['X-Tenant-Id'] = tenantId;
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+};
+
+/**
+ * 文件下载 API 函数
+ * 统一处理文件下载的认证和租户 headers
+ * @param {string} path - API 路径（不含 /api 前缀）
+ * @param {string} filename - 下载文件名
+ */
+export async function apiDownload(path, filename = 'download') {
+  const lang = getLang();
+  const headers = getCommonHeaders(lang);
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const fallback = lang === 'zh' ? '下载失败' : 'Download failed';
+    throw new Error(body.message || fallback);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+  return blob;
+}
+
+/**
+ * 文件上传 API 函数（使用 FormData）
+ * @param {string} path - API 路径
+ * @param {FormData} formData - 表单数据
+ * @param {object} options - 其他请求选项
+ */
+export async function apiUpload(path, formData, options = {}) {
+  const lang = getLang();
+  const headers = getCommonHeaders(lang);
+  // FormData 不需要设置 Content-Type，让浏览器自动处理
+  delete headers['Content-Type'];
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: formData,
+    ...options
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const fallback = lang === 'zh' ? '上传失败' : 'Upload failed';
+    const err = new Error(body.message || fallback);
+    err.code = body.code || '';
+    err.details = body.details || {};
+    err.validationErrors = body.validationErrors || null;
+    throw err;
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
 }
 
 

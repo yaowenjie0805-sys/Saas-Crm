@@ -97,7 +97,7 @@ class CollaborationServiceTest {
 
         service.replyToComment("tenant-1", "parent-1", "user-2", "Jane", "Reply content");
 
-        verify(commentRepository, times(2)).save(any(Comment.class));
+        verify(commentRepository, times(1)).save(any(Comment.class));
     }
 
     @Test

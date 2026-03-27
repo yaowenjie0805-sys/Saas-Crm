@@ -24,13 +24,15 @@ public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, St
     @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and upper(p.status) in :statuses")
     Long sumAmountByTenantIdAndStatusInUppercase(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
-    @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and lower(p.owner) in :owners and upper(p.status) in :statuses")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and p.owner in :owners and upper(p.status) in :statuses")
     Long sumAmountByTenantIdAndOwnerInAndStatusInUppercase(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("statuses") List<String> statuses);
 
     @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and upper(p.status) in :statuses and p.createdAt between :from and :to")
     Long sumAmountByTenantIdAndStatusInUppercaseAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and lower(p.owner) in :owners and upper(p.status) in :statuses and p.createdAt between :from and :to")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and p.owner in :owners and upper(p.status) in :statuses and p.createdAt between :from and :to")
     Long sumAmountByTenantIdAndOwnerInAndStatusInUppercaseAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("statuses") List<String> statuses, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and upper(p.status) not in :statuses")

@@ -12,50 +12,70 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const inputRef = useRef(null)
+  const searchRequestIdRef = useRef(0)
+  const searchAbortControllerRef = useRef(null)
 
   // 搜索结果
   const searchDomain = useAppStore(selectSearchDomainSlice)
   const searchHistory = searchDomain?.data?.history || []
   const flatResults = useMemo(() => flattenSearchResults(results), [results])
 
+  const cancelSearchRequest = useCallback(() => {
+    searchAbortControllerRef.current?.abort()
+    searchAbortControllerRef.current = null
+  }, [])
+
   // 搜索处理
   const handleSearch = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
+    const requestId = ++searchRequestIdRef.current
+    const trimmedKeyword = keyword.trim()
+    cancelSearchRequest()
+    if (!trimmedKeyword) {
       setResults({})
+      setIsLoading(false)
       return
     }
 
+    const controller = new AbortController()
+    searchAbortControllerRef.current = controller
     setIsLoading(true)
     try {
       const response = await fetch(
-        `/api/v2/search?q=${encodeURIComponent(keyword)}&limit=20`,
+        `/api/v2/search?q=${encodeURIComponent(trimmedKeyword)}&limit=20`,
         {
           headers: {
             'X-Tenant-Id': 'tenant_default',
           },
+          signal: controller.signal,
         }
       )
 
-      if (response.ok) {
+      if (response.ok && searchRequestIdRef.current === requestId && !controller.signal.aborted) {
         const data = await response.json()
         setResults(data.results || {})
       }
     } catch (error) {
-      console.error('Search error:', error)
+      if (error?.name !== 'AbortError') {
+        console.error('Search error:', error)
+      }
     } finally {
-      setIsLoading(false)
+      if (searchRequestIdRef.current === requestId) {
+        setIsLoading(false)
+      }
+      if (searchAbortControllerRef.current === controller) {
+        searchAbortControllerRef.current = null
+      }
     }
-  }, [])
+  }, [cancelSearchRequest])
 
   // 防抖搜索
-  useEffect(() => {
-    if (!isOpen) return undefined
-    const timer = setTimeout(() => {
-      handleSearch(query)
-    }, 300)
 
-    return () => clearTimeout(timer)
-  }, [isOpen, query, handleSearch])
+  useEffect(() => {
+    if (isOpen) return
+    searchRequestIdRef.current += 1
+    cancelSearchRequest()
+    setIsLoading(false)
+  }, [cancelSearchRequest, isOpen])
 
   // 聚焦输入框
   useEffect(() => {
@@ -68,7 +88,21 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
     setSelectedIndex((prev) => clampSelectedIndex(prev, flatResults.length))
   }, [flatResults.length])
 
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const timer = setTimeout(() => {
+      handleSearch(query)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [isOpen, query, handleSearch])
+
   // 键盘导航
+  useEffect(() => () => {
+    searchRequestIdRef.current += 1
+    cancelSearchRequest()
+  }, [cancelSearchRequest])
+
   const handleKeyDown = (e) => {
     switch (e.key) {
       case 'ArrowDown':
@@ -94,11 +128,14 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
 
   // 扁平化搜索结果
   const handleClose = useCallback(() => {
+    searchRequestIdRef.current += 1
+    cancelSearchRequest()
     setQuery('')
     setResults({})
     setSelectedIndex(0)
+    setIsLoading(false)
     onClose?.()
-  }, [onClose])
+  }, [cancelSearchRequest, onClose])
 
   // 选择结果
   const handleSelect = (item) => {

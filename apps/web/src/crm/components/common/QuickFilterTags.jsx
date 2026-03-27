@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 
 /**
  * 快捷筛选标签组件 - 国内特色
@@ -8,37 +8,68 @@ export function QuickFilterTags({ entityType, onFilterChange }) {
   const [filters, setFilters] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const loadRequestIdRef = useRef(0)
+  const loadAbortControllerRef = useRef(null)
 
-  // 加载快捷筛选
-  useEffect(() => {
-    loadQuickFilters()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType])
+  const cancelLoadQuickFilters = useCallback(() => {
+    loadAbortControllerRef.current?.abort()
+    loadAbortControllerRef.current = null
+  }, [])
 
-  const loadQuickFilters = async () => {
-    if (!entityType) return
+  const loadQuickFilters = useCallback(async (currentEntityType) => {
+    const requestId = ++loadRequestIdRef.current
+    cancelLoadQuickFilters()
 
+    if (!currentEntityType) {
+      setFilters([])
+      setSelectedId(null)
+      setIsLoading(false)
+      return
+    }
+
+    setFilters([])
+    setSelectedId(null)
+    const controller = new AbortController()
+    loadAbortControllerRef.current = controller
     setIsLoading(true)
     try {
       const response = await fetch(
-        `/api/v2/filters/quick?entityType=${entityType}`,
+        `/api/v2/filters/quick?entityType=${currentEntityType}`,
         {
           headers: {
             'X-Tenant-Id': 'tenant_default',
           },
+          signal: controller.signal,
         }
       )
 
-      if (response.ok) {
+      if (response.ok && loadRequestIdRef.current === requestId && !controller.signal.aborted) {
         const data = await response.json()
         setFilters(data.filters || [])
       }
     } catch (error) {
-      console.error('Load quick filters error:', error)
+      if (error?.name !== 'AbortError') {
+        console.error('Load quick filters error:', error)
+      }
     } finally {
-      setIsLoading(false)
+      if (loadRequestIdRef.current === requestId) {
+        setIsLoading(false)
+      }
+      if (loadAbortControllerRef.current === controller) {
+        loadAbortControllerRef.current = null
+      }
     }
-  }
+  }, [cancelLoadQuickFilters])
+
+  useEffect(() => {
+    setSelectedId(null)
+    loadQuickFilters(entityType)
+  }, [entityType, loadQuickFilters])
+
+  useEffect(() => () => {
+    loadRequestIdRef.current += 1
+    cancelLoadQuickFilters()
+  }, [cancelLoadQuickFilters])
 
   // 选择筛选
   const handleSelect = (filter) => {
@@ -55,8 +86,6 @@ export function QuickFilterTags({ entityType, onFilterChange }) {
       }
     }
   }
-
-
 
   if (isLoading) {
     return (

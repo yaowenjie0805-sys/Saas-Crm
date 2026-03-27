@@ -28,36 +28,42 @@ public interface CustomerRepository extends JpaRepository<Customer, String>, Jpa
     @Query("select coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId")
     Long sumValueByTenantId(@Param("tenantId") String tenantId);
 
-    @Query("select coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and lower(c.owner) in :owners")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and c.owner in :owners")
     Long sumValueByTenantIdAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and c.createdAt between :from and :to")
     Long sumValueByTenantIdAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and lower(c.owner) in :owners and c.createdAt between :from and :to")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and c.owner in :owners and c.createdAt between :from and :to")
     Long sumValueByTenantIdAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select c.owner, count(c) from Customer c where c.tenantId = :tenantId group by c.owner")
     List<Object[]> countByOwnerGrouped(@Param("tenantId") String tenantId);
 
-    @Query("select c.owner, count(c) from Customer c where c.tenantId = :tenantId and lower(c.owner) in :owners group by c.owner")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select c.owner, count(c) from Customer c where c.tenantId = :tenantId and c.owner in :owners group by c.owner")
     List<Object[]> countByOwnerGroupedAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select c.owner, count(c) from Customer c where c.tenantId = :tenantId and c.createdAt between :from and :to group by c.owner")
     List<Object[]> countByOwnerGroupedAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select c.owner, count(c) from Customer c where c.tenantId = :tenantId and lower(c.owner) in :owners and c.createdAt between :from and :to group by c.owner")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select c.owner, count(c) from Customer c where c.tenantId = :tenantId and c.owner in :owners and c.createdAt between :from and :to group by c.owner")
     List<Object[]> countByOwnerGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select c.status, coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId group by c.status")
     List<Object[]> sumValueByStatusGrouped(@Param("tenantId") String tenantId);
 
-    @Query("select c.status, coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and lower(c.owner) in :owners group by c.status")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select c.status, coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and c.owner in :owners group by c.status")
     List<Object[]> sumValueByStatusGroupedAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select c.status, coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and c.createdAt between :from and :to group by c.status")
     List<Object[]> sumValueByStatusGroupedAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select c.status, coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and lower(c.owner) in :owners and c.createdAt between :from and :to group by c.status")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select c.status, coalesce(sum(c.value), 0) from Customer c where c.tenantId = :tenantId and c.owner in :owners and c.createdAt between :from and :to group by c.status")
     List<Object[]> sumValueByStatusGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

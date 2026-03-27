@@ -43,10 +43,25 @@ import static com.yao.crm.service.ReportUtils.startOfDay;
 
 @Service
 public class ReportService {
+    // 状态常量 - 不可变列表提高效率
     private static final List<String> QUOTE_APPROVED_OR_ACCEPTED =
             java.util.Collections.unmodifiableList(java.util.Arrays.asList("APPROVED", "ACCEPTED"));
     private static final List<String> QUOTE_ACCEPTED_ONLY = java.util.Collections.singletonList("ACCEPTED");
     private static final List<String> PAYMENT_RECEIVED_ONLY = java.util.Collections.singletonList("RECEIVED");
+    
+    // 缓存配置常量
+    private static final int IDENTITY_CACHE_MAX_SIZE = 500;
+    private static final long IDENTITY_CACHE_TTL_MINUTES = 10;
+    private static final long IDENTITY_SCOPE_CACHE_TTL_MS = 30_000L;
+    
+    // 日期范围常量
+    private static final LocalDate OPEN_RANGE_START = LocalDate.of(1970, 1, 1);
+    private static final LocalDate OPEN_RANGE_END = LocalDate.of(2099, 12, 31);
+    
+    // 预定义空 Map - 减少对象创建
+    private static final Map<String, Integer> EMPTY_INT_MAP = Collections.emptyMap();
+    private static final Map<String, Long> EMPTY_LONG_MAP = Collections.emptyMap();
+    private static final Map<String, Object> EMPTY_OBJ_MAP = Collections.emptyMap();
 
     private final CustomerRepository customerRepository;
     private final OpportunityRepository opportunityRepository;
@@ -61,12 +76,12 @@ public class ReportService {
     private final DashboardMetricsCacheService dashboardMetricsCacheService;
     private final ReportAggregationService reportAggregationService;
     private final Cache<String, IdentityScopeCacheEntry> roleIdentityCache = Caffeine.newBuilder()
-            .maximumSize(500)
-            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .maximumSize(IDENTITY_CACHE_MAX_SIZE)
+            .expireAfterWrite(IDENTITY_CACHE_TTL_MINUTES, TimeUnit.MINUTES)
             .build();
     private final Cache<String, IdentityScopeCacheEntry> departmentIdentityCache = Caffeine.newBuilder()
-            .maximumSize(500)
-            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .maximumSize(IDENTITY_CACHE_MAX_SIZE)
+            .expireAfterWrite(IDENTITY_CACHE_TTL_MINUTES, TimeUnit.MINUTES)
             .build();
 
     public ReportService(CustomerRepository customerRepository,

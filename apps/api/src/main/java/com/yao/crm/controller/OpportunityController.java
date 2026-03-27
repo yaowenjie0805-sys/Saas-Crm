@@ -43,10 +43,10 @@ public class OpportunityController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                new HashSet<String>(Arrays.asList("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt")),
                 "updatedAt");
         org.springframework.data.domain.Page<Opportunity> result = opportunityRepository.findByTenantId(currentTenant(request), pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
@@ -92,11 +92,11 @@ public class OpportunityController extends BaseApiController {
             if (salesScoped) {
                 predicates.add(cb.equal(root.get("owner"), ownerScope));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
 
         Page<Opportunity> result = opportunityRepository.findAll(spec, pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);

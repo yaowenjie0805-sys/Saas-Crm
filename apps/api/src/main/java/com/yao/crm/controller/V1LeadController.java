@@ -39,8 +39,8 @@ import java.util.*;
 @RequestMapping("/api/v1/leads")
 public class V1LeadController extends BaseApiController {
 
-    private static final Set<String> LEAD_STATUSES = new HashSet<String>(Arrays.asList("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED"));
-    private static final Set<String> CONVERT_ALLOWED_STATUSES = new HashSet<String>(Arrays.asList("NEW", "QUALIFIED", "NURTURING"));
+    private static final Set<String> LEAD_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
+    private static final Set<String> CONVERT_ALLOWED_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING");
     private static final Set<String> IMPORT_CANCEL_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("PENDING", "RUNNING"));
     private static final Set<String> IMPORT_RETRY_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("FAILED", "CANCELED"));
 
@@ -101,7 +101,7 @@ public class V1LeadController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<String>(Arrays.asList("name", "company", "owner", "status", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("name", "company", "owner", "status", "createdAt", "updatedAt")),
                 "updatedAt"
         );
         final boolean salesScoped = isSalesScoped(request);
@@ -124,10 +124,10 @@ public class V1LeadController extends BaseApiController {
             if (salesScoped) {
                 predicates.add(cb.equal(cb.lower(root.get("owner")), ownerScope.toLowerCase(Locale.ROOT)));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
         Page<Lead> result = leadRepository.findAll(spec, pageable);
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
@@ -267,7 +267,7 @@ public class V1LeadController extends BaseApiController {
         lead = leadRepository.save(lead);
         auditLogService.record(currentUser(request), currentRole(request), "CONVERT", "LEAD", lead.getId(), "Converted lead", tenantId);
 
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("lead", toLeadView(lead));
         body.put("customerId", customer.getId());
         body.put("contactId", contact.getId());
@@ -293,7 +293,7 @@ public class V1LeadController extends BaseApiController {
         if (!Objects.equals(before, assigned)) {
             leadAutomationService.onLeadEvent(tenantId, "LEAD_ASSIGNED", lead, currentUser(request));
         }
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("leadId", lead.getId());
         body.put("owner", assigned);
         return ResponseEntity.ok(successWithFields(request, "lead_assigned", body));
@@ -327,10 +327,10 @@ public class V1LeadController extends BaseApiController {
             return ResponseEntity.status(201).body(successWithFields(request, "lead_import_job_created", leadImportService.toView(job)));
         } catch (IllegalStateException ex) {
             String code = isBlank(ex.getMessage()) ? "lead_import_concurrent_limit_exceeded" : ex.getMessage().trim();
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("action", "create");
             details.put("tenantId", tenantId);
-            details.put("allowedConcurrentStatuses", new ArrayList<String>(Arrays.asList("PENDING", "RUNNING")));
+            details.put("allowedConcurrentStatuses", List.of("PENDING", "RUNNING"));
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -556,7 +556,7 @@ public class V1LeadController extends BaseApiController {
     private ResponseEntity<?> leadStatusTransitionConflict(HttpServletRequest request, String currentStatus, String targetStatus) {
         String current = normalizeStatusValue(currentStatus);
         String target = normalizeStatusValue(targetStatus);
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        Map<String, Object> details = new LinkedHashMap<>();
         details.put("from", current);
         details.put("to", target);
         details.put("allowed", new ArrayList<String>(allowedLeadTransitions(current)));
@@ -564,7 +564,7 @@ public class V1LeadController extends BaseApiController {
     }
 
     private Map<String, Object> buildImportConflictDetails(String tenantId, String jobId, String action, String code) {
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        Map<String, Object> details = new LinkedHashMap<>();
         details.put("jobId", jobId);
         details.put("action", action);
         details.put("tenantId", tenantId);
@@ -616,7 +616,7 @@ public class V1LeadController extends BaseApiController {
     }
 
     private Map<String, Object> toLeadView(Lead lead) {
-        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", lead.getId());
         out.put("name", lead.getName());
         out.put("company", lead.getCompany());

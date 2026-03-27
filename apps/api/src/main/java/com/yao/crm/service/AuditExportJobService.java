@@ -258,7 +258,7 @@ public class AuditExportJobService {
                 if (record.to != null) {
                     predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), record.to));
                 }
-                return cb.and(predicates.toArray(new Predicate[0]));
+                return cb.and(predicates.toArray(Predicate[]::new));
             };
 
             List<AuditLog> logs = auditLogRepository.findAll(spec);

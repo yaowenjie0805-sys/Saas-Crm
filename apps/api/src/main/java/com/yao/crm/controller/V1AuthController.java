@@ -120,7 +120,7 @@ public class V1AuthController extends BaseApiController {
         String ip = request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
 
         if (loginRiskService.isLocked(username, ip)) {
-            Map<String, Object> details = new HashMap<String, Object>();
+            Map<String, Object> details = new HashMap<>();
             details.put("retryAfterSeconds", loginRiskService.remainingSeconds(username, ip));
             return ResponseEntity.status(423).body(errorBody(request, "login_locked", msg(request, "login_locked"), details));
         }
@@ -150,13 +150,13 @@ public class V1AuthController extends BaseApiController {
                         .body(body);
             }
             String challengeId = mfaChallengeService.issue(user.getUsername(), user.getRole(), safeOwner(user), user.getTenantId());
-            Map<String, Object> body = new HashMap<String, Object>();
+            Map<String, Object> body = new HashMap<>();
             body.put("code", "mfa_required");
             body.put("message", msg(request, "mfa_required"));
             body.put("mfaRequired", true);
             body.put("challengeId", challengeId);
             body.put("requestId", traceId(request));
-            body.put("details", new LinkedHashMap<String, Object>());
+            body.put("details", new LinkedHashMap<>());
             return ResponseEntity.status(202).body(body);
         }
 

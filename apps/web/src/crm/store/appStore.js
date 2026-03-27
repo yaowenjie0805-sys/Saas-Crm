@@ -37,14 +37,6 @@ const setSafeStorage = (key, value) => {
   }
 }
 
-const removeSafeStorage = (key) => {
-  try {
-    localStorage.removeItem(key)
-  } catch {
-    // ignore storage remove failures
-  }
-}
-
 const createDomainSetter = (set, sliceName) => (nextValue) =>
   set((state) => {
     const current = state[sliceName] || {}
@@ -98,16 +90,13 @@ export const useAppStore = create((set, get) => ({
   },
 
   setLang: (lang) => {
-    set((state) => ({ auth: { ...state.auth, lang } }))
-    setSafeStorage(LANG_KEY, lang)
+    const nextLang = String(lang || 'en')
+    if ((get().auth?.lang || 'en') === nextLang) return
+    set((state) => ({ auth: { ...state.auth, lang: nextLang } }))
+    setSafeStorage(LANG_KEY, nextLang)
   },
   setAuth: (session) => {
     set((state) => ({ auth: { ...state.auth, session } }))
-    if (!session) {
-      removeSafeStorage('crm_auth')
-      return
-    }
-    setSafeStorage('crm_auth', JSON.stringify(session))
   },
   setUiError: (error) => set((state) => ({ ui: { ...state.ui, error } })),
   setUiLoginError: (loginError) => set((state) => ({ ui: { ...state.ui, loginError } })),

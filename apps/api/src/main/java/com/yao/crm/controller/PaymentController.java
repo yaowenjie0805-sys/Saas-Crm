@@ -75,7 +75,7 @@ public class PaymentController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<String>(Arrays.asList("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -98,11 +98,11 @@ public class PaymentController extends BaseApiController {
                 Predicate scopeOwner = cb.equal(root.get("owner"), ownerScope);
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
 
         Page<PaymentRecord> result = paymentRepository.findAll(spec, pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);

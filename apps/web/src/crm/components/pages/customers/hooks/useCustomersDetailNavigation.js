@@ -28,6 +28,7 @@ export function useCustomersDetailNavigation({
 
   const detail = localDetail || urlDetail
   const detailMode = localDetail ? localDetailMode : (urlDetail ? 'page' : localDetailMode)
+  const detailSource = localDetail ? 'local' : (urlDetail ? 'url' : null)
 
   const openDetailState = useCallback((row, mode = 'drawer') => {
     setLocalDetail(row)
@@ -67,6 +68,7 @@ export function useCustomersDetailNavigation({
   return {
     detail,
     detailMode,
+    detailSource,
     openDetailState,
     openFullDetailUrl,
     resolveNeighbor,

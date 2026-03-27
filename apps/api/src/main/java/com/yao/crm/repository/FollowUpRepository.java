@@ -22,13 +22,15 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, String>, Jpa
     @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId group by f.channel")
     List<Object[]> countByChannelGrouped(@Param("tenantId") String tenantId);
 
-    @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId and lower(f.author) in :authors group by f.channel")
+    // Note: authors 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId and f.author in :authors group by f.channel")
     List<Object[]> countByChannelGroupedAndAuthorIn(@Param("tenantId") String tenantId, @Param("authors") Collection<String> authors);
 
     @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId and f.createdAt between :from and :to group by f.channel")
     List<Object[]> countByChannelGroupedAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId and lower(f.author) in :authors and f.createdAt between :from and :to group by f.channel")
+    // Note: authors 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId and f.author in :authors and f.createdAt between :from and :to group by f.channel")
     List<Object[]> countByChannelGroupedAndAuthorInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("authors") Collection<String> authors, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     long countByTenantId(String tenantId);

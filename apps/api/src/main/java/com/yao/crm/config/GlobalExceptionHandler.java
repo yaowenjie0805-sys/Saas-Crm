@@ -22,9 +22,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.ConstraintViolation;
+import javax.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -39,7 +43,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
-        Map<String, String> validationErrors = new LinkedHashMap<String, String>();
+        Map<String, String> validationErrors = new LinkedHashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             if (fieldError == null || fieldError.getField() == null) {
                 continue;
@@ -66,8 +70,50 @@ public class GlobalExceptionHandler {
         if (!validationErrors.isEmpty()) {
             body.setValidationErrors(validationErrors);
         }
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        Map<String, Object> details = new LinkedHashMap<>();
         details.put("type", "validation");
+        details.put("count", validationErrors.size());
+        body.setDetails(details);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * 处理 @Validated 注解在类级别时的参数校验异常 - HTTP 400
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
+        Map<String, String> validationErrors = new LinkedHashMap<>();
+
+        Set<ConstraintViolation<?>> violations = ex.getConstraintViolations();
+        for (ConstraintViolation<?> violation : violations) {
+            String propertyPath = violation.getPropertyPath().toString();
+            // 提取方法参数名（格式：方法名.参数名）
+            String fieldName = propertyPath.contains(".") ? propertyPath.substring(propertyPath.lastIndexOf(".") + 1) : propertyPath;
+            String message = violation.getMessage();
+
+            if (!validationErrors.containsKey(fieldName)) {
+                validationErrors.put(fieldName, i18nService.msg(request, message));
+            }
+        }
+
+        String message = validationErrors.isEmpty()
+                ? i18nService.msg(request, "validation_error")
+                : validationErrors.values().iterator().next();
+
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                "Bad Request",
+                codeFor(request, "VALIDATION_ERROR", "validation_error"),
+                message,
+                request.getRequestURI(),
+                traceId(request)
+        );
+
+        if (!validationErrors.isEmpty()) {
+            body.setValidationErrors(validationErrors);
+        }
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("type", "constraint_violation");
         details.put("count", validationErrors.size());
         body.setDetails(details);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
@@ -100,7 +146,7 @@ public class GlobalExceptionHandler {
                 request.getRequestURI(),
                 traceId(request)
         );
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        Map<String, Object> details = new LinkedHashMap<>();
         details.put("type", ex.getClass().getSimpleName());
         body.setDetails(details);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
@@ -125,7 +171,7 @@ public class GlobalExceptionHandler {
         );
         
         if (ex.hasField()) {
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("field", ex.getField());
             body.setDetails(details);
         }
@@ -149,7 +195,7 @@ public class GlobalExceptionHandler {
         );
         
         if (ex.hasField()) {
-            Map<String, String> validationErrors = new LinkedHashMap<String, String>();
+            Map<String, String> validationErrors = new LinkedHashMap<>();
             validationErrors.put(ex.getField(), ex.getMessage());
             body.setValidationErrors(validationErrors);
         }
@@ -173,7 +219,7 @@ public class GlobalExceptionHandler {
         );
         
         if (ex.hasField()) {
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("field", ex.getField());
             body.setDetails(details);
         }
@@ -197,7 +243,7 @@ public class GlobalExceptionHandler {
         );
         
         if (ex.hasField()) {
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("field", ex.getField());
             body.setDetails(details);
         }
@@ -221,7 +267,7 @@ public class GlobalExceptionHandler {
         );
         
         if (ex.hasField()) {
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("field", ex.getField());
             body.setDetails(details);
         }
@@ -245,7 +291,7 @@ public class GlobalExceptionHandler {
         );
         
         if (ex.hasField()) {
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("field", ex.getField());
             body.setDetails(details);
         }
@@ -378,7 +424,7 @@ public class GlobalExceptionHandler {
                 request.getRequestURI(),
                 traceId(request)
         );
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        Map<String, Object> details = new LinkedHashMap<>();
         details.put("type", sanitizedType);
         body.setDetails(details);
         return ResponseEntity.status(status).body(body);

@@ -28,13 +28,17 @@ export function useAppAuthModel({
 }) {
   const saveAuth = useCallback((next) => {
     if (!next) {
-      localStorage.removeItem('crm_auth')
+      if (localStorage.getItem('crm_auth') !== null) {
+        localStorage.removeItem('crm_auth')
+      }
       setAuth(null)
       return
     }
     const tenantId = String(next.tenantId || '').trim()
     if (tenantId) {
-      localStorage.setItem('crm_last_tenant', tenantId)
+      if (String(localStorage.getItem('crm_last_tenant') || '').trim() !== tenantId) {
+        localStorage.setItem('crm_last_tenant', tenantId)
+      }
     }
     const safePersisted = {
       username: next.username || '',
@@ -47,7 +51,10 @@ export function useAppAuthModel({
       dateFormat: next.dateFormat || 'yyyy-MM-dd',
       sessionActive: true,
     }
-    localStorage.setItem('crm_auth', JSON.stringify(safePersisted))
+    const serializedAuth = JSON.stringify(safePersisted)
+    if (localStorage.getItem('crm_auth') !== serializedAuth) {
+      localStorage.setItem('crm_auth', serializedAuth)
+    }
     setAuth({ ...safePersisted, token: 'COOKIE_SESSION' })
   }, [setAuth])
 

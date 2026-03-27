@@ -39,10 +39,10 @@ public class TaskController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                new HashSet<String>(Arrays.asList("title", "owner", "done", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("title", "owner", "done", "createdAt", "updatedAt")),
                 "updatedAt");
         org.springframework.data.domain.Page<TaskItem> result = taskRepository.findByTenantId(currentTenant(request), pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
@@ -113,7 +113,7 @@ public class TaskController extends BaseApiController {
                 }
                 predicates.add(cb.equal(root.get("done"), doneFilter));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
 
         Page<TaskItem> result = taskRepository.findAll(spec, pageable);
@@ -184,7 +184,7 @@ public class TaskController extends BaseApiController {
     }
 
     private Map<String, Object> pageBody(Page<TaskItem> page, int safePage, int safeSize) {
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", page.getContent());
         body.put("total", page.getTotalElements());
         body.put("page", safePage);

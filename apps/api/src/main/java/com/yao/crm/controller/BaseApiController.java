@@ -190,7 +190,7 @@ abstract class BaseApiController {
     }
 
     protected Set<String> supportedDateFormats() {
-        return new HashSet<String>(Arrays.asList(DATE_FORMAT_ISO, DATE_FORMAT_DMY, DATE_FORMAT_MDY));
+        return Set.of(DATE_FORMAT_ISO, DATE_FORMAT_DMY, DATE_FORMAT_MDY);
     }
 
     protected String currentTenantDateFormat(HttpServletRequest request) {
@@ -279,10 +279,16 @@ abstract class BaseApiController {
     }
 
     protected String normalizeCode(String value, String fallback) {
-        String base = isBlank(value) ? fallback : value.trim().toLowerCase(Locale.ROOT);
-        if (isBlank(base)) return "bad_request";
-        String normalized = base.replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
-        return isBlank(normalized) ? "bad_request" : normalized;
+        if (isBlank(value)) value = fallback;
+        if (isBlank(value)) return "bad_request";
+        String normalized = value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_");
+        if (normalized.isEmpty()) return "bad_request";
+        // 去除首尾下划线
+        int start = 0, end = normalized.length();
+        while (start < end && normalized.charAt(start) == '_') start++;
+        while (end > start && normalized.charAt(end - 1) == '_') end--;
+        normalized = normalized.substring(start, end);
+        return normalized.isEmpty() ? "bad_request" : normalized;
     }
 
     protected String legacyCode(String value, String fallback) {
@@ -306,6 +312,6 @@ abstract class BaseApiController {
     }
 
     private static Set<String> immutableKeys(String... keys) {
-        return Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(keys)));
+        return Set.of(keys);
     }
 }

@@ -37,11 +37,11 @@ export function useLoaderOrchestrator({
       })
       mark.markDuplicateFetchBlocked(reason)
       if (reason === 'workbench_jump') mark.markWorkbenchJumpDecision(true)
-      return undefined
+      return Promise.resolve(false)
     }
     if (!force && run.isInFlight(pageKey, loader.signature)) {
       mark.markDuplicateFetchBlocked(reason)
-      return undefined
+      return Promise.resolve(false)
     }
     run.markInFlight(pageKey, loader.signature)
     handle.onLoaderLifecycle?.({
@@ -94,8 +94,7 @@ export function useLoaderOrchestrator({
       const timer = setTimeout(execute, delay)
       return () => clearTimeout(timer)
     }
-    execute()
-    return undefined
+    return execute().then(() => true).catch(() => false)
   }, [])
 
   const activePage = loaders?.activePage
@@ -141,15 +140,21 @@ export function useLoaderOrchestrator({
       const commonLoader = state.loaders.commonPageLoaders[normalized]
       if (commonLoader) {
         state.loaders.loadReasonRef.current = normalizedReason
-        runRegisteredLoader(normalized, commonLoader, { force: true, delay: 0, reason: normalizedReason })
-        return true
+        return await runRegisteredLoader(normalized, commonLoader, {
+          force: true,
+          delay: 0,
+          reason: normalizedReason,
+        })
       }
 
       const keyLoader = state.loaders.keyPageLoaders[normalized]
       if (keyLoader && keyLoader.canRun()) {
         state.loaders.loadReasonRef.current = normalizedReason
-        runRegisteredLoader(normalized, keyLoader, { force: true, delay: 0, reason: normalizedReason })
-        return true
+        return await runRegisteredLoader(normalized, keyLoader, {
+          force: true,
+          delay: 0,
+          reason: normalizedReason,
+        })
       }
 
       state.metrics.markLoaderFallbackUsed()

@@ -74,7 +74,8 @@ function MainContent() {
       if (!changedTenantId || !currentTenantId || changedTenantId !== currentTenantId) return
       if (!['dashboard', 'reports', 'adminTenants'].includes(activePage)) return
       // Keep report/dashboard market context aligned with latest tenant governance edits.
-      refreshPage('reports', 'panel_action')
+      const targetPage = activePage === 'adminTenants' ? 'adminTenants' : 'reports'
+      refreshPage(targetPage, 'panel_action')
     }
     window.addEventListener('crm:tenant-config-updated', onTenantConfigUpdated)
     return () => window.removeEventListener('crm:tenant-config-updated', onTenantConfigUpdated)

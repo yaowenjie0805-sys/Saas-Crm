@@ -28,25 +28,29 @@ public interface OpportunityRepository extends JpaRepository<Opportunity, String
     @Query("select coalesce(sum(o.amount * o.progress), 0) from Opportunity o where o.tenantId = :tenantId")
     Long sumWeightedAmountRawByTenantId(@Param("tenantId") String tenantId);
 
-    @Query("select coalesce(sum(o.amount * o.progress), 0) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(o.amount * o.progress), 0) from Opportunity o where o.tenantId = :tenantId and o.owner in :owners")
     Long sumWeightedAmountRawByTenantIdAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select coalesce(sum(o.amount * o.progress), 0) from Opportunity o where o.tenantId = :tenantId and o.createdAt between :from and :to")
     Long sumWeightedAmountRawByTenantIdAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select coalesce(sum(o.amount * o.progress), 0) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.createdAt between :from and :to")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select coalesce(sum(o.amount * o.progress), 0) from Opportunity o where o.tenantId = :tenantId and o.owner in :owners and o.createdAt between :from and :to")
     Long sumWeightedAmountRawByTenantIdAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and o.progress >= :threshold")
     long countByTenantIdAndProgressGte(@Param("tenantId") String tenantId, @Param("threshold") int threshold);
 
-    @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.progress >= :threshold")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and o.owner in :owners and o.progress >= :threshold")
     long countByTenantIdAndOwnerInAndProgressGte(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("threshold") int threshold);
 
     @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and o.progress >= :threshold and o.createdAt between :from and :to")
     long countByTenantIdAndProgressGteAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("threshold") int threshold, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.progress >= :threshold and o.createdAt between :from and :to")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select count(o) from Opportunity o where o.tenantId = :tenantId and o.owner in :owners and o.progress >= :threshold and o.createdAt between :from and :to")
     long countByTenantIdAndOwnerInAndProgressGteAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("threshold") int threshold, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select coalesce(avg(100 - (case when o.progress < 0 then 0 when o.progress > 100 then 100 else o.progress end)), 0) from Opportunity o where o.tenantId = :tenantId")
@@ -55,13 +59,15 @@ public interface OpportunityRepository extends JpaRepository<Opportunity, String
     @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId group by o.stage")
     List<Object[]> countByStageGrouped(@Param("tenantId") String tenantId);
 
-    @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners group by o.stage")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId and o.owner in :owners group by o.stage")
     List<Object[]> countByStageGroupedAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId and o.createdAt between :from and :to group by o.stage")
     List<Object[]> countByStageGroupedAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId and lower(o.owner) in :owners and o.createdAt between :from and :to group by o.stage")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select o.stage, count(o) from Opportunity o where o.tenantId = :tenantId and o.owner in :owners and o.createdAt between :from and :to group by o.stage")
     List<Object[]> countByStageGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select coalesce(sum(o.amount), 0) from Opportunity o where o.tenantId = :tenantId and o.stage = :stage")

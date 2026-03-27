@@ -220,7 +220,7 @@ public class V1ApprovalController extends BaseApiController {
                 tenantId, bizTypeUpper, bizId, Arrays.asList("PENDING", "WAITING"));
         if (activeInstanceOpt.isPresent()) {
             ApprovalInstance active = activeInstanceOpt.get();
-            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            Map<String, Object> details = new LinkedHashMap<>();
             details.put("instanceId", active.getId());
             details.put("status", active.getStatus());
             details.put("bizType", active.getBizType());
@@ -443,7 +443,7 @@ public class V1ApprovalController extends BaseApiController {
         int finalLimit = Math.max(1, Math.min(limit, 100));
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (ApprovalInstance row : rows) {
-            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", row.getId());
             item.put("bizType", row.getBizType());
             item.put("bizId", row.getBizId());
@@ -468,10 +468,10 @@ public class V1ApprovalController extends BaseApiController {
         List<ApprovalInstance> instances = instanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         List<ApprovalTask> tasks = taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
 
-        Map<String, Integer> instanceByStatus = new LinkedHashMap<String, Integer>();
-        Map<String, Integer> taskByStatus = new LinkedHashMap<String, Integer>();
-        Map<String, Integer> bizByType = new LinkedHashMap<String, Integer>();
-        Map<String, Integer> backlogByRole = new LinkedHashMap<String, Integer>();
+        Map<String, Integer> instanceByStatus = new LinkedHashMap<>();
+        Map<String, Integer> taskByStatus = new LinkedHashMap<>();
+        Map<String, Integer> bizByType = new LinkedHashMap<>();
+        Map<String, Integer> backlogByRole = new LinkedHashMap<>();
         int overdueCount = 0;
         int escalatedCount = 0;
         long processingMinutesTotal = 0L;
@@ -497,19 +497,19 @@ public class V1ApprovalController extends BaseApiController {
                 processedCount++;
             }
         }
-        Map<String, Object> summary = new LinkedHashMap<String, Object>();
+        Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("templates", templateRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).size());
         summary.put("instances", instances.size());
         summary.put("tasks", tasks.size());
         summary.put("pendingTasks", taskByStatus.containsKey("PENDING") ? taskByStatus.get("PENDING") : 0);
-        Map<String, Object> sla = new LinkedHashMap<String, Object>();
+        Map<String, Object> sla = new LinkedHashMap<>();
         sla.put("overdueCount", overdueCount);
         sla.put("escalatedCount", escalatedCount);
         sla.put("avgProcessingMinutes", processedCount == 0 ? 0 : processingMinutesTotal / processedCount);
         sla.put("escalationRate", tasks.isEmpty() ? 0.0 : ((double) escalatedCount / (double) tasks.size()));
         sla.put("backlogByRole", backlogByRole);
 
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("summary", summary);
         body.put("sla", sla);
         body.put("instanceByStatus", instanceByStatus);
@@ -529,7 +529,7 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalInstance row = optional.get();
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("id", row.getId());
         body.put("templateId", row.getTemplateId());
         body.put("bizType", row.getBizType());
@@ -548,7 +548,7 @@ public class V1ApprovalController extends BaseApiController {
         List<ApprovalEvent> events = eventRepository.findByInstanceIdAndTenantIdOrderByCreatedAtAsc(id, tenantId);
         List<Map<String, Object>> timeline = new ArrayList<Map<String, Object>>();
         for (ApprovalEvent event : events) {
-            Map<String, Object> item = new LinkedHashMap<String, Object>();
+            Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", event.getId());
             item.put("eventType", event.getEventType());
             item.put("taskId", event.getTaskId());
@@ -568,9 +568,9 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         ApprovalSlaService.ScanResult result = approvalSlaService.scanOverdueAndEscalate();
-        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> body = new LinkedHashMap<>();
         body.put("affected", result.getAffected());
-        body.put("tierStats", result.getTierStats() == null ? new LinkedHashMap<String, Integer>() : result.getTierStats());
+        body.put("tierStats", result.getTierStats() == null ? new LinkedHashMap<>() : result.getTierStats());
         return ResponseEntity.ok(successWithFields(request, "approval_sla_scan_completed", body));
     }
 
@@ -594,7 +594,7 @@ public class V1ApprovalController extends BaseApiController {
         if (payload != null) task.setComment(payload.getComment());
 
         ApprovalInstance latestInstance = null;
-        Map<String, Object> bizWriteback = new LinkedHashMap<String, Object>();
+        Map<String, Object> bizWriteback = new LinkedHashMap<>();
         Optional<ApprovalInstance> instOpt = instanceRepository.findByIdAndTenantId(task.getInstanceId(), tenantId);
         if (instOpt.isPresent()) {
             ApprovalInstance inst = instOpt.get();
@@ -663,7 +663,7 @@ public class V1ApprovalController extends BaseApiController {
     }
 
     private Map<String, Object> buildTaskConflictDetails(ApprovalTask task, String reason, String action) {
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        Map<String, Object> details = new LinkedHashMap<>();
         details.put("taskId", task == null ? null : task.getId());
         details.put("instanceId", task == null ? null : task.getInstanceId());
         details.put("status", task == null ? null : task.getStatus());
@@ -690,7 +690,7 @@ public class V1ApprovalController extends BaseApiController {
     }
 
     private Map<String, Object> toTaskView(ApprovalTask row) {
-        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", row.getId());
         item.put("instanceId", row.getInstanceId());
         item.put("approverRole", row.getApproverRole());
@@ -729,7 +729,7 @@ public class V1ApprovalController extends BaseApiController {
     }
 
     private Map<String, Object> toTemplateView(ApprovalTemplate row) {
-        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", row.getId());
         item.put("tenantId", row.getTenantId());
         item.put("bizType", row.getBizType());

@@ -49,7 +49,7 @@ public class CollaborationService {
     /**
      * 添加评论
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public Comment addComment(String tenantId, String entityType, String entityId,
                                 String authorId, String authorName, String content,
                                 String parentCommentId, Map<String, Object> metadata) {
@@ -109,7 +109,7 @@ public class CollaborationService {
     /**
      * 回复评论
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public Comment replyToComment(String tenantId, String parentCommentId,
                                   String authorId, String authorName, String content) {
         Comment parentComment = commentRepository.findById(parentCommentId)
@@ -130,7 +130,7 @@ public class CollaborationService {
     /**
      * 删除评论
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public boolean deleteComment(String commentId, String userId) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
@@ -154,7 +154,7 @@ public class CollaborationService {
     /**
      * 点赞评论
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public boolean likeComment(String commentId, String userId) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
@@ -183,7 +183,7 @@ public class CollaborationService {
     /**
      * 编辑评论
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public Comment editComment(String commentId, String userId, String newContent) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
@@ -373,7 +373,7 @@ public class CollaborationService {
     /**
      * 创建团队
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public Team createTeam(String tenantId, String name, String description, String leaderId, List<String> memberIds) {
         Team team = new Team();
         team.setId(UUID.randomUUID().toString());
@@ -392,7 +392,7 @@ public class CollaborationService {
     /**
      * 添加团队成员
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public Team addTeamMember(String teamId, String userId, String role) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));
@@ -410,7 +410,7 @@ public class CollaborationService {
     /**
      * 移除团队成员
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public Team removeTeamMember(String teamId, String userId) {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));

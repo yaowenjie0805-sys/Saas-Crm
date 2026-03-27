@@ -66,7 +66,7 @@ public class AuditController extends BaseApiController {
         int safeSize = Math.max(1, Math.min(100, size));
         Pageable pageable = buildPageable(
                 safePage, safeSize, sortBy, sortDir,
-                new HashSet<String>(Arrays.asList("username", "role", "action", "resource", "createdAt")),
+                new HashSet<>(Set.of("username", "role", "action", "resource", "createdAt")),
                 "createdAt"
         );
 
@@ -78,7 +78,7 @@ public class AuditController extends BaseApiController {
 
         String tenantId = currentTenant(request);
         Page<AuditLog> result = auditLogRepository.findAll(buildAuditSpec(tenantId, username, role, action, fromTime, toTime), pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
@@ -289,7 +289,7 @@ public class AuditController extends BaseApiController {
             if (!isBlank(action)) predicates.add(cb.equal(root.get("action"), action));
             if (fromTime != null) predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromTime));
             if (toTime != null) predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), toTime));
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
     }
 }

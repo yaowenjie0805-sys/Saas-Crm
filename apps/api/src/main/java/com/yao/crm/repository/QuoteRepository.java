@@ -41,24 +41,28 @@ public interface QuoteRepository extends JpaRepository<Quote, String> {
     @Query("select q.status, count(q) from Quote q where q.tenantId = :tenantId group by q.status")
     List<Object[]> countByStatusGrouped(@Param("tenantId") String tenantId);
 
-    @Query("select q.status, count(q) from Quote q where q.tenantId = :tenantId and lower(q.owner) in :owners group by q.status")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select q.status, count(q) from Quote q where q.tenantId = :tenantId and q.owner in :owners group by q.status")
     List<Object[]> countByStatusGroupedAndOwnerIn(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners);
 
     @Query("select q.status, count(q) from Quote q where q.tenantId = :tenantId and q.createdAt between :from and :to group by q.status")
     List<Object[]> countByStatusGroupedAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select q.status, count(q) from Quote q where q.tenantId = :tenantId and lower(q.owner) in :owners and q.createdAt between :from and :to group by q.status")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select q.status, count(q) from Quote q where q.tenantId = :tenantId and q.owner in :owners and q.createdAt between :from and :to group by q.status")
     List<Object[]> countByStatusGroupedAndOwnerInAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("select count(q) from Quote q where q.tenantId = :tenantId and upper(q.status) in :statuses")
     long countByTenantIdAndStatusInUppercase(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
-    @Query("select count(q) from Quote q where q.tenantId = :tenantId and lower(q.owner) in :owners and upper(q.status) in :statuses")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select count(q) from Quote q where q.tenantId = :tenantId and q.owner in :owners and upper(q.status) in :statuses")
     long countByTenantIdAndOwnerInAndStatusInUppercase(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("statuses") List<String> statuses);
 
     @Query("select count(q) from Quote q where q.tenantId = :tenantId and upper(q.status) in :statuses and q.createdAt between :from and :to")
     long countByTenantIdAndStatusInUppercaseAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("select count(q) from Quote q where q.tenantId = :tenantId and lower(q.owner) in :owners and upper(q.status) in :statuses and q.createdAt between :from and :to")
+    // Note: owners 参数已由 Service 层统一转为小写，可直接使用索引
+    @Query("select count(q) from Quote q where q.tenantId = :tenantId and q.owner in :owners and upper(q.status) in :statuses and q.createdAt between :from and :to")
     long countByTenantIdAndOwnerInAndStatusInUppercaseAndCreatedAtBetween(@Param("tenantId") String tenantId, @Param("owners") Collection<String> owners, @Param("statuses") List<String> statuses, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

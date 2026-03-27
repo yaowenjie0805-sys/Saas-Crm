@@ -26,8 +26,8 @@ import java.util.Set;
 @RequestMapping("/api/v2")
 public class V2TenantConfigController extends BaseApiController {
 
-    private static final Set<String> MARKET_PROFILES = new HashSet<String>(Arrays.asList("CN", "GLOBAL"));
-    private static final Set<String> APPROVAL_MODES = new HashSet<String>(Arrays.asList("STRICT", "STAGE_GATE"));
+    private static final Set<String> MARKET_PROFILES = Set.of("CN", "GLOBAL");
+    private static final Set<String> APPROVAL_MODES = Set.of("STRICT", "STAGE_GATE");
     private final TenantRepository tenantRepository;
 
     public V2TenantConfigController(TenantRepository tenantRepository, I18nService i18nService) {

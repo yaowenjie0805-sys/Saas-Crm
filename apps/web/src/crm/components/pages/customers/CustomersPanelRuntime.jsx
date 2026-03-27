@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useCustomer360Data from './customer360/useCustomer360Data'
 import { CustomersFullDetailSection, CustomersListSection } from './CustomersPanelSections'
@@ -81,6 +81,7 @@ function CustomersPanel({
   const {
     detail,
     detailMode,
+    detailSource,
     openDetailState,
     openFullDetailUrl,
     resolveNeighbor,
@@ -140,22 +141,32 @@ function CustomersPanel({
     byId,
   })
 
-  const openDetail = useCallback(async (row, mode = 'drawer') => {
-    openDetailState(row, mode)
+  const urlDetailLoadKeyRef = useRef('')
+
+  const loadDetailData = useCallback(async (row, options = {}) => {
     if (!row?.id) return
     setTimelineLoading(true)
     try {
       await Promise.all([
         loadTimeline ? loadTimeline(row.id) : Promise.resolve(),
-        loadCustomer360(row, { resetModules: true, force: false, source: 'open' }),
+        loadCustomer360(row, {
+          resetModules: options.resetModules ?? true,
+          force: options.force ?? false,
+          source: options.source || 'open',
+        }),
       ])
     } catch {
       // global error banner handles message
     } finally {
       setTimelineLoading(false)
     }
-    if (mode === 'drawer') scheduleNeighborPrefetch(row)
-  }, [loadCustomer360, loadTimeline, openDetailState, scheduleNeighborPrefetch, setTimelineLoading])
+    if (options.prefetchNeighbor) scheduleNeighborPrefetch(row)
+  }, [loadCustomer360, loadTimeline, scheduleNeighborPrefetch, setTimelineLoading])
+
+  const openDetail = useCallback(async (row, mode = 'drawer') => {
+    openDetailState(row, mode)
+    await loadDetailData(row, { resetModules: true, force: false, source: 'open', prefetchNeighbor: mode === 'drawer' })
+  }, [loadDetailData, openDetailState])
 
   const openFullDetail = useCallback(async (row) => {
     if (!row?.id) return
@@ -178,6 +189,17 @@ function CustomersPanel({
     closeDrawerNav()
     abortPrefetchRequests()
   }, [abortPrefetchRequests, closeDrawerNav])
+
+  useEffect(() => {
+    if (activePage !== 'customers' || detailSource !== 'url' || !detail?.id) {
+      urlDetailLoadKeyRef.current = ''
+      return
+    }
+    const nextKey = `${detailSource}:${detail.id}`
+    if (urlDetailLoadKeyRef.current === nextKey) return
+    urlDetailLoadKeyRef.current = nextKey
+    loadDetailData(detail, { resetModules: true, force: false, source: 'open', prefetchNeighbor: false })
+  }, [activePage, detail, detailSource, loadDetailData])
 
   const isFullDetail = activePage === 'customers' && detailMode === 'page' && !!detail
   if (activePage !== 'customers') return null

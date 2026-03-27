@@ -64,7 +64,7 @@ public class ContractController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<String>(Arrays.asList("customerId", "contractNo", "title", "amount", "status", "owner", "signDate", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("customerId", "contractNo", "title", "amount", "status", "owner", "signDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -92,11 +92,11 @@ public class ContractController extends BaseApiController {
                 Predicate scopeOwner = cb.equal(root.get("owner"), ownerScope);
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
 
         Page<ContractRecord> result = contractRepository.findAll(spec, pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);

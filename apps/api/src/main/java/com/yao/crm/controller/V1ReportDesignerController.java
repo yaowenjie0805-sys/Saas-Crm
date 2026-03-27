@@ -20,8 +20,8 @@ import java.util.*;
 @RequestMapping("/api/v1/reports/designer")
 public class V1ReportDesignerController extends BaseApiController {
 
-    private static final Set<String> DATASETS = new HashSet<String>(Arrays.asList("CUSTOMERS", "OPPORTUNITIES", "CONTRACTS", "PAYMENTS", "LEADS"));
-    private static final Set<String> VISIBILITY = new HashSet<String>(Arrays.asList("PRIVATE", "DEPARTMENT", "TENANT"));
+    private static final Set<String> DATASETS = Set.of("CUSTOMERS", "OPPORTUNITIES", "CONTRACTS", "PAYMENTS", "LEADS");
+    private static final Set<String> VISIBILITY = Set.of("PRIVATE", "DEPARTMENT", "TENANT");
 
     private final ReportDesignerTemplateRepository templateRepository;
     private final CustomerRepository customerRepository;

@@ -1,5 +1,7 @@
 package com.yao.crm.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.AuditLogService;
@@ -12,9 +14,13 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.Cookie;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
+
+    private static final String DEFAULT_TENANT_DATE_FORMAT = "yyyy-MM-dd";
+    private static final long TENANT_DATE_FORMAT_TTL_MINUTES = 5L;
 
     private final TokenService tokenService;
     private final I18nService i18nService;
@@ -22,6 +28,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final TenantRepository tenantRepository;
     private final AuditLogService auditLogService;
     private final String sessionCookieName;
+    private final Cache<String, String> tenantDateFormatCache;
 
     public AuthInterceptor(TokenService tokenService,
                            I18nService i18nService,
@@ -35,6 +42,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         this.tenantRepository = tenantRepository;
         this.auditLogService = auditLogService;
         this.sessionCookieName = sessionCookieService.cookieName();
+        this.tenantDateFormatCache = Caffeine.newBuilder()
+                .expireAfterWrite(TENANT_DATE_FORMAT_TTL_MINUTES, TimeUnit.MINUTES)
+                .maximumSize(1024)
+                .build();
     }
 
     @Override
@@ -72,13 +83,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         request.setAttribute("authOwnerScope", principal.getOwnerScope());
         request.setAttribute("authTenantId", principal.getTenantId());
         request.setAttribute("authMfaVerified", principal.isMfaVerified());
-        String tenantDateFormat = tenantRepository.findById(principal.getTenantId())
-                .map(t -> t.getDateFormat())
-                .orElse("yyyy-MM-dd");
-        if ("YYYY-MM-DD".equalsIgnoreCase(tenantDateFormat)) {
-            tenantDateFormat = "yyyy-MM-dd";
-        }
-        request.setAttribute("authTenantDateFormat", tenantDateFormat);
+        request.setAttribute("authTenantDateFormat", getTenantDateFormat(principal.getTenantId()));
 
         String headerTenant = request.getHeader("X-Tenant-Id");
         if (path.startsWith("/api/v1/") || path.startsWith("/api/v2/")) {
@@ -98,6 +103,26 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
         return true;
+    }
+
+    private String getTenantDateFormat(String tenantId) {
+        if (tenantId == null || tenantId.trim().isEmpty()) {
+            return DEFAULT_TENANT_DATE_FORMAT;
+        }
+        return tenantDateFormatCache.get(tenantId, this::loadTenantDateFormat);
+    }
+
+    private String loadTenantDateFormat(String tenantId) {
+        String tenantDateFormat = tenantRepository.findById(tenantId)
+                .map(t -> t.getDateFormat())
+                .orElse(DEFAULT_TENANT_DATE_FORMAT);
+        if ("YYYY-MM-DD".equalsIgnoreCase(tenantDateFormat)) {
+            return DEFAULT_TENANT_DATE_FORMAT;
+        }
+        if (tenantDateFormat == null || tenantDateFormat.trim().isEmpty()) {
+            return DEFAULT_TENANT_DATE_FORMAT;
+        }
+        return tenantDateFormat;
     }
 
     private String resolveToken(HttpServletRequest request) {

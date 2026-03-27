@@ -45,10 +45,10 @@ public class CustomerController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                new HashSet<String>(Arrays.asList("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
                 "updatedAt");
         Page<Customer> result = customerRepository.findByTenantId(currentTenant(request), pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
@@ -78,7 +78,7 @@ public class CustomerController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<String>(Arrays.asList("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
+                new HashSet<>(Set.of("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -103,11 +103,11 @@ public class CustomerController extends BaseApiController {
             if (salesScoped) {
                 predicates.add(cb.equal(root.get("owner"), ownerScope));
             }
-            return cb.and(predicates.toArray(new Predicate[0]));
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
 
         Page<Customer> result = customerRepository.findAll(spec, pageable);
-        Map<String, Object> body = new HashMap<String, Object>();
+        Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);

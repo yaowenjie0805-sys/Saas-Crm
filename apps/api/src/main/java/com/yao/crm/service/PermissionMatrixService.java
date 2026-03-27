@@ -10,13 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class PermissionMatrixService {
 
-    private final List<String> roles = Arrays.asList(
-            UserRole.ADMIN.name(),
-            UserRole.MANAGER.name(),
-            UserRole.SALES.name(),
-            UserRole.ANALYST.name()
-    );
-    private final List<String> operations = Arrays.asList(
+    private static final List<String> OPERATIONS = List.of(
             "opViewDashboard",
             "opViewReports",
             "opManageCustomers",
@@ -26,37 +20,48 @@ public class PermissionMatrixService {
             "opCreateOpportunity",
             "opEditOpportunityAmount"
     );
+    
+    private static final List<String> SALES_OPERATIONS = List.of(
+            "opViewDashboard",
+            "opManageCustomers",
+            "opManageTasks",
+            "opManageFollowUps",
+            "opCreateOpportunity"
+    );
+    
+    private static final List<String> ANALYST_OPERATIONS = List.of(
+            "opViewDashboard",
+            "opViewReports"
+    );
+    
+    private static final List<String> ROLES = List.of(
+            UserRole.ADMIN.name(),
+            UserRole.MANAGER.name(),
+            UserRole.SALES.name(),
+            UserRole.ANALYST.name()
+    );
 
-    private final Map<String, Set<String>> byRole = new ConcurrentHashMap<String, Set<String>>();
-    private final Map<String, Deque<Set<String>>> history = new ConcurrentHashMap<String, Deque<Set<String>>>();
+    private final Map<String, Set<String>> byRole = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Set<String>>> history = new ConcurrentHashMap<>();
 
     public PermissionMatrixService() {
-        byRole.put(UserRole.ADMIN.name(), new HashSet<String>(operations));
-        byRole.put(UserRole.MANAGER.name(), new HashSet<String>(operations));
-        byRole.put(UserRole.SALES.name(), new HashSet<String>(Arrays.asList(
-                "opViewDashboard",
-                "opManageCustomers",
-                "opManageTasks",
-                "opManageFollowUps",
-                "opCreateOpportunity"
-        )));
-        byRole.put(UserRole.ANALYST.name(), new HashSet<String>(Arrays.asList(
-                "opViewDashboard",
-                "opViewReports"
-        )));
-        for (String role : roles) {
-            history.put(role, new ArrayDeque<Set<String>>());
+        byRole.put(UserRole.ADMIN.name(), new HashSet<>(OPERATIONS));
+        byRole.put(UserRole.MANAGER.name(), new HashSet<>(OPERATIONS));
+        byRole.put(UserRole.SALES.name(), new HashSet<>(SALES_OPERATIONS));
+        byRole.put(UserRole.ANALYST.name(), new HashSet<>(ANALYST_OPERATIONS));
+        for (String role : ROLES) {
+            history.put(role, new ArrayDeque<>());
         }
     }
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> matrixRows() {
-        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-        for (String operation : operations) {
-            Map<String, Object> row = new HashMap<String, Object>();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (String operation : OPERATIONS) {
+            Map<String, Object> row = new HashMap<>();
             row.put("key", operation);
-            List<String> allowedRoles = new ArrayList<String>();
-            for (String role : roles) {
+            List<String> allowedRoles = new ArrayList<>();
+            for (String role : ROLES) {
                 if (hasPermission(role, operation)) {
                     allowedRoles.add(role);
                 }
@@ -113,7 +118,7 @@ public class PermissionMatrixService {
     @Transactional(readOnly = true)
     public List<Map<String, String>> conflicts() {
         List<Map<String, String>> rows = new ArrayList<Map<String, String>>();
-        for (String role : roles) {
+        for (String role : ROLES) {
             List<String> warnings = validateRole(role, byRole.get(role));
             for (String warning : warnings) {
                 Map<String, String> row = new HashMap<String, String>();
@@ -127,7 +132,7 @@ public class PermissionMatrixService {
 
     @Transactional(readOnly = true)
     public List<String> roles() {
-        return roles;
+        return ROLES;
     }
 
     private void pushHistory(String role, Set<String> current) {
@@ -144,13 +149,13 @@ public class PermissionMatrixService {
 
     private void applyMutation(Set<String> target, List<String> grant, List<String> revoke) {
         for (String op : grant == null ? Collections.<String>emptyList() : grant) {
-            if (!operations.contains(op)) {
+            if (!OPERATIONS.contains(op)) {
                 throw new IllegalArgumentException("invalid_permission");
             }
             target.add(op);
         }
         for (String op : revoke == null ? Collections.<String>emptyList() : revoke) {
-            if (!operations.contains(op)) {
+            if (!OPERATIONS.contains(op)) {
                 throw new IllegalArgumentException("invalid_permission");
             }
             target.remove(op);
@@ -204,7 +209,7 @@ public class PermissionMatrixService {
             throw new IllegalArgumentException("invalid_role");
         }
         String normalized = role.trim().toUpperCase(Locale.ROOT);
-        if (!roles.contains(normalized)) {
+        if (!ROLES.contains(normalized)) {
             throw new IllegalArgumentException("invalid_role");
         }
         return normalized;

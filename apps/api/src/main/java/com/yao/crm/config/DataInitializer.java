@@ -36,6 +36,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
+import java.util.*;
 
 @Configuration
 public class DataInitializer {
@@ -197,30 +198,47 @@ public class DataInitializer {
                                        TaskRepository taskRepository,
                                        AuditLogRepository auditLogRepository,
                                        ValueNormalizerService normalizer) {
+        // Customer status normalization - batch save
+        List<Customer> customersToUpdate = new ArrayList<>();
         for (Customer customer : customerRepository.findAll()) {
             String normalized = normalizer.normalizeCustomerStatus(customer.getStatus());
             if (!equalsSafe(customer.getStatus(), normalized)) {
                 customer.setStatus(normalized);
-                customerRepository.save(customer);
+                customersToUpdate.add(customer);
             }
         }
+        if (!customersToUpdate.isEmpty()) {
+            customerRepository.saveAll(customersToUpdate);
+        }
 
+        // Opportunity stage normalization - batch save
+        List<Opportunity> opportunitiesToUpdate = new ArrayList<>();
         for (Opportunity opportunity : opportunityRepository.findAll()) {
             String normalized = normalizer.normalizeOpportunityStage(opportunity.getStage());
             if (!equalsSafe(opportunity.getStage(), normalized)) {
                 opportunity.setStage(normalized);
-                opportunityRepository.save(opportunity);
+                opportunitiesToUpdate.add(opportunity);
             }
         }
+        if (!opportunitiesToUpdate.isEmpty()) {
+            opportunityRepository.saveAll(opportunitiesToUpdate);
+        }
 
+        // ContractRecord status normalization - batch save
+        List<ContractRecord> contractsToUpdate = new ArrayList<>();
         for (ContractRecord contract : contractRepository.findAll()) {
             String normalized = normalizer.normalizeContractStatus(contract.getStatus());
             if (!equalsSafe(contract.getStatus(), normalized)) {
                 contract.setStatus(normalized);
-                contractRepository.save(contract);
+                contractsToUpdate.add(contract);
             }
         }
+        if (!contractsToUpdate.isEmpty()) {
+            contractRepository.saveAll(contractsToUpdate);
+        }
 
+        // PaymentRecord status+method normalization - batch save
+        List<PaymentRecord> paymentsToUpdate = new ArrayList<>();
         for (PaymentRecord payment : paymentRepository.findAll()) {
             String normalizedStatus = normalizer.normalizePaymentStatus(payment.getStatus());
             String normalizedMethod = normalizer.normalizePaymentMethod(payment.getMethod());
@@ -234,64 +252,112 @@ public class DataInitializer {
                 changed = true;
             }
             if (changed) {
-                paymentRepository.save(payment);
+                paymentsToUpdate.add(payment);
             }
         }
+        if (!paymentsToUpdate.isEmpty()) {
+            paymentRepository.saveAll(paymentsToUpdate);
+        }
 
+        // FollowUp channel normalization + tenantId fill - batch save
+        List<FollowUp> followUpsToUpdate = new ArrayList<>();
         for (FollowUp followUp : followUpRepository.findAll()) {
             String normalizedChannel = normalizer.normalizeFollowUpChannel(followUp.getChannel());
+            boolean changed = false;
             if (isBlank(followUp.getTenantId())) {
                 followUp.setTenantId("tenant_default");
+                changed = true;
             }
             if (!equalsSafe(followUp.getChannel(), normalizedChannel)) {
                 followUp.setChannel(normalizedChannel);
-                followUpRepository.save(followUp);
-            } else if (isBlank(followUp.getTenantId())) {
-                followUpRepository.save(followUp);
+                changed = true;
+            } else if (changed) {
+                followUpsToUpdate.add(followUp);
+            }
+            if (changed) {
+                followUpsToUpdate.add(followUp);
             }
         }
+        if (!followUpsToUpdate.isEmpty()) {
+            followUpRepository.saveAll(followUpsToUpdate);
+        }
 
+        // TenantId batch fills - batch save
+        List<Customer> customerTenants = new ArrayList<>();
         for (Customer customer : customerRepository.findAll()) {
             if (isBlank(customer.getTenantId())) {
                 customer.setTenantId("tenant_default");
-                customerRepository.save(customer);
+                customerTenants.add(customer);
             }
         }
+        if (!customerTenants.isEmpty()) {
+            customerRepository.saveAll(customerTenants);
+        }
+
+        List<Opportunity> oppTenants = new ArrayList<>();
         for (Opportunity opportunity : opportunityRepository.findAll()) {
             if (isBlank(opportunity.getTenantId())) {
                 opportunity.setTenantId("tenant_default");
-                opportunityRepository.save(opportunity);
+                oppTenants.add(opportunity);
             }
         }
+        if (!oppTenants.isEmpty()) {
+            opportunityRepository.saveAll(oppTenants);
+        }
+
+        List<ContractRecord> contractTenants = new ArrayList<>();
         for (ContractRecord contract : contractRepository.findAll()) {
             if (isBlank(contract.getTenantId())) {
                 contract.setTenantId("tenant_default");
-                contractRepository.save(contract);
+                contractTenants.add(contract);
             }
         }
+        if (!contractTenants.isEmpty()) {
+            contractRepository.saveAll(contractTenants);
+        }
+
+        List<PaymentRecord> paymentTenants = new ArrayList<>();
         for (PaymentRecord payment : paymentRepository.findAll()) {
             if (isBlank(payment.getTenantId())) {
                 payment.setTenantId("tenant_default");
-                paymentRepository.save(payment);
+                paymentTenants.add(payment);
             }
         }
+        if (!paymentTenants.isEmpty()) {
+            paymentRepository.saveAll(paymentTenants);
+        }
+
+        List<Contact> contactTenants = new ArrayList<>();
         for (Contact contact : contactRepository.findAll()) {
             if (isBlank(contact.getTenantId())) {
                 contact.setTenantId("tenant_default");
-                contactRepository.save(contact);
+                contactTenants.add(contact);
             }
         }
+        if (!contactTenants.isEmpty()) {
+            contactRepository.saveAll(contactTenants);
+        }
+
+        List<TaskItem> taskTenants = new ArrayList<>();
         for (TaskItem task : taskRepository.findAll()) {
             if (isBlank(task.getTenantId())) {
                 task.setTenantId("tenant_default");
-                taskRepository.save(task);
+                taskTenants.add(task);
             }
         }
+        if (!taskTenants.isEmpty()) {
+            taskRepository.saveAll(taskTenants);
+        }
+
+        List<AuditLog> auditTenants = new ArrayList<>();
         for (AuditLog audit : auditLogRepository.findAll()) {
             if (isBlank(audit.getTenantId())) {
                 audit.setTenantId("tenant_default");
-                auditLogRepository.save(audit);
+                auditTenants.add(audit);
             }
+        }
+        if (!auditTenants.isEmpty()) {
+            auditLogRepository.saveAll(auditTenants);
         }
     }
 

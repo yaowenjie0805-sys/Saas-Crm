@@ -2,49 +2,48 @@ package com.yao.crm.service;
 
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 
 @Service
 public class ValueNormalizerService {
 
-    private final Map<String, String> customerStatusMap = mapOf(
-            "ACTIVE", "Active",
-            "PENDING", "Pending",
-            "INACTIVE", "Inactive",
-            "NEGOTIATING", "Active",
-            "QUOTATION_PENDING", "Pending",
-            "FIRST_CONTACT", "Pending",
-            "PROPOSAL_REVIEW", "Active"
+    private static final Map<String, String> CUSTOMER_STATUS_MAP = Map.ofEntries(
+            Map.entry("ACTIVE", "Active"),
+            Map.entry("PENDING", "Pending"),
+            Map.entry("INACTIVE", "Inactive"),
+            Map.entry("NEGOTIATING", "Active"),
+            Map.entry("QUOTATION_PENDING", "Pending"),
+            Map.entry("FIRST_CONTACT", "Pending"),
+            Map.entry("PROPOSAL_REVIEW", "Active")
     );
 
-    private final Map<String, String> opportunityStageMap = mapOf(
-            "LEAD", "Lead",
-            "QUALIFIED", "Qualified",
-            "PROPOSAL", "Proposal",
-            "NEGOTIATION", "Negotiation",
-            "CLOSED_WON", "Closed Won",
-            "CLOSED_LOST", "Closed Lost",
-            "LEAD_COLLECTION", "Lead",
-            "INITIAL_CONTACT", "Lead",
-            "PROPOSAL_FOLLOW_UP", "Proposal",
-            "BUSINESS_NEGOTIATION", "Negotiation"
+    private static final Map<String, String> OPPORTUNITY_STAGE_MAP = Map.ofEntries(
+            Map.entry("LEAD", "Lead"),
+            Map.entry("QUALIFIED", "Qualified"),
+            Map.entry("PROPOSAL", "Proposal"),
+            Map.entry("NEGOTIATION", "Negotiation"),
+            Map.entry("CLOSED_WON", "Closed Won"),
+            Map.entry("CLOSED_LOST", "Closed Lost"),
+            Map.entry("LEAD_COLLECTION", "Lead"),
+            Map.entry("INITIAL_CONTACT", "Lead"),
+            Map.entry("PROPOSAL_FOLLOW_UP", "Proposal"),
+            Map.entry("BUSINESS_NEGOTIATION", "Negotiation")
     );
 
-    private final Map<String, String> contractStatusMap = mapOf(
+    private static final Map<String, String> CONTRACT_STATUS_MAP = Map.of(
             "DRAFT", "Draft",
             "SIGNED", "Signed"
     );
 
-    private final Map<String, String> paymentStatusMap = mapOf(
+    private static final Map<String, String> PAYMENT_STATUS_MAP = Map.of(
             "PENDING", "Pending",
             "RECEIVED", "Received",
             "OVERDUE", "Overdue"
     );
 
-    private final Map<String, String> paymentMethodMap = mapOf(
+    private static final Map<String, String> PAYMENT_METHOD_MAP = Map.of(
             "BANK", "Bank",
             "BANK_TRANSFER", "Bank",
             "TRANSFER", "Transfer",
@@ -52,7 +51,7 @@ public class ValueNormalizerService {
             "CARD", "Card"
     );
 
-    private final Map<String, String> followUpChannelMap = mapOf(
+    private static final Map<String, String> FOLLOWUP_CHANNEL_MAP = Map.of(
             "PHONE", "Phone",
             "EMAIL", "Email",
             "WECHAT", "WeChat",
@@ -61,27 +60,27 @@ public class ValueNormalizerService {
     );
 
     public String normalizeContractStatus(String value) {
-        return normalizeByMap(value, contractStatusMap);
+        return normalizeByMap(value, CONTRACT_STATUS_MAP);
     }
 
     public String normalizeCustomerStatus(String value) {
-        return normalizeByMap(value, customerStatusMap);
+        return normalizeByMap(value, CUSTOMER_STATUS_MAP);
     }
 
     public String normalizeOpportunityStage(String value) {
-        return normalizeByMap(value, opportunityStageMap);
+        return normalizeByMap(value, OPPORTUNITY_STAGE_MAP);
     }
 
     public String normalizePaymentStatus(String value) {
-        return normalizeByMap(value, paymentStatusMap);
+        return normalizeByMap(value, PAYMENT_STATUS_MAP);
     }
 
     public String normalizePaymentMethod(String value) {
-        return normalizeByMap(value, paymentMethodMap);
+        return normalizeByMap(value, PAYMENT_METHOD_MAP);
     }
 
     public String normalizeFollowUpChannel(String value) {
-        return normalizeByMap(value, followUpChannelMap);
+        return normalizeByMap(value, FOLLOWUP_CHANNEL_MAP);
     }
 
     public String normalizeQueryToken(String value) {
@@ -140,14 +139,6 @@ public class ValueNormalizerService {
                 .replace('-', '_')
                 .replace(' ', '_')
                 .toUpperCase(Locale.ROOT);
-    }
-
-    private Map<String, String> mapOf(String... values) {
-        Map<String, String> map = new HashMap<String, String>();
-        for (int i = 0; i + 1 < values.length; i += 2) {
-            map.put(values[i], values[i + 1]);
-        }
-        return map;
     }
 }
 

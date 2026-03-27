@@ -3,7 +3,7 @@ import { lazy, memo } from 'react'
 const DashboardPanel = lazy(() => import('./pages/DashboardPanel'))
 const PermissionsPanel = lazy(() => import('./pages/PermissionsPanel'))
 const AuditPanel = lazy(() => import('./pages/AuditPanel'))
-const CustomersPanel = lazy(() => import('./pages/CustomersPanel'))
+const CustomersPanel = lazy(() => import('./pages/customers'))
 const PipelinePanel = lazy(() => import('./pages/PipelinePanel'))
 const TasksPanel = lazy(() => import('./pages/TasksPanel'))
 const FollowUpsPanel = lazy(() => import('./pages/FollowUpsPanel'))
