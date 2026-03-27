@@ -1,59 +1,23 @@
 import { useState, useCallback } from 'react';
+import { api } from '../shared';
 
 /**
  * API请求Hook封装
  * 提供统一的请求处理、错误处理、加载状态管理
+ * 使用 shared.js 的 api 函数统一管理 headers 和请求去重
  */
 export function useApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const parseResponseBody = useCallback(async (response) => {
-    if (response.status === 204) {
-      return null;
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.toLowerCase().includes('application/json')) {
-      const text = await response.text();
-      return text ? { raw: text } : null;
-    }
-
-    const text = await response.text();
-    if (!text) {
-      return null;
-    }
-
-    return JSON.parse(text);
-  }, []);
-
-  const getHeaders = useCallback(() => {
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-      'X-Tenant-Id': localStorage.getItem('tenantId') || ''
-    };
-  }, []);
 
   const request = useCallback(async (url, options = {}) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...getHeaders(),
-          ...options.headers
-        }
-      });
-
-      const data = await parseResponseBody(response);
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || '请求失败');
-      }
-
+      // 移除 url 中可能的 /api 前缀，因为 api 函数会自动添加
+      const path = url.replace(/^\/api/, '');
+      const data = await api(path, options);
       return data;
     } catch (err) {
       setError(err.message);
@@ -61,7 +25,7 @@ export function useApi() {
     } finally {
       setLoading(false);
     }
-  }, [getHeaders, parseResponseBody]);
+  }, []);
 
   return { request, loading, error, setError };
 }
@@ -393,21 +357,19 @@ export function useTeam() {
 
 /**
  * 数据导入导出API Hook
+ * 注意：文件上传/下载操作需要特殊处理 headers
  */
 export function useImportExport() {
   const { request, loading, error } = useApi();
 
-  // 创建导入任务
+  // 创建导入任务（FormData 不需要设置 Content-Type）
   const createImportJob = useCallback(async (formData) => {
-    const response = await fetch('/api/v2/import/jobs', {
+    // 移除 url 中可能的 /api 前缀
+    const path = '/api/v2/import/jobs'.replace(/^\/api/, '');
+    return api(path, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-        'X-Tenant-Id': localStorage.getItem('tenantId') || ''
-      },
       body: formData
     });
-    return response.json();
   }, []);
 
   // 获取导入任务状态
@@ -422,9 +384,12 @@ export function useImportExport() {
     });
   }, [request]);
 
-  // 获取导入模板
+  // 获取导入模板（返回 blob）
   const getImportTemplate = useCallback(async (entityType, format = 'xlsx') => {
-    const response = await fetch(`/api/v2/import/templates/${entityType}?format=${format}`, {
+    // 移除 url 中可能的 /api 前缀
+    const path = `/api/v2/import/templates/${entityType}?format=${format}`.replace(/^\/api/, '');
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}${path}`, {
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
         'X-Tenant-Id': localStorage.getItem('tenantId') || ''
@@ -446,9 +411,12 @@ export function useImportExport() {
     return request(`/api/v2/export/jobs/${jobId}`);
   }, [request]);
 
-  // 下载导出文件
+  // 下载导出文件（返回 blob）
   const downloadExportFile = useCallback(async (jobId) => {
-    const response = await fetch(`/api/v2/export/jobs/${jobId}/download`, {
+    // 移除 url 中可能的 /api 前缀
+    const path = `/api/v2/export/jobs/${jobId}/download`.replace(/^\/api/, '');
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}${path}`, {
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
         'X-Tenant-Id': localStorage.getItem('tenantId') || ''

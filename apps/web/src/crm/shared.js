@@ -188,41 +188,66 @@ export const parseHashPage = () => {
   return raw || 'dashboard'
 }
 
+// 请求去重 Map：防止短时间内重复发送相同 GET 请求
+const pendingRequests = new Map()
+
 export async function api(path, options = {}, token, lang = 'en') {
-  const body = options.body
-  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
-  const headers = { 'Accept-Language': lang, ...(options.headers || {}) }
-  if (!isFormData && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
-  if (isFormData && headers['Content-Type']) delete headers['Content-Type']
-  if (token && token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${token}`
-  if (!headers['X-Tenant-Id']) {
-    try {
-      const auth = JSON.parse(localStorage.getItem('crm_auth') || 'null')
-      const tenantFromAuth = String(auth?.tenantId || '').trim()
-      if (tenantFromAuth) headers['X-Tenant-Id'] = tenantFromAuth
-    } catch {
-      // ignore localStorage parse errors
-    }
+  // 只对 GET 请求去重
+  const method = (options.method || 'GET').toUpperCase()
+  const dedupeKey = method === 'GET' ? `${method}:${path}` : null
+
+  // 如果有相同的 GET 请求正在进行，直接返回该 Promise
+  if (dedupeKey && pendingRequests.has(dedupeKey)) {
+    return pendingRequests.get(dedupeKey)
+  }
+
+  const requestPromise = (async () => {
+    const body = options.body
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    const headers = { 'Accept-Language': lang, ...(options.headers || {}) }
+    if (!isFormData && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
+    if (isFormData && headers['Content-Type']) delete headers['Content-Type']
+    if (token && token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${token}`
     if (!headers['X-Tenant-Id']) {
-      const lastTenant = String(localStorage.getItem('crm_last_tenant') || '').trim()
-      if (lastTenant) headers['X-Tenant-Id'] = lastTenant
+      try {
+        const auth = JSON.parse(localStorage.getItem('crm_auth') || 'null')
+        const tenantFromAuth = String(auth?.tenantId || '').trim()
+        if (tenantFromAuth) headers['X-Tenant-Id'] = tenantFromAuth
+      } catch {
+        // ignore localStorage parse errors
+      }
+      if (!headers['X-Tenant-Id']) {
+        const lastTenant = String(localStorage.getItem('crm_last_tenant') || '').trim()
+        if (lastTenant) headers['X-Tenant-Id'] = lastTenant
+      }
+      if (!headers['X-Tenant-Id']) headers['X-Tenant-Id'] = 'tenant_default'
     }
-    if (!headers['X-Tenant-Id']) headers['X-Tenant-Id'] = 'tenant_default'
+    const res = await fetch(`${API_BASE}${path}`, { ...options, credentials: 'include', headers, body })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const fallback = lang === 'zh' ? '\u8bf7\u6c42\u5931\u8d25' : 'Request failed'
+      const err = new Error(body.message || fallback)
+      err.code = body.code || ''
+      err.details = body.details || {}
+      err.requestId = body.requestId || ''
+      err.status = res.status
+      err.validationErrors = body.validationErrors || null
+      throw err
+    }
+    if (res.status === 204) return null
+    return res.json()
+  })()
+
+  // 注册 GET 请求到 pendingRequests
+  if (dedupeKey) {
+    pendingRequests.set(dedupeKey, requestPromise)
+    // 请求完成后清理
+    requestPromise.finally(() => {
+      pendingRequests.delete(dedupeKey)
+    })
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, credentials: 'include', headers, body })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const fallback = lang === 'zh' ? '\u8bf7\u6c42\u5931\u8d25' : 'Request failed'
-    const err = new Error(body.message || fallback)
-    err.code = body.code || ''
-    err.details = body.details || {}
-    err.requestId = body.requestId || ''
-    err.status = res.status
-    err.validationErrors = body.validationErrors || null
-    throw err
-  }
-  if (res.status === 204) return null
-  return res.json()
+
+  return requestPromise
 }
 
 

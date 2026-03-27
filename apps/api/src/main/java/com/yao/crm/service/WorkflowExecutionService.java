@@ -13,6 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import com.yao.crm.enums.WorkflowStatus;
 import com.yao.crm.enums.ApprovalStatus;
+import com.yao.crm.enums.NodeType;
+import com.yao.crm.enums.ConditionOperator;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.transaction.annotation.Transactional;
@@ -132,71 +134,72 @@ public class WorkflowExecutionService {
      */
     @Transactional(timeout = 30)
     public void executeNextNodes(String executionId) {
-        WorkflowExecution execution = executionRepository.findById(executionId)
-                .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
+        while (true) {
+            WorkflowExecution execution = executionRepository.findById(executionId)
+                    .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
 
-        if (!WorkflowStatus.isRunning(execution.getStatus())) {
-            return;
+            if (!WorkflowStatus.isRunning(execution.getStatus())) {
+                return;
+            }
+
+            WorkflowExecutionContext context = getContext(execution);
+            if (context == null) {
+                context = parseContext(execution);
+                activeExecutions.put(executionId, context);
+            }
+
+            // 如果没有起始节点，找到触发器节点
+            if (context.getCurrentNodeId() == null) {
+                List<WorkflowNode> triggerNodes = nodeRepository.findByWorkflowIdAndNodeType(execution.getWorkflowId(), NodeType.TRIGGER.name());
+                if (triggerNodes.isEmpty()) {
+                    completeExecution(executionId);
+                    return;
+                }
+                List<String> nextNodeIds = new ArrayList<>();
+                nextNodeIds.add(triggerNodes.get(0).getId());
+                context.setNextNodeIds(nextNodeIds);
+            } else {
+                // 从当前节点的连接中获取下一个节点
+                List<WorkflowConnection> outgoing = connectionRepository.findBySourceNodeId(context.getCurrentNodeId());
+                if (outgoing.isEmpty()) {
+                    completeExecution(executionId);
+                    return;
+                }
+                context.setNextNodeIds(outgoing.stream().map(WorkflowConnection::getTargetNodeId).collect(Collectors.toList()));
+            }
+
+            // 执行下一个节点
+            for (String nodeId : context.getNextNodeIds()) {
+                WorkflowNode node = nodeRepository.findById(nodeId).orElse(null);
+                if (node == null) continue;
+
+                context.setCurrentNodeId(nodeId);
+                execution.setCurrentNodeId(nodeId);
+                saveContext(execution, context);
+
+                NodeExecutionResult result = executeNode(node, context, execution);
+
+                context.getNodeResults().put(nodeId, result);
+
+                if (!result.isSuccess()) {
+                    failExecution(executionId, result.getErrorMessage(), result.getErrorDetails());
+                    return;
+                }
+
+                // 如果是结束节点，完成执行
+                if (NodeType.END.name().equals(node.getNodeType())) {
+                    completeExecution(executionId);
+                    return;
+                }
+
+                // 如果节点需要等待（如审批），暂停执行
+                if (result.isWaiting()) {
+                    return;
+                }
+            }
+
+            // 循环继续执行下一个节点（替代递归）
         }
-
-        WorkflowExecutionContext context = getContext(execution);
-        if (context == null) {
-            context = parseContext(execution);
-            activeExecutions.put(executionId, context);
-        }
-
-        // 如果没有起始节点，找到触发器节点
-        if (context.getCurrentNodeId() == null) {
-            List<WorkflowNode> triggerNodes = nodeRepository.findByWorkflowIdAndNodeType(execution.getWorkflowId(), "TRIGGER");
-            if (triggerNodes.isEmpty()) {
-                completeExecution(executionId);
-                return;
-            }
-            List<String> nextNodeIds = new ArrayList<>();
-            nextNodeIds.add(triggerNodes.get(0).getId());
-            context.setNextNodeIds(nextNodeIds);
-        } else {
-            // 从当前节点的连接中获取下一个节点
-            List<WorkflowConnection> outgoing = connectionRepository.findBySourceNodeId(context.getCurrentNodeId());
-            if (outgoing.isEmpty()) {
-                completeExecution(executionId);
-                return;
-            }
-            context.setNextNodeIds(outgoing.stream().map(WorkflowConnection::getTargetNodeId).collect(Collectors.toList()));
-        }
-
-        // 执行下一个节点
-        for (String nodeId : context.getNextNodeIds()) {
-            WorkflowNode node = nodeRepository.findById(nodeId).orElse(null);
-            if (node == null) continue;
-
-            context.setCurrentNodeId(nodeId);
-            execution.setCurrentNodeId(nodeId);
-            saveContext(execution, context);
-
-            NodeExecutionResult result = executeNode(node, context, execution);
-
-            context.getNodeResults().put(nodeId, result);
-
-            if (!result.isSuccess()) {
-                failExecution(executionId, result.getErrorMessage(), result.getErrorDetails());
-                return;
-            }
-
-            // 如果是结束节点，完成执行
-            if ("END".equals(node.getNodeType())) { // Node type is not an enum
-                completeExecution(executionId);
-                return;
-            }
-
-            // 如果节点需要等待（如审批），暂停执行
-            if (result.isWaiting()) {
-                return;
-            }
-        }
-
-        // 继续执行下一个节点
-        executeNextNodes(executionId);
     }
 
     /**
@@ -210,22 +213,27 @@ public class WorkflowExecutionService {
         result.setNodeSubtype(node.getNodeSubtype());
 
         try {
-            switch (node.getNodeType()) {
-                case "TRIGGER":
+            NodeType nodeType = NodeType.fromString(node.getNodeType());
+            if (nodeType == null) {
+                result.setSuccess(true);
+                return result;
+            }
+            switch (nodeType) {
+                case TRIGGER:
                     return executeTriggerNode(node, context, result);
-                case "CONDITION":
+                case CONDITION:
                     return executeConditionNode(node, context, result);
-                case "ACTION":
+                case ACTION:
                     return executeActionNode(node, context, result);
-                case "NOTIFICATION":
+                case NOTIFICATION:
                     return executeNotificationNode(node, context, result);
-                case "APPROVAL":
+                case APPROVAL:
                     return executeApprovalNode(node, context, result, execution);
-                case "WAIT":
+                case WAIT:
                     return executeWaitNode(node, context, result);
-                case "CC":
+                case CC:
                     return executeCcNode(node, context, result);
-                case "END":
+                case END:
                     return executeEndNode(node, context, result);
                 default:
                     result.setSuccess(true);
@@ -318,35 +326,40 @@ public class WorkflowExecutionService {
      */
     private boolean evaluateSingleCondition(Object fieldValue, String operator, Object compareValue) {
         if (fieldValue == null) {
-            return "IS_NULL".equals(operator) || "IS_EMPTY".equals(operator);
+            return ConditionOperator.IS_NULL.name().equals(operator) || ConditionOperator.IS_EMPTY.name().equals(operator);
         }
 
-        switch (operator) {
-            case "EQUALS":
+        ConditionOperator op = ConditionOperator.fromString(operator);
+        if (op == null) {
+            return false;
+        }
+
+        switch (op) {
+            case EQUALS:
                 return fieldValue.toString().equals(compareValue.toString());
-            case "NOT_EQUALS":
+            case NOT_EQUALS:
                 return !fieldValue.toString().equals(compareValue.toString());
-            case "CONTAINS":
+            case CONTAINS:
                 return fieldValue.toString().contains(compareValue.toString());
-            case "NOT_CONTAINS":
+            case NOT_CONTAINS:
                 return !fieldValue.toString().contains(compareValue.toString());
-            case "STARTS_WITH":
+            case STARTS_WITH:
                 return fieldValue.toString().startsWith(compareValue.toString());
-            case "ENDS_WITH":
+            case ENDS_WITH:
                 return fieldValue.toString().endsWith(compareValue.toString());
-            case "GREATER_THAN":
+            case GREATER_THAN:
                 return compareNumbers(fieldValue, compareValue) > 0;
-            case "LESS_THAN":
+            case LESS_THAN:
                 return compareNumbers(fieldValue, compareValue) < 0;
-            case "GREATER_EQUAL":
+            case GREATER_EQUAL:
                 return compareNumbers(fieldValue, compareValue) >= 0;
-            case "LESS_EQUAL":
+            case LESS_EQUAL:
                 return compareNumbers(fieldValue, compareValue) <= 0;
-            case "IS_NULL":
-            case "IS_EMPTY":
+            case IS_NULL:
+            case IS_EMPTY:
                 return fieldValue == null || fieldValue.toString().isEmpty();
-            case "IS_NOT_NULL":
-            case "IS_NOT_EMPTY":
+            case IS_NOT_NULL:
+            case IS_NOT_EMPTY:
                 return fieldValue != null && !fieldValue.toString().isEmpty();
             default:
                 return false;

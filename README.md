@@ -65,49 +65,64 @@ crm/
 
 ## 5. 本地开发快速开始
 
-### 5.1 环境要求
+### 5.1 环境要求 | Environment Requirements
 
-- JDK 8
-- Maven 3.9+
-- Node.js 18+
-- MySQL 8+
+| 工具 Tool | 版本 Version | 说明 Note |
+|-----------|-------------|----------|
+| JDK | 8+ | Java 开发环境 |
+| Node.js | 18+ | 前端运行环境 |
+| MySQL | 8.0+ | 主数据库 |
+| Redis | 6.0+ | 缓存（可选，默认使用本地缓存） |
+| Maven | 3.6+ | Java 构建工具 |
 
-### 5.2 安装依赖
+### 5.2 一键启动指南 | Quick Start Guide
+
+> 复制以下命令，按顺序执行即可启动项目
 
 ```bash
-npm install
-```
+# 1. 克隆项目 | Clone the project
+git clone https://github.com/yaowenjie0805-sys/Saas-Crm.git
+cd Saas-Crm
 
-### 5.3 初始化数据库（首次）
+# 2. 配置环境变量 | Configure environment
+# Windows:
+copy .env.example .env
+copy .env.backend.local.example .env.backend.local
+# Linux/Mac:
+cp .env.example .env
+cp .env.backend.local.example .env.backend.local
+# 编辑 .env 和 .env.backend.local 填入你的数据库密码等配置
 
-```bash
-# Windows
+# 3. 初始化数据库 | Initialize database
+# Windows:
 npm run db:init
-
-# Linux/macOS
+# Linux/Mac:
 bash scripts/init-db.sh root root crm_local
-```
 
-### 5.4 启动服务
-
-```bash
-# 后端
+# 4. 启动后端 | Start backend
 npm run dev:backend
+# 或者使用更稳定的脚本:
+# npm run dev:backend:stable
 
-# 或更稳定的后端启动脚本
-npm run dev:backend:stable
-
-# 前端
+# 5. 启动前端（另开一个终端）| Start frontend (new terminal)
+npm install
 npm run dev
+
+# 6. 访问 | Access
+# 前端 Frontend: http://localhost:5173
+# 后端 API: http://localhost:8080
+# Swagger UI: http://localhost:8080/swagger-ui.html
 ```
 
-默认地址：
+### 5.3 默认访问地址 | Default URLs
 
-- 前端：`http://localhost:5173`
-- 后端：`http://localhost:8080`
-- 健康检查：`http://localhost:8080/api/health`
-- API 文档（Swagger UI）：`http://localhost:8080/swagger-ui.html`
-- OpenAPI JSON：`http://localhost:8080/api-docs`
+| 服务 Service | 地址 URL |
+|-------------|---------|
+| 前端 Frontend | `http://localhost:5173` |
+| 后端 Backend | `http://localhost:8080` |
+| 健康检查 Health Check | `http://localhost:8080/api/health` |
+| Swagger UI | `http://localhost:8080/swagger-ui.html` |
+| OpenAPI JSON | `http://localhost:8080/api-docs` |
 
 ## 6. 数据库迁移与修复
 
@@ -197,13 +212,77 @@ npm run test:full
 npm run validate:env
 ```
 
-## 9. 常见问题
+## 9. 常见问题 | FAQ
 
-### 9.1 启动时报 Flyway 校验失败
+### 9.1 启动时报 Flyway 校验失败 | Flyway Checksum Mismatch
 
 先执行：`npm run db:flyway:repair`。
 
-### 9.2 后端起来了但飞书发不出去
+### 9.2 数据库连接失败怎么办？| Database Connection Failed
+
+检查以下几点：
+1. MySQL 服务是否启动：`mysql -u root -p`
+2. 数据库是否存在：`SHOW DATABASES LIKE 'crm_local';`
+3. `.env` 文件中的 `DB_URL`、`DB_USER`、`DB_PASSWORD` 是否正确
+4. MySQL 连接数是否已满：`SHOW STATUS LIKE 'Threads_connected';`
+
+### 9.3 端口被占用怎么办？| Port Already in Use
+
+Windows:
+```powershell
+# 查看 8080 端口占用
+netstat -ano | findstr :8080
+# 结束进程（PID 为上一步查到的进程ID）
+taskkill /PID <进程ID> /F
+```
+
+Linux/Mac:
+```bash
+# 查看 8080 端口占用
+lsof -i :8080
+# 结束进程
+kill -9 <PID>
+```
+
+### 9.4 Maven 下载慢怎么配置镜像？| Maven Mirror Configuration
+
+编辑 Maven 配置文件（Windows: `~/.m2/settings.xml`，Linux/Mac: `~/.m2/settings.xml`）：
+
+```xml
+<mirrors>
+  <mirror>
+    <id>aliyun</id>
+    <mirrorOf>central</mirrorOf>
+    <name>Aliyun Maven Mirror</name>
+    <url>https://maven.aliyun.com/repository/public</url>
+  </mirror>
+</mirrors>
+```
+
+### 9.5 前端启动报错 Node 版本不对？| Node Version Mismatch
+
+项目要求 Node.js 18+，推荐使用 nvm 管理多版本：
+
+```bash
+# 安装 nvm (Windows 用户下载 nvm-windows)
+# Windows: https://github.com/coreybutler/nvm-windows/releases
+
+# 安装并切换到 Node 18
+nvm install 18
+nvm use 18
+
+# 验证版本
+node -v
+```
+
+### 9.6 如何切换中英文？| How to Switch Language?
+
+前端支持中英文切换：
+1. 点击页面右上角用户头像
+2. 选择"设置 / Settings"
+3. 在"语言 / Language"下拉框中选择"中文"或"English"
+
+### 9.7 后端起来了但飞书发不出去 | Feishu Integration Not Working
 
 优先检查：
 
@@ -211,7 +290,7 @@ npm run validate:env
 2. `INTEGRATION_FEISHU_RECEIVE_ID` 是否可用
 3. 应用权限是否包含消息发送相关 scope
 
-### 9.3 本地改了配置但不生效
+### 9.8 本地改了配置但不生效 | Config Changes Not Taking Effect
 
 确认你是通过 `npm run dev:backend` 或 `npm run dev:backend:stable` 启动（两者都会走 `run-maven.mjs` 读取本地 env）。
 

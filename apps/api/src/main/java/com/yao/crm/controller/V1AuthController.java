@@ -23,6 +23,7 @@ import javax.validation.Valid;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -208,7 +209,7 @@ public class V1AuthController extends BaseApiController {
             user = new UserAccount();
             user.setId("u_oidc_" + Long.toString(System.currentTimeMillis(), 36));
             user.setUsername(identity.getUsername());
-            user.setPassword(passwordEncoder.encode("oidc-user"));
+            user.setPassword(passwordEncoder.encode(generateSecureRandomPassword()));
             user.setRole(ssoAuthService.defaultRole());
             user.setDisplayName(identity.getDisplayName());
             user.setOwnerScope(identity.getUsername());
@@ -287,6 +288,12 @@ public class V1AuthController extends BaseApiController {
 
     private String safeOwner(UserAccount user) {
         return isBlank(user.getOwnerScope()) ? user.getUsername() : user.getOwnerScope();
+    }
+
+    private String generateSecureRandomPassword() {
+        // Generate a strong random password that meets common password policy requirements
+        // Format: UUID-based + suffix with uppercase, lowercase, digit, and special char
+        return UUID.randomUUID().toString().replace("-", "") + "!Aa1";
     }
 }
 

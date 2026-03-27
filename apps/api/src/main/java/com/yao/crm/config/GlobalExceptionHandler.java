@@ -254,23 +254,134 @@ public class GlobalExceptionHandler {
 
     // ============ 系统异常处理 ============
 
+    /**
+     * 通用异常兜底处理
+     * 区分可恢复异常（如 IO/网络异常）和不可恢复异常（如 Error）
+     * 返回相应的 HTTP 状态码和错误分类
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleAnyException(Exception ex, HttpServletRequest request) {
-        log.error("Unexpected exception at {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+        // 构建请求上下文日志
+        String requestContext = buildRequestContext(request);
         
+        // 判断异常类型并返回相应响应
+        if (isRecoverableIOException(ex)) {
+            log.warn("Recoverable IO error {}: {}", requestContext, ex.getMessage());
+            return buildErrorResponse(ex, request, HttpStatus.SERVICE_UNAVAILABLE, "ServiceUnavailable", "service_unavailable", "RecoverableError");
+        }
+        
+        if (isDatabaseTimeoutOrConnectionError(ex)) {
+            log.warn("Database connection error {}: {}", requestContext, ex.getMessage());
+            return buildErrorResponse(ex, request, HttpStatus.SERVICE_UNAVAILABLE, "DatabaseUnavailable", "database_unavailable", "DatabaseError");
+        }
+        
+        if (isIllegalArgument(ex)) {
+            log.warn("Bad request {}: {}", requestContext, ex.getMessage());
+            return buildErrorResponse(ex, request, HttpStatus.BAD_REQUEST, "BadRequest", "bad_request", "ValidationError");
+        }
+        
+        if (isSecurityError(ex)) {
+            log.warn("Security error {}: {}", requestContext, ex.getMessage());
+            return buildErrorResponse(ex, request, HttpStatus.INTERNAL_SERVER_ERROR, "SecurityError", "internal_error", "SecurityError");
+        }
+        
+        // 其他未预期异常：记录完整堆栈
+        log.error("Unexpected error {}: {}", requestContext, ex.getMessage(), ex);
+        return buildErrorResponse(ex, request, HttpStatus.INTERNAL_SERVER_ERROR, "InternalError", "internal_error", sanitizeExceptionType(ex));
+    }
+    
+    /**
+     * 构建请求上下文日志字符串
+     */
+    private String buildRequestContext(HttpServletRequest request) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[").append(request.getMethod()).append(" ").append(request.getRequestURI()).append("]");
+        
+        String userId = request.getHeader("X-User-Id");
+        String tenantId = request.getHeader("X-Tenant-Id");
+        
+        if (userId != null || tenantId != null) {
+            sb.append(" user=").append(userId != null ? userId : "anonymous");
+            sb.append(" tenant=").append(tenantId != null ? tenantId : "none");
+        }
+        
+        // 请求参数概要（防止敏感信息泄露）
+        String queryString = request.getQueryString();
+        if (queryString != null && !queryString.isEmpty()) {
+            sb.append(" qs=").append(queryString.length() > 100 ? queryString.substring(0, 100) + "..." : queryString);
+        }
+        
+        return sb.toString();
+    }
+    
+    /**
+     * 判断是否为可恢复的 IO 异常
+     */
+    private boolean isRecoverableIOException(Exception ex) {
+        return ex instanceof java.net.SocketTimeoutException
+                || ex instanceof java.net.ConnectException
+                || ex instanceof java.net.UnknownHostException
+                || (ex instanceof java.io.IOException && !(ex instanceof java.io.EOFException));
+    }
+    
+    /**
+     * 判断是否为数据库超时或连接错误
+     */
+    private boolean isDatabaseTimeoutOrConnectionError(Exception ex) {
+        String className = ex.getClass().getName();
+        if (className.startsWith("java.sql.") || className.startsWith("javax.persistence.")) {
+            return true;
+        }
+        if (className.startsWith("org.springframework.dao.") || className.startsWith("org.hibernate.")) {
+            return true;
+        }
+        // 检查常见的数据库连接异常消息
+        String message = ex.getMessage();
+        if (message != null) {
+            String lowerMessage = message.toLowerCase();
+            return lowerMessage.contains("connection") 
+                    || lowerMessage.contains("timeout")
+                    || lowerMessage.contains("unavailable")
+                    || lowerMessage.contains("refused");
+        }
+        return false;
+    }
+    
+    /**
+     * 判断是否为 IllegalArgumentException（注意：IllegalArgumentException 已在 handleBadRequest 中处理，
+     * 但如果逃逸到这里，仍需要正确分类）
+     */
+    private boolean isIllegalArgument(Exception ex) {
+        return ex instanceof IllegalArgumentException;
+    }
+    
+    /**
+     * 判断是否为安全相关错误
+     */
+    private boolean isSecurityError(Exception ex) {
+        String className = ex.getClass().getName();
+        return className.startsWith("org.springframework.security.")
+                || className.contains("AccessDenied")
+                || className.contains("Authentication");
+    }
+    
+    /**
+     * 构建错误响应
+     */
+    private ResponseEntity<ApiErrorResponse> buildErrorResponse(Exception ex, HttpServletRequest request, 
+            HttpStatus status, String errorType, String messageKey, String sanitizedType) {
         ApiErrorResponse body = ApiErrorResponse.of(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Internal Server Error",
-                codeFor(request, "INTERNAL_ERROR", "internal_error"),
-                i18nService.msg(request, "internal_error"),
+                status.value(),
+                status.getReasonPhrase(),
+                codeFor(request, errorType, messageKey),
+                i18nService.msg(request, messageKey),
                 request.getRequestURI(),
                 traceId(request)
         );
         Map<String, Object> details = new LinkedHashMap<String, Object>();
-        // 异常类型脱敏：只返回分类名，不暴露具体类名
-        details.put("type", sanitizeExceptionType(ex));
+        details.put("type", sanitizedType);
         body.setDetails(details);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+        return ResponseEntity.status(status).body(body);
     }
 
     /**

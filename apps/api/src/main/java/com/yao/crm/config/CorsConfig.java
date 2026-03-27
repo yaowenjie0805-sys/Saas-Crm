@@ -40,7 +40,7 @@ public class CorsConfig implements WebMvcConfigurer {
         registry.addMapping("/api/**")
                 .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PATCH", "DELETE", "PUT", "OPTIONS")
-                .allowedHeaders("Content-Type", "Authorization", "X-Tenant-Id", "X-Requested-With", "Accept", "Origin")
+                .allowedHeaders("Content-Type", "Authorization", "X-Tenant-Id", "X-Requested-With", "Accept", "Origin", "Accept-Language")
                 .allowCredentials(true)
                 .exposedHeaders(TraceIdInterceptor.TRACE_ID_HEADER, "X-CRM-Cache", "X-CRM-Cache-Tier", "X-CRM-Cache-Fallback");
     }

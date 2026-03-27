@@ -47,10 +47,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -58,6 +60,7 @@ import java.util.*;
 @Tag(name = "Commerce", description = "Products, quotes, orders, contracts and payments")
 @RestController
 @RequestMapping("/api/v1")
+@Validated
 public class V1CommerceController extends BaseApiController {
 
     private static final Set<String> PRODUCT_STATUSES = new HashSet<String>(Arrays.asList("ACTIVE", "INACTIVE"));
@@ -266,7 +269,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @GetMapping("/price-books/{id}/items")
-    public ResponseEntity<?> listPriceBookItems(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> listPriceBookItems(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -284,7 +287,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/price-books/{id}/items")
-    public ResponseEntity<?> upsertPriceBookItem(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody PriceBookItemRequest payload) {
+    public ResponseEntity<?> upsertPriceBookItem(HttpServletRequest request, @PathVariable @NotBlank String id, @Valid @RequestBody PriceBookItemRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -399,7 +402,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @GetMapping("/quotes/{id}/items")
-    public ResponseEntity<?> listQuoteItems(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> listQuoteItems(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -423,7 +426,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/quotes/{id}/items")
-    public ResponseEntity<?> replaceQuoteItems(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody List<QuoteItemRequest> payload) {
+    public ResponseEntity<?> replaceQuoteItems(HttpServletRequest request, @PathVariable @NotBlank String id, @Valid @RequestBody List<QuoteItemRequest> payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -489,7 +492,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/quotes/{id}/submit")
-    public ResponseEntity<?> submitQuote(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> submitQuote(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -536,12 +539,12 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/quotes/{id}/accept")
-    public ResponseEntity<?> acceptQuote(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> acceptQuote(HttpServletRequest request, @PathVariable @NotBlank String id) {
         return transitionQuote(request, id, Collections.singletonList("APPROVED"), "ACCEPTED", "quote_accepted");
     }
 
     @PostMapping("/quotes/{id}/to-order")
-    public ResponseEntity<?> quoteToOrder(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> quoteToOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -644,7 +647,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @GetMapping("/quotes/{id}/versions")
-    public ResponseEntity<?> listQuoteVersions(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> listQuoteVersions(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -679,7 +682,7 @@ public class V1CommerceController extends BaseApiController {
 
     @PostMapping("/quotes/{id}/versions")
     public ResponseEntity<?> createQuoteVersion(HttpServletRequest request,
-                                                @PathVariable String id,
+                                                @PathVariable @NotBlank String id,
                                                 @Valid @RequestBody(required = false) QuoteVersionCreateRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
@@ -761,22 +764,22 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/orders/{id}/confirm")
-    public ResponseEntity<?> confirmOrder(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> confirmOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
         return transitionOrder(request, id, "DRAFT", "CONFIRMED", "order_confirmed");
     }
 
     @PostMapping("/orders/{id}/fulfill")
-    public ResponseEntity<?> fulfillOrder(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> fulfillOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
         return transitionOrder(request, id, "CONFIRMED", "FULFILLING", "order_fulfilling");
     }
 
     @PostMapping("/orders/{id}/complete")
-    public ResponseEntity<?> completeOrder(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> completeOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
         return transitionOrder(request, id, "FULFILLING", "COMPLETED", "order_completed");
     }
 
     @PostMapping("/orders/{id}/cancel")
-    public ResponseEntity<?> cancelOrder(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> cancelOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -799,7 +802,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/orders/{id}/to-contract")
-    public ResponseEntity<?> orderToContract(HttpServletRequest request, @PathVariable String id) {
+    public ResponseEntity<?> orderToContract(HttpServletRequest request, @PathVariable @NotBlank String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }

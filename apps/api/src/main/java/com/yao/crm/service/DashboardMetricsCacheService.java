@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,15 +53,16 @@ public class DashboardMetricsCacheService {
 
     private static final class CacheEntry {
         private final Object value;
-        private final long expireAt;
 
-        private CacheEntry(Object value, long expireAt) {
+        private CacheEntry(Object value) {
             this.value = value;
-            this.expireAt = expireAt;
         }
     }
 
-    private final Map<String, CacheEntry> localCache = new ConcurrentHashMap<String, CacheEntry>();
+    private final Cache<String, CacheEntry> localCache = Caffeine.newBuilder()
+            .maximumSize(10000)
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .build();
     private final Map<String, Long> localTenantVersions = new ConcurrentHashMap<String, Long>();
     private final Map<String, Long> localDomainVersions = new ConcurrentHashMap<String, Long>();
     private final RedisTemplate<String, Object> redisTemplate;
@@ -115,8 +118,6 @@ public class DashboardMetricsCacheService {
         String ns = normalizeNamespace(namespace);
         String body = key == null ? "" : key.trim();
         long ttlMs = ttlMsOverride > 0 ? ttlMsOverride : namespaceTtlMs(ns);
-        long now = System.currentTimeMillis();
-        pruneExpiredEntries(now, 64);
         boolean fallback = false;
 
         long version = localTenantVersions.containsKey(tenant) ? localTenantVersions.get(tenant) : 0L;
@@ -135,8 +136,8 @@ public class DashboardMetricsCacheService {
         long domainVersion = loadDomainVersion(tenant, namespaceDomain(ns));
         String finalKey = cacheDataKey(tenant, ns, version, domainVersion, body);
 
-        CacheEntry local = localCache.get(finalKey);
-        if (local != null && local.expireAt >= now) {
+        CacheEntry local = localCache.getIfPresent(finalKey);
+        if (local != null) {
             @SuppressWarnings("unchecked")
             T value = (T) local.value;
             recordCacheMetric("hit", "LOCAL", fallback, ns);
@@ -149,7 +150,7 @@ public class DashboardMetricsCacheService {
                 if (cached != null) {
                     @SuppressWarnings("unchecked")
                     T value = (T) cached;
-                    localCache.put(finalKey, new CacheEntry(value, now + ttlMs));
+                    localCache.put(finalKey, new CacheEntry(value));
                     recordCacheMetric("hit", "REDIS", false, ns);
                     return new CachedValue<T>(value, true, "REDIS", false);
                 }
@@ -160,7 +161,7 @@ public class DashboardMetricsCacheService {
         }
 
         T loaded = loader.get();
-        localCache.put(finalKey, new CacheEntry(loaded, now + ttlMs));
+        localCache.put(finalKey, new CacheEntry(loaded));
         if (canUseRedis() && !fallback) {
             try {
                 redisTemplate.opsForValue().set(finalKey, loaded, ttlMs, TimeUnit.MILLISECONDS);
@@ -175,7 +176,7 @@ public class DashboardMetricsCacheService {
 
     @Scheduled(fixedDelayString = "${crm.cache.local.cleanup-interval-ms:60000}")
     public void cleanupExpiredLocalCacheEntries() {
-        pruneExpiredEntries(System.currentTimeMillis(), Integer.MAX_VALUE);
+        localCache.cleanUp();
     }
 
     public void evictTenant(String tenantId) {
@@ -204,7 +205,7 @@ public class DashboardMetricsCacheService {
         }
         localTenantVersions.put(tenant, nextVersion);
         String prefix = cacheDataPrefix(tenant);
-        Iterator<String> it = localCache.keySet().iterator();
+        Iterator<String> it = localCache.asMap().keySet().iterator();
         while (it.hasNext()) {
             String cacheKey = it.next();
             if (cacheKey.startsWith(prefix)) {
@@ -229,7 +230,7 @@ public class DashboardMetricsCacheService {
         }
         localDomainVersions.put(domainKey, nextVersion);
         String prefix = cacheDataPrefix(tenant) + domain + ":";
-        Iterator<String> it = localCache.keySet().iterator();
+        Iterator<String> it = localCache.asMap().keySet().iterator();
         while (it.hasNext()) {
             String cacheKey = it.next();
             if (cacheKey.startsWith(prefix)) {
@@ -352,24 +353,5 @@ public class DashboardMetricsCacheService {
                 "fallback", fallback ? "1" : "0",
                 "namespace", namespaceDomain(namespace)
         ).increment();
-    }
-
-    private void pruneExpiredEntries(long now, int maxRemovals) {
-        if (localCache.isEmpty()) {
-            return;
-        }
-        int removed = 0;
-        Iterator<Map.Entry<String, CacheEntry>> it = localCache.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, CacheEntry> entry = it.next();
-            CacheEntry cacheEntry = entry.getValue();
-            if (cacheEntry != null && cacheEntry.expireAt < now) {
-                it.remove();
-                removed++;
-                if (removed >= maxRemovals) {
-                    return;
-                }
-            }
-        }
     }
 }

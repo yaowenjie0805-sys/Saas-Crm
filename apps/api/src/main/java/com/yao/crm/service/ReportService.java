@@ -47,7 +47,6 @@ public class ReportService {
             java.util.Collections.unmodifiableList(java.util.Arrays.asList("APPROVED", "ACCEPTED"));
     private static final List<String> QUOTE_ACCEPTED_ONLY = java.util.Collections.singletonList("ACCEPTED");
     private static final List<String> PAYMENT_RECEIVED_ONLY = java.util.Collections.singletonList("RECEIVED");
-    private static final long IDENTITY_SCOPE_CACHE_TTL_MS = 30_000L;
 
     private final CustomerRepository customerRepository;
     private final OpportunityRepository opportunityRepository;
@@ -609,34 +608,28 @@ public class ReportService {
         if (isBlank(role)) return null;
         String normalizedRole = ReportUtils.normalizeRole(role);
         String cacheKey = tenantId + "|" + normalizedRole;
-        IdentityScopeCacheEntry cached = roleIdentityCache.getIfPresent(cacheKey);
-        long now = System.currentTimeMillis();
-        if (cached != null && cached.expiresAtMs > now) {
-            return cached.identities;
-        }
-        Set<String> identities = loadRoleIdentitiesFromRepository(tenantId, normalizedRole);
-        roleIdentityCache.put(cacheKey, new IdentityScopeCacheEntry(
-                Collections.unmodifiableSet(new HashSet<String>(identities)),
-                now + IDENTITY_SCOPE_CACHE_TTL_MS
-        ));
-        return identities;
+        IdentityScopeCacheEntry entry = roleIdentityCache.get(cacheKey, new java.util.function.Function<String, IdentityScopeCacheEntry>() {
+            @Override
+            public IdentityScopeCacheEntry apply(String k) {
+                Set<String> identities = loadRoleIdentitiesFromRepository(tenantId, normalizedRole);
+                return new IdentityScopeCacheEntry(Collections.unmodifiableSet(new HashSet<String>(identities)));
+            }
+        });
+        return entry.identities;
     }
 
     private Set<String> loadDepartmentIdentities(String tenantId, String department) {
         if (isBlank(department)) return null;
         String normalizedDepartment = normalized(department);
         String cacheKey = tenantId + "|" + normalizedDepartment;
-        IdentityScopeCacheEntry cached = departmentIdentityCache.getIfPresent(cacheKey);
-        long now = System.currentTimeMillis();
-        if (cached != null && cached.expiresAtMs > now) {
-            return cached.identities;
-        }
-        Set<String> identities = loadDepartmentIdentitiesFromRepository(tenantId, normalizedDepartment);
-        departmentIdentityCache.put(cacheKey, new IdentityScopeCacheEntry(
-                Collections.unmodifiableSet(new HashSet<String>(identities)),
-                now + IDENTITY_SCOPE_CACHE_TTL_MS
-        ));
-        return identities;
+        IdentityScopeCacheEntry entry = departmentIdentityCache.get(cacheKey, new java.util.function.Function<String, IdentityScopeCacheEntry>() {
+            @Override
+            public IdentityScopeCacheEntry apply(String k) {
+                Set<String> identities = loadDepartmentIdentitiesFromRepository(tenantId, normalizedDepartment);
+                return new IdentityScopeCacheEntry(Collections.unmodifiableSet(new HashSet<String>(identities)));
+            }
+        });
+        return entry.identities;
     }
 
     private Set<String> loadRoleIdentitiesFromRepository(String tenantId, String role) {
@@ -661,11 +654,9 @@ public class ReportService {
 
     private static final class IdentityScopeCacheEntry {
         private final Set<String> identities;
-        private final long expiresAtMs;
 
-        private IdentityScopeCacheEntry(Set<String> identities, long expiresAtMs) {
+        private IdentityScopeCacheEntry(Set<String> identities) {
             this.identities = identities;
-            this.expiresAtMs = expiresAtMs;
         }
     }
 }
