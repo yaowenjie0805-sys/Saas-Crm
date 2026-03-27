@@ -1,0 +1,43 @@
+# IDE and editor directories
+.git
+.idea
+.vscode
+.arts
+.lingma
+.qoder
+.codeartsdoer
+
+# Dependencies and build artifacts
+node_modules
+target
+*.class
+*.jar
+*.war
+
+# Logs and backups
+logs
+backups
+*.log
+
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+
+# Test results and coverage
+test-results
+coverage
+.nyc_output
+
+# Documentation (not needed in image)
+docs
+*.md
+!README.md
+
+# CI/CD files
+.github
+
+# Local development files
+*.local
+*.bak
+*.tmp

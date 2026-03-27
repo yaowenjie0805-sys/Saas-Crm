@@ -22,6 +22,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(Runtime.getRuntime().availableProcessors() * 4);
         executor.setQueueCapacity(1000);
         executor.setThreadNamePrefix("report-export-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setKeepAliveSeconds(60);
         executor.initialize();
@@ -38,6 +39,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(Runtime.getRuntime().availableProcessors() * 3);
         executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("audit-export-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setKeepAliveSeconds(60);
         executor.initialize();
@@ -54,6 +56,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(Runtime.getRuntime().availableProcessors() * 2);
         executor.setQueueCapacity(200);
         executor.setThreadNamePrefix("async-task-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setKeepAliveSeconds(30);
         executor.initialize();

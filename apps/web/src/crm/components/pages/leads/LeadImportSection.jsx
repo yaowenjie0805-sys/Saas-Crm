@@ -95,13 +95,19 @@ export default function LeadImportSection({
           <div className="table-row table-head-row">
             <span>{t('lineNo')}</span><span>{t('summary')}</span><span>{t('errorReason')}</span>
           </div>
-          {importFailedRowsView.map((row) => (
-            <div key={row.key} className="table-row">
-              <span>{row.lineNo}</span>
-              <span title={row.rawLine || ''}>{row.rawLineSnippet}</span>
-              <span title={row.errorMessage || row.errorCode || ''}>{row.errorSnippet}</span>
-            </div>
-          ))}
+          <VirtualListTable
+            rows={importFailedRowsView}
+            viewportHeight={200}
+            rowHeight={42}
+            getRowKey={(row) => row.key}
+            renderRow={(row) => (
+              <div key={row.key} className="table-row">
+                <span>{row.lineNo}</span>
+                <span title={row.rawLine || ''}>{row.rawLineSnippet}</span>
+                <span title={row.errorMessage || row.errorCode || ''}>{row.errorSnippet}</span>
+              </div>
+            )}
+          />
         </div>
       )}
 

@@ -1,36 +1,60 @@
 # =============================================
 # CRM Backend Production Dockerfile
 # Multi-stage build for minimal image size
+# Optimized layer caching for faster builds
 # =============================================
 
-# Stage 1: Build
-FROM maven:3.9-eclipse-temurin-8 AS builder
+# Stage 1: Dependency resolution (cached layer)
+# This layer only rebuilds when pom.xml changes
+FROM maven:3.9-eclipse-temurin-8 AS dependencies
 WORKDIR /build
 COPY apps/api/pom.xml .
 RUN mvn dependency:go-offline -B
-COPY apps/api/src ./src
-RUN mvn package -DskipTests -B
 
-# Stage 2: Runtime
+# Stage 2: Build application
+# This layer rebuilds when source code changes
+FROM maven:3.9-eclipse-temurin-8 AS builder
+WORKDIR /build
+# Copy pom.xml first for better caching
+COPY --from=dependencies /build/pom.xml .
+# Copy maven repository from dependencies stage
+COPY --from=dependencies /root/.m2 /root/.m2
+# Copy source code
+COPY apps/api/src ./src
+# Build the application
+RUN mvn package -DskipTests -B -o
+
+# Stage 3: Runtime image (minimal size)
 FROM eclipse-temurin:8-jre-alpine
 LABEL maintainer="crm-team"
 LABEL description="CRM Backend API"
+LABEL version="1.0.0"
 
+# Create non-root user for security
 RUN addgroup -S crm && adduser -S crm -G crm
 
 WORKDIR /app
+
+# Copy only the built artifact
 COPY --from=builder /build/target/crm-backend-1.0.0.jar app.jar
 
+# Set proper ownership
 RUN chown -R crm:crm /app
+
+# Switch to non-root user
 USER crm
 
 EXPOSE 8080
 
+# Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
   CMD wget -q --spider http://localhost:8080/api/health/live || exit 1
 
+# JVM optimization for containerized environments
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
+  "-XX:+UseG1GC", \
+  "-XX:MaxGCPauseMillis=200", \
   "-Djava.security.egd=file:/dev/./urandom", \
   "-jar", "app.jar"]

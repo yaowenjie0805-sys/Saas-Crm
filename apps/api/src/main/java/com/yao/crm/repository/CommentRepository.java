@@ -4,6 +4,7 @@ import com.yao.crm.entity.Comment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -141,4 +142,18 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
      * 删除实体所有评论
      */
     void deleteByTenantIdAndEntityTypeAndEntityId(String tenantId, String entityType, String entityId);
+
+    /**
+     * 原子递增父评论的回复计数
+     */
+    @Modifying
+    @Query("UPDATE Comment c SET c.replyCount = c.replyCount + 1 WHERE c.id = :parentId")
+    void incrementReplyCount(@Param("parentId") String parentId);
+
+    /**
+     * 原子递减父评论的回复计数
+     */
+    @Modifying
+    @Query("UPDATE Comment c SET c.replyCount = CASE WHEN c.replyCount > 0 THEN c.replyCount - 1 ELSE 0 END WHERE c.id = :parentId")
+    void decrementReplyCount(@Param("parentId") String parentId);
 }

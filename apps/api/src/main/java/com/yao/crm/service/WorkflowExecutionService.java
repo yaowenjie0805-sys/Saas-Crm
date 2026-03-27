@@ -13,13 +13,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import com.yao.crm.enums.WorkflowStatus;
 import com.yao.crm.enums.ApprovalStatus;
-import com.yao.crm.enums.WorkflowStatus;
-import com.yao.crm.enums.ApprovalStatus;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -39,7 +39,10 @@ public class WorkflowExecutionService {
     private final ObjectMapper objectMapper;
 
     // 执行中的工作流缓存（用于处理异步审批等场景）
-    private final Map<String, WorkflowExecutionContext> activeExecutions = new ConcurrentHashMap<>();
+    private final Cache<String, WorkflowExecutionContext> activeExecutions = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(24, TimeUnit.HOURS)
+            .build();
 
     public WorkflowExecutionService(
             WorkflowDefinitionRepository workflowRepository,
@@ -677,7 +680,7 @@ public class WorkflowExecutionService {
         }
 
         executionRepository.save(execution);
-        activeExecutions.remove(executionId);
+        activeExecutions.invalidate(executionId);
 
         log.info("Workflow execution completed: {}", executionId);
     }
@@ -702,7 +705,7 @@ public class WorkflowExecutionService {
         }
 
         executionRepository.save(execution);
-        activeExecutions.remove(executionId);
+        activeExecutions.invalidate(executionId);
 
         log.error("Workflow execution failed: {} - {}", executionId, errorMessage);
     }
@@ -730,7 +733,7 @@ public class WorkflowExecutionService {
         }
 
         executionRepository.save(execution);
-        activeExecutions.remove(executionId);
+        activeExecutions.invalidate(executionId);
 
         log.info("Workflow execution cancelled: {} by {}", executionId, cancelledBy);
     }
@@ -814,7 +817,7 @@ public class WorkflowExecutionService {
     }
 
     private WorkflowExecutionContext getContext(WorkflowExecution execution) {
-        return activeExecutions.get(execution.getId());
+        return activeExecutions.getIfPresent(execution.getId());
     }
 
     private WorkflowExecutionContext parseContext(WorkflowExecution execution) {

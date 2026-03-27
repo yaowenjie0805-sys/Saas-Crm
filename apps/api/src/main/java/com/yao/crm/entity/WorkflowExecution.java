@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "workflow_executions")
-public class WorkflowExecution {
+public class WorkflowExecution extends BaseEntity {
 
     @Id
     @Column(length = 64)

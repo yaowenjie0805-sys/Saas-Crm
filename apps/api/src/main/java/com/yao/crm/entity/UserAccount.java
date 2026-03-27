@@ -8,7 +8,7 @@ import javax.persistence.Table;
 
 @Entity
 @Table(name = "user_accounts")
-public class UserAccount {
+public class UserAccount extends BaseEntity {
 
     @Id
     @Column(length = 64)

@@ -42,6 +42,8 @@ import java.util.Set;
 public class LeadImportService {
 
     private static final Set<String> LEAD_STATUSES = new HashSet<String>(Arrays.asList("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED"));
+    private static final int DEDUPE_BATCH_SIZE = 500;
+    private static final int SAVE_BATCH_SIZE = 100;
 
     private final LeadRepository leadRepository;
     private final LeadImportJobRepository jobRepository;
@@ -311,9 +313,20 @@ public class LeadImportService {
             int success = 0;
             int failed = 0;
             Set<String> existingKeys = new HashSet<String>();
-            for (Lead row : leadRepository.findByTenantId(tenantId)) {
-                existingKeys.add(keyOf(row.getName(), row.getCompany(), row.getPhone(), row.getEmail()));
-            }
+            int page = 0;
+            Page<Object[]> dedupePage;
+            do {
+                dedupePage = leadRepository.findDedupeKeysByTenantId(tenantId, PageRequest.of(page, DEDUPE_BATCH_SIZE));
+                for (Object[] cols : dedupePage.getContent()) {
+                    String name = cols[0] == null ? "" : cols[0].toString();
+                    String company = cols[1] == null ? "" : cols[1].toString();
+                    String phone = cols[2] == null ? "" : cols[2].toString();
+                    String email = cols[3] == null ? "" : cols[3].toString();
+                    existingKeys.add(keyOf(name, company, phone, email));
+                }
+                page++;
+            } while (dedupePage.hasNext());
+            List<Lead> batchToSave = new ArrayList<Lead>(SAVE_BATCH_SIZE);
             for (String wrapped : rawRows) {
                 processed++;
                 int lineNo = parseLineNo(wrapped);
@@ -341,14 +354,28 @@ public class LeadImportService {
                         if (!assigned.isEmpty()) lead.setOwner(assigned);
                     }
                     if (isBlank(lead.getOwner())) lead.setOwner(job.getCreatedBy());
-                    lead = leadRepository.save(lead);
-                    leadAutomationService.onLeadEvent(tenantId, "LEAD_CREATED", lead, job.getCreatedBy());
-                    leadAutomationService.onLeadEvent(tenantId, "LEAD_ASSIGNED", lead, job.getCreatedBy());
-                    success++;
+                    batchToSave.add(lead);
+                    if (batchToSave.size() >= SAVE_BATCH_SIZE) {
+                        List<Lead> saved = leadRepository.saveAll(batchToSave);
+                        for (Lead savedLead : saved) {
+                            leadAutomationService.onLeadEvent(tenantId, "LEAD_CREATED", savedLead, job.getCreatedBy());
+                            leadAutomationService.onLeadEvent(tenantId, "LEAD_ASSIGNED", savedLead, job.getCreatedBy());
+                        }
+                        success += batchToSave.size();
+                        batchToSave.clear();
+                    }
                 } catch (Exception rowEx) {
                     failed++;
                     saveItemFailure(tenantId, jobId, lineNo, line, normalizeError(rowEx), normalizeError(rowEx));
                 }
+            }
+            if (!batchToSave.isEmpty()) {
+                List<Lead> saved = leadRepository.saveAll(batchToSave);
+                for (Lead savedLead : saved) {
+                    leadAutomationService.onLeadEvent(tenantId, "LEAD_CREATED", savedLead, job.getCreatedBy());
+                    leadAutomationService.onLeadEvent(tenantId, "LEAD_ASSIGNED", savedLead, job.getCreatedBy());
+                }
+                success += batchToSave.size();
             }
 
             chunk.setStatus("PROCESSED");

@@ -90,12 +90,9 @@ public class CollaborationService {
         // 保存评论
         comment = commentRepository.save(comment);
 
-        // 更新父评论的回复数
+        // 更新父评论的回复数（原子操作避免竞态条件）
         if (parentCommentId != null) {
-            commentRepository.findById(parentCommentId).ifPresent(parent -> {
-                parent.setReplyCount(parent.getReplyCount() + 1);
-                commentRepository.save(parent);
-            });
+            commentRepository.incrementReplyCount(parentCommentId);
         }
 
         // 发送提及通知
@@ -143,12 +140,9 @@ public class CollaborationService {
             throw new IllegalStateException("Cannot delete other user's comment");
         }
 
-        // 更新父评论的回复数
+        // 更新父评论的回复数（原子操作避免竞态条件）
         if (comment.getParentCommentId() != null) {
-            commentRepository.findById(comment.getParentCommentId()).ifPresent(parent -> {
-                parent.setReplyCount(Math.max(0, parent.getReplyCount() - 1));
-                commentRepository.save(parent);
-            });
+            commentRepository.decrementReplyCount(comment.getParentCommentId());
         }
 
         commentRepository.delete(comment);

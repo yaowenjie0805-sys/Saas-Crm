@@ -41,12 +41,29 @@ class DataImportExportServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DataImportExportService(
-                new ObjectMapper(),
+        ObjectMapper objectMapper = new ObjectMapper();
+        FileParsingService fileParsingService = new FileParsingService(objectMapper);
+        DataMappingService dataMappingService = new DataMappingService();
+        DataImportService dataImportService = new DataImportService(
+                fileParsingService,
+                dataMappingService,
                 customerRepository,
                 contactRepository,
                 leadRepository,
                 productRepository
+        );
+        DataExportService dataExportService = new DataExportService(
+                objectMapper,
+                dataMappingService,
+                customerRepository,
+                contactRepository,
+                leadRepository,
+                productRepository
+        );
+        service = new DataImportExportService(
+                dataImportService,
+                dataExportService,
+                dataMappingService
         );
     }
 

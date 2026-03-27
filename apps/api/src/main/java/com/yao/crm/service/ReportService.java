@@ -28,8 +28,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import static com.yao.crm.service.ReportUtils.isBlank;
 import static com.yao.crm.service.ReportUtils.endOfDay;
@@ -58,8 +61,14 @@ public class ReportService {
     private final ValueNormalizerService valueNormalizerService;
     private final DashboardMetricsCacheService dashboardMetricsCacheService;
     private final ReportAggregationService reportAggregationService;
-    private final Map<String, IdentityScopeCacheEntry> roleIdentityCache = new ConcurrentHashMap<String, IdentityScopeCacheEntry>();
-    private final Map<String, IdentityScopeCacheEntry> departmentIdentityCache = new ConcurrentHashMap<String, IdentityScopeCacheEntry>();
+    private final Cache<String, IdentityScopeCacheEntry> roleIdentityCache = Caffeine.newBuilder()
+            .maximumSize(500)
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .build();
+    private final Cache<String, IdentityScopeCacheEntry> departmentIdentityCache = Caffeine.newBuilder()
+            .maximumSize(500)
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .build();
 
     public ReportService(CustomerRepository customerRepository,
                          OpportunityRepository opportunityRepository,
@@ -600,7 +609,7 @@ public class ReportService {
         if (isBlank(role)) return null;
         String normalizedRole = ReportUtils.normalizeRole(role);
         String cacheKey = tenantId + "|" + normalizedRole;
-        IdentityScopeCacheEntry cached = roleIdentityCache.get(cacheKey);
+        IdentityScopeCacheEntry cached = roleIdentityCache.getIfPresent(cacheKey);
         long now = System.currentTimeMillis();
         if (cached != null && cached.expiresAtMs > now) {
             return cached.identities;
@@ -617,7 +626,7 @@ public class ReportService {
         if (isBlank(department)) return null;
         String normalizedDepartment = normalized(department);
         String cacheKey = tenantId + "|" + normalizedDepartment;
-        IdentityScopeCacheEntry cached = departmentIdentityCache.get(cacheKey);
+        IdentityScopeCacheEntry cached = departmentIdentityCache.getIfPresent(cacheKey);
         long now = System.currentTimeMillis();
         if (cached != null && cached.expiresAtMs > now) {
             return cached.identities;

@@ -267,9 +267,56 @@ public class GlobalExceptionHandler {
                 traceId(request)
         );
         Map<String, Object> details = new LinkedHashMap<String, Object>();
-        details.put("type", ex.getClass().getSimpleName());
+        // 异常类型脱敏：只返回分类名，不暴露具体类名
+        details.put("type", sanitizeExceptionType(ex));
         body.setDetails(details);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+    }
+
+    /**
+     * 对异常类型进行脱敏处理，防止信息泄露
+     * 已知安全的异常类型返回分类名，未知异常统一返回 "InternalError"
+     */
+    private String sanitizeExceptionType(Exception ex) {
+        if (ex == null) {
+            return "InternalError";
+        }
+        Class<?> clazz = ex.getClass();
+        
+        // 已知安全的异常类型映射
+        if (clazz.getName().startsWith("com.yao.crm.exception.")) {
+            return "BusinessError";
+        }
+        if (clazz.getName().startsWith("org.springframework.security.")) {
+            return "SecurityError";
+        }
+        if (clazz.getName().startsWith("org.springframework.validation.")) {
+            return "ValidationError";
+        }
+        if (clazz.getName().startsWith("org.springframework.web.bind.")) {
+            return "BindingError";
+        }
+        if (clazz.getName().startsWith("java.sql.")) {
+            return "DatabaseError";
+        }
+        if (clazz.getName().startsWith("org.springframework.dao.")) {
+            return "DatabaseError";
+        }
+        if (clazz.getName().startsWith("java.io.")) {
+            return "IOError";
+        }
+        if (clazz.getName().startsWith("java.net.")) {
+            return "NetworkError";
+        }
+        if (clazz.getName().startsWith("javax.persistence.")) {
+            return "PersistenceError";
+        }
+        if (clazz.getName().startsWith("org.hibernate.")) {
+            return "PersistenceError";
+        }
+        
+        // 未知异常类型统一返回 InternalError，不暴露具体类名
+        return "InternalError";
     }
 
     private String traceId(HttpServletRequest request) {
