@@ -2,6 +2,7 @@ package com.yao.crm.service;
 
 import com.yao.crm.entity.*;
 import com.yao.crm.repository.*;
+import com.yao.crm.enums.WorkflowStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +35,7 @@ public class WorkflowService {
     /**
      * 创建工作流
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public WorkflowDefinition createWorkflow(String tenantId, String name, String description, String category, String owner) {
         WorkflowDefinition workflow = new WorkflowDefinition();
         workflow.setId(UUID.randomUUID().toString());
@@ -43,7 +44,7 @@ public class WorkflowService {
         workflow.setDescription(description);
         workflow.setCategory(category);
         workflow.setOwner(owner);
-        workflow.setStatus("DRAFT");
+        workflow.setStatus(WorkflowStatus.DRAFT.name());
         workflow.setVersion(1);
         workflow.setIsSystem(false);
         workflow.setExecutionCount(0);
@@ -56,8 +57,9 @@ public class WorkflowService {
     /**
      * 获取工作流详情
      */
-    public Map<String, Object> getWorkflowDetail(String workflowId) {
-        WorkflowDefinition workflow = workflowRepository.findById(workflowId).orElse(null);
+    @Transactional(readOnly = true)
+    public Map<String, Object> getWorkflowDetail(String tenantId, String workflowId) {
+        WorkflowDefinition workflow = workflowRepository.findByIdAndTenantId(workflowId, tenantId).orElse(null);
         if (workflow == null) {
             return null;
         }
@@ -76,9 +78,10 @@ public class WorkflowService {
     /**
      * 添加节点
      */
-    @Transactional
-    public WorkflowNode addNode(String workflowId, String nodeType, String nodeSubtype, String name,
-                                  int positionX, int positionY, String configJson) {
+    @Transactional(timeout = 30)
+    public WorkflowNode addNode(String tenantId, String workflowId, String nodeType, String nodeSubtype, String name,
+                                int positionX, int positionY, String configJson) {
+        requireWorkflow(tenantId, workflowId);
         WorkflowNode node = new WorkflowNode();
         node.setId(UUID.randomUUID().toString());
         node.setWorkflowId(workflowId);
@@ -98,9 +101,10 @@ public class WorkflowService {
     /**
      * 添加连接
      */
-    @Transactional
-    public WorkflowConnection addConnection(String workflowId, String sourceNodeId, String targetNodeId,
-                                             String connectionType, String label) {
+    @Transactional(timeout = 30)
+    public WorkflowConnection addConnection(String tenantId, String workflowId, String sourceNodeId, String targetNodeId,
+                                            String connectionType, String label) {
+        requireWorkflow(tenantId, workflowId);
         WorkflowConnection connection = new WorkflowConnection();
         connection.setId(UUID.randomUUID().toString());
         connection.setWorkflowId(workflowId);
@@ -117,7 +121,9 @@ public class WorkflowService {
     /**
      * 验证工作流
      */
-    public Map<String, Object> validateWorkflow(String workflowId) {
+    @Transactional(readOnly = true)
+    public Map<String, Object> validateWorkflow(String tenantId, String workflowId) {
+        requireWorkflow(tenantId, workflowId);
         List<WorkflowNode> nodes = nodeRepository.findByWorkflowIdOrderByPositionXAscPositionYAsc(workflowId);
         List<WorkflowConnection> connections = connectionRepository.findByWorkflowId(workflowId);
 
@@ -166,20 +172,17 @@ public class WorkflowService {
     /**
      * 激活工作流
      */
-    @Transactional
-    public WorkflowDefinition activateWorkflow(String workflowId, String activatedBy) {
-        WorkflowDefinition workflow = workflowRepository.findById(workflowId).orElse(null);
-        if (workflow == null) {
-            throw new IllegalArgumentException("Workflow not found");
-        }
+    @Transactional(timeout = 30)
+    public WorkflowDefinition activateWorkflow(String tenantId, String workflowId, String activatedBy) {
+        WorkflowDefinition workflow = requireWorkflow(tenantId, workflowId);
 
         // 验证工作流
-        Map<String, Object> validation = validateWorkflow(workflowId);
+        Map<String, Object> validation = validateWorkflow(tenantId, workflowId);
         if (!(Boolean) validation.get("valid")) {
             throw new IllegalStateException("Workflow validation failed: " + validation.get("errors"));
         }
 
-        workflow.setStatus("ACTIVE");
+        workflow.setStatus(WorkflowStatus.ACTIVE.name());
         workflow.setActivatedAt(LocalDateTime.now());
         workflow.setPublishedBy(activatedBy);
 
@@ -189,12 +192,9 @@ public class WorkflowService {
     /**
      * 停用工作流
      */
-    @Transactional
-    public WorkflowDefinition deactivateWorkflow(String workflowId) {
-        WorkflowDefinition workflow = workflowRepository.findById(workflowId).orElse(null);
-        if (workflow == null) {
-            throw new IllegalArgumentException("Workflow not found");
-        }
+    @Transactional(timeout = 30)
+    public WorkflowDefinition deactivateWorkflow(String tenantId, String workflowId) {
+        WorkflowDefinition workflow = requireWorkflow(tenantId, workflowId);
 
         // 检查是否有正在运行的执行
         List<WorkflowExecution> running = executionRepository.findRunningByWorkflowId(workflowId);
@@ -202,24 +202,26 @@ public class WorkflowService {
             throw new IllegalStateException("Cannot deactivate workflow with running executions");
         }
 
-        workflow.setStatus("PAUSED");
+        workflow.setStatus(WorkflowStatus.PAUSED.name());
         return workflowRepository.save(workflow);
     }
 
     /**
      * 删除工作流
      */
-    @Transactional
-    public void deleteWorkflow(String workflowId) {
+    @Transactional(timeout = 30)
+    public void deleteWorkflow(String tenantId, String workflowId) {
+        requireWorkflow(tenantId, workflowId);
         // 先删除关联数据
         connectionRepository.deleteByWorkflowId(workflowId);
         nodeRepository.deleteByWorkflowId(workflowId);
-        workflowRepository.deleteById(workflowId);
+        workflowRepository.deleteByIdAndTenantId(workflowId, tenantId);
     }
 
     /**
      * 获取工作流列表
      */
+    @Transactional(readOnly = true)
     public List<WorkflowDefinition> getWorkflows(String tenantId, String status, String category) {
         if (status != null && !status.isEmpty()) {
             return workflowRepository.findByTenantIdAndStatus(tenantId, status);
@@ -233,8 +235,9 @@ public class WorkflowService {
     /**
      * 获取工作流统计
      */
-    public Map<String, Object> getWorkflowStats(String workflowId) {
-        WorkflowDefinition workflow = workflowRepository.findById(workflowId).orElse(null);
+    @Transactional(readOnly = true)
+    public Map<String, Object> getWorkflowStats(String tenantId, String workflowId) {
+        WorkflowDefinition workflow = workflowRepository.findByIdAndTenantId(workflowId, tenantId).orElse(null);
         if (workflow == null) {
             return null;
         }
@@ -256,6 +259,7 @@ public class WorkflowService {
     /**
      * 获取节点类型选项
      */
+    @Transactional(readOnly = true)
     public Map<String, List<Map<String, String>>> getNodeTypes() {
         Map<String, List<Map<String, String>>> nodeTypes = new HashMap<>();
 
@@ -323,5 +327,10 @@ public class WorkflowService {
         type.put("label", label);
         type.put("icon", icon);
         return type;
+    }
+
+    private WorkflowDefinition requireWorkflow(String tenantId, String workflowId) {
+        return workflowRepository.findByIdAndTenantId(workflowId, tenantId)
+                .orElseThrow(() -> new IllegalArgumentException("Workflow not found"));
     }
 }

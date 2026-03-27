@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { api, translateStatus } from '../../shared'
 import ListState from '../ListState'
 import RowDetailDrawer from '../RowDetailDrawer'
@@ -230,4 +230,4 @@ function PipelinePanel({
   )
 }
 
-export default PipelinePanel
+export default memo(PipelinePanel)

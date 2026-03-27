@@ -48,7 +48,7 @@ public class ApprovalDelegationService {
     /**
      * 委托审批任务
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public DelegationResult delegateTask(String taskId, String fromUserId, String toUserId, String reason) {
         ApprovalTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
@@ -108,7 +108,7 @@ public class ApprovalDelegationService {
     /**
      * 加签 - 审批时指定额外审批人
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public AddSignResult addSign(String taskId, String approverId, String addSignUserId, String reason, String type) {
         ApprovalTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
@@ -161,7 +161,7 @@ public class ApprovalDelegationService {
      * 转交审批任务
      * 与委托不同，转交后原审批人不再有权限查看
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public TransferResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
         ApprovalTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
@@ -212,6 +212,7 @@ public class ApprovalDelegationService {
     /**
      * 获取委托历史
      */
+    @Transactional(readOnly = true)
     public List<DelegationRecord> getDelegationHistory(String taskId) {
         List<ApprovalEvent> events = eventRepository.findByTaskIdOrderByCreatedAtDesc(taskId);
 
@@ -234,6 +235,7 @@ public class ApprovalDelegationService {
     /**
      * 获取转交历史
      */
+    @Transactional(readOnly = true)
     public List<TransferRecord> getTransferHistory(String taskId) {
         ApprovalTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found"));
@@ -272,7 +274,7 @@ public class ApprovalDelegationService {
     /**
      * 撤回委托
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public boolean recallDelegation(String delegationId, String userId) {
         List<ApprovalEvent> events = eventRepository.findAll();
         ApprovalEvent delegationEvent = events.stream()
@@ -322,6 +324,7 @@ public class ApprovalDelegationService {
     /**
      * 获取可委托的用户列表
      */
+    @Transactional(readOnly = true)
     public List<Map<String, String>> getDelegatableUsers(String tenantId, String currentUserId) {
         // 在实际实现中，应该从用户服务获取同部门或有审批权限的用户
         // 这里返回模拟数据

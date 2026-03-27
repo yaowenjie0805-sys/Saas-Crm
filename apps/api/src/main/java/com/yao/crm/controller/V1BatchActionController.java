@@ -1,5 +1,6 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.dto.request.BatchActionRequest;
 import com.yao.crm.entity.ContractRecord;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.entity.Opportunity;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -70,14 +72,14 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/customers/batch-actions")
-    public ResponseEntity<?> batchCustomers(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchCustomers(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = str(payload.get("status"));
-        String ownerValue = str(payload.get("owner"));
+        String statusValue = payload.getStatus();
+        String ownerValue = payload.getOwner();
         Map<String, Customer> rowsById = new LinkedHashMap<String, Customer>();
         for (Customer row : customerRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -142,15 +144,15 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/opportunities/batch-actions")
-    public ResponseEntity<?> batchOpportunities(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchOpportunities(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String stageValue = str(payload.get("status"));
-        if (isBlank(stageValue)) stageValue = str(payload.get("stage"));
-        String ownerValue = str(payload.get("owner"));
+        String stageValue = payload.getStatus();
+        if (isBlank(stageValue)) stageValue = payload.getStage();
+        String ownerValue = payload.getOwner();
         Map<String, Opportunity> rowsById = new LinkedHashMap<String, Opportunity>();
         for (Opportunity row : opportunityRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -215,13 +217,13 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/products/batch-actions")
-    public ResponseEntity<?> batchProducts(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchProducts(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = str(payload.get("status"));
+        String statusValue = payload.getStatus();
         Map<String, Product> rowsById = new LinkedHashMap<String, Product>();
         for (Product row : productRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -263,14 +265,14 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/quotes/batch-actions")
-    public ResponseEntity<?> batchQuotes(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchQuotes(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = str(payload.get("status"));
-        String ownerValue = str(payload.get("owner"));
+        String statusValue = payload.getStatus();
+        String ownerValue = payload.getOwner();
         Map<String, Quote> rowsById = new LinkedHashMap<String, Quote>();
         for (Quote row : quoteRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -335,14 +337,14 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/orders/batch-actions")
-    public ResponseEntity<?> batchOrders(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchOrders(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = str(payload.get("status"));
-        String ownerValue = str(payload.get("owner"));
+        String statusValue = payload.getStatus();
+        String ownerValue = payload.getOwner();
         Map<String, OrderRecord> rowsById = new LinkedHashMap<String, OrderRecord>();
         for (OrderRecord row : orderRecordRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -407,14 +409,14 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/contracts/batch-actions")
-    public ResponseEntity<?> batchContracts(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchContracts(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = str(payload.get("status"));
-        String ownerValue = str(payload.get("owner"));
+        String statusValue = payload.getStatus();
+        String ownerValue = payload.getOwner();
         Map<String, ContractRecord> rowsById = new LinkedHashMap<String, ContractRecord>();
         for (ContractRecord row : contractRecordRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -479,14 +481,14 @@ public class V1BatchActionController extends BaseApiController {
     }
 
     @PostMapping("/payments/batch-actions")
-    public ResponseEntity<?> batchPayments(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> batchPayments(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
-        String action = normalizeAction(payload.get("action"));
-        List<String> ids = parseIds(payload.get("ids"));
+        String action = normalizeAction(payload.getAction());
+        List<String> ids = payload.getIds();
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = str(payload.get("status"));
-        String ownerValue = str(payload.get("owner"));
+        String statusValue = payload.getStatus();
+        String ownerValue = payload.getOwner();
         Map<String, PaymentRecord> rowsById = new LinkedHashMap<String, PaymentRecord>();
         for (PaymentRecord row : paymentRecordRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);

@@ -12,6 +12,8 @@ import java.util.List;
 @Repository
 public interface WorkflowDefinitionRepository extends JpaRepository<WorkflowDefinition, String> {
 
+    java.util.Optional<WorkflowDefinition> findByIdAndTenantId(String id, String tenantId);
+
     List<WorkflowDefinition> findByTenantId(String tenantId);
 
     List<WorkflowDefinition> findByTenantIdAndStatus(String tenantId, String status);
@@ -30,4 +32,6 @@ public interface WorkflowDefinitionRepository extends JpaRepository<WorkflowDefi
     List<WorkflowDefinition> findRecentlyUpdated(@Param("tenantId") String tenantId, @Param("since") LocalDateTime since);
 
     void deleteByTenantId(String tenantId);
+
+    void deleteByIdAndTenantId(String id, String tenantId);
 }

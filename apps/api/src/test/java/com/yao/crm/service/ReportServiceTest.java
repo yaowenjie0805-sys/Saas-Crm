@@ -44,6 +44,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
@@ -97,7 +98,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
@@ -135,6 +137,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
@@ -152,7 +155,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
@@ -188,6 +192,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(customerRepository.countByTenantIdAndCreatedAtBetween(anyString(), any(), any())).thenReturn(3L);
         when(customerRepository.sumValueByTenantIdAndCreatedAtBetween(anyString(), any(), any())).thenReturn(500L);
@@ -214,7 +219,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
@@ -250,6 +256,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(customerRepository.countByTenantIdAndCreatedAtBetween(anyString(), any(), any())).thenReturn(1L);
         when(customerRepository.sumValueByTenantIdAndCreatedAtBetween(anyString(), any(), any())).thenReturn(100L);
@@ -280,7 +287,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
@@ -316,6 +324,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
@@ -353,7 +362,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         reportService.overviewByTenant("tenant_default", null, null, "sales", "alice", "bd");
@@ -376,6 +386,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(leadRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(anyString(), anyCollection(), any(), any())).thenReturn(10L);
         when(opportunityRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(anyString(), anyCollection(), any(), any())).thenReturn(4L);
@@ -393,7 +404,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         Map<String, Object> funnel = reportService.funnelByTenant(
@@ -438,6 +450,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         when(leadRepository.countByTenantId(anyString())).thenReturn(8L);
         when(opportunityRepository.countByTenantId(anyString())).thenReturn(4L);
@@ -455,7 +468,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         Map<String, Object> funnel = reportService.funnelByTenant("tenant_default", null, null, "");
@@ -490,6 +504,7 @@ class ReportServiceTest {
         LeadRepository leadRepository = mock(LeadRepository.class);
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
         doReturn(new DashboardMetricsCacheService.CachedValue<Map<String, Object>>(
                 Collections.<String, Object>emptyMap(),
@@ -509,7 +524,8 @@ class ReportServiceTest {
                 userAccountRepository,
                 leadRepository,
                 valueNormalizerService,
-                cacheService
+                cacheService,
+                reportAggregationService
         );
 
         reportService.funnelByTenantCached(

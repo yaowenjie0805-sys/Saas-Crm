@@ -7,6 +7,7 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -18,6 +19,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.*;
 
+@Tag(name = "Customers", description = "Customer management operations")
 @RestController
 @RequestMapping("/api")
 public class CustomerController extends BaseApiController {

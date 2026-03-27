@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useAppStore } from '../../store/appStore'
 
 /**
  * 快捷筛选标签组件 - 国内特色
@@ -13,6 +12,7 @@ export function QuickFilterTags({ entityType, onFilterChange }) {
   // 加载快捷筛选
   useEffect(() => {
     loadQuickFilters()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityType])
 
   const loadQuickFilters = async () => {
@@ -56,54 +56,7 @@ export function QuickFilterTags({ entityType, onFilterChange }) {
     }
   }
 
-  // 添加新的快捷筛选
-  const handleAddFilter = async (name, icon, filterConfig) => {
-    try {
-      const response = await fetch('/api/v2/filters/quick', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tenant-Id': 'tenant_default',
-        },
-        body: JSON.stringify({
-          name,
-          icon,
-          entityType,
-          filterConfig: JSON.stringify(filterConfig),
-        }),
-      })
 
-      if (response.ok) {
-        await loadQuickFilters()
-      }
-    } catch (error) {
-      console.error('Add quick filter error:', error)
-    }
-  }
-
-  // 删除快捷筛选
-  const handleDelete = async (filterId) => {
-    try {
-      const response = await fetch(`/api/v2/filters/quick/${filterId}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Tenant-Id': 'tenant_default',
-        },
-      })
-
-      if (response.ok) {
-        if (selectedId === filterId) {
-          setSelectedId(null)
-          if (onFilterChange) {
-            onFilterChange(null)
-          }
-        }
-        await loadQuickFilters()
-      }
-    } catch (error) {
-      console.error('Delete quick filter error:', error)
-    }
-  }
 
   if (isLoading) {
     return (
@@ -145,7 +98,7 @@ export function QuickFilterTags({ entityType, onFilterChange }) {
 /**
  * 快捷筛选管理弹窗
  */
-export function QuickFilterManager({ entityType, currentFilter, onSave }) {
+export function QuickFilterManager({ _entityType, currentFilter, onSave }) {
   const [name, setName] = useState('')
   const [icon, setIcon] = useState('🏷️')
 
@@ -223,10 +176,7 @@ export function QuickFilterManager({ entityType, currentFilter, onSave }) {
   )
 }
 
-/**
- * 快捷筛选预设（可配置）
- */
-export const DEFAULT_QUICK_FILTERS = {
+const DEFAULT_QUICK_FILTERS = {
   CUSTOMER: [
     { name: '全部', icon: '👥', filterConfig: {} },
     { name: '我的客户', icon: '👤', filterConfig: { owner: 'current' } },

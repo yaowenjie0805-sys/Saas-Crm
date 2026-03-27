@@ -41,8 +41,10 @@ public class WorkflowController {
      * 获取工作流详情
      */
     @GetMapping("/{id}")
-    public ResponseEntity<?> getWorkflowDetail(@PathVariable String id) {
-        Map<String, Object> detail = workflowService.getWorkflowDetail(id);
+    public ResponseEntity<?> getWorkflowDetail(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String id) {
+        Map<String, Object> detail = workflowService.getWorkflowDetail(tenantId, id);
         if (detail == null) {
             return ResponseEntity.notFound().build();
         }
@@ -87,9 +89,11 @@ public class WorkflowController {
      * 删除工作流
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteWorkflow(@PathVariable String id) {
+    public ResponseEntity<?> deleteWorkflow(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String id) {
         try {
-            workflowService.deleteWorkflow(id);
+            workflowService.deleteWorkflow(tenantId, id);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             return ResponseEntity.ok(result);
@@ -105,11 +109,12 @@ public class WorkflowController {
      */
     @PostMapping("/{id}/activate")
     public ResponseEntity<?> activateWorkflow(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody ActivateRequest request) {
 
         try {
-            WorkflowDefinition workflow = workflowService.activateWorkflow(id, request.activatedBy);
+            WorkflowDefinition workflow = workflowService.activateWorkflow(tenantId, id, request.activatedBy);
             return ResponseEntity.ok(workflow);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
@@ -122,9 +127,11 @@ public class WorkflowController {
      * 停用工作流
      */
     @PostMapping("/{id}/deactivate")
-    public ResponseEntity<?> deactivateWorkflow(@PathVariable String id) {
+    public ResponseEntity<?> deactivateWorkflow(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String id) {
         try {
-            WorkflowDefinition workflow = workflowService.deactivateWorkflow(id);
+            WorkflowDefinition workflow = workflowService.deactivateWorkflow(tenantId, id);
             return ResponseEntity.ok(workflow);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
@@ -137,8 +144,10 @@ public class WorkflowController {
      * 验证工作流
      */
     @PostMapping("/{id}/validate")
-    public ResponseEntity<?> validateWorkflow(@PathVariable String id) {
-        Map<String, Object> validation = workflowService.validateWorkflow(id);
+    public ResponseEntity<?> validateWorkflow(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String id) {
+        Map<String, Object> validation = workflowService.validateWorkflow(tenantId, id);
         return ResponseEntity.ok(validation);
     }
 
@@ -146,8 +155,10 @@ public class WorkflowController {
      * 获取工作流统计
      */
     @GetMapping("/{id}/stats")
-    public ResponseEntity<?> getWorkflowStats(@PathVariable String id) {
-        Map<String, Object> stats = workflowService.getWorkflowStats(id);
+    public ResponseEntity<?> getWorkflowStats(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String id) {
+        Map<String, Object> stats = workflowService.getWorkflowStats(tenantId, id);
         if (stats == null) {
             return ResponseEntity.notFound().build();
         }
@@ -159,10 +170,12 @@ public class WorkflowController {
      */
     @PostMapping("/{id}/nodes")
     public ResponseEntity<WorkflowNode> addNode(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody AddNodeRequest request) {
 
         WorkflowNode node = workflowService.addNode(
+                tenantId,
                 id,
                 request.nodeType,
                 request.nodeSubtype,
@@ -207,10 +220,12 @@ public class WorkflowController {
      */
     @PostMapping("/{id}/connections")
     public ResponseEntity<WorkflowConnection> addConnection(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody AddConnectionRequest request) {
 
         WorkflowConnection connection = workflowService.addConnection(
+                tenantId,
                 id,
                 request.sourceNodeId,
                 request.targetNodeId,
@@ -247,8 +262,11 @@ public class WorkflowController {
      */
     @PostMapping("/{id}/test")
     public ResponseEntity<?> testWorkflow(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody TestWorkflowRequest request) {
+
+        workflowService.getWorkflowDetail(tenantId, id);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -309,11 +327,13 @@ public class WorkflowController {
      */
     @PostMapping("/{id}/execute")
     public ResponseEntity<?> executeWorkflow(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody ExecuteWorkflowRequest request) {
 
         try {
             WorkflowExecution execution = executionService.startExecution(
+                    tenantId,
                     id,
                     request.triggerType != null ? request.triggerType : "MANUAL",
                     request.triggerSource,
@@ -337,9 +357,11 @@ public class WorkflowController {
      * 获取执行详情
      */
     @GetMapping("/executions/{executionId}")
-    public ResponseEntity<?> getExecutionDetail(@PathVariable String executionId) {
+    public ResponseEntity<?> getExecutionDetail(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String executionId) {
         try {
-            Map<String, Object> detail = executionService.getExecutionDetail(executionId);
+            Map<String, Object> detail = executionService.getExecutionDetail(tenantId, executionId);
             if (detail == null) {
                 return ResponseEntity.notFound().build();
             }
@@ -356,12 +378,13 @@ public class WorkflowController {
      */
     @GetMapping("/{id}/executions")
     public ResponseEntity<List<WorkflowExecution>> getExecutionHistory(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        List<WorkflowExecution> executions = executionService.getExecutionHistory(id, status, page, size);
+        List<WorkflowExecution> executions = executionService.getExecutionHistory(tenantId, id, status, page, size);
         return ResponseEntity.ok(executions);
     }
 
@@ -370,11 +393,12 @@ public class WorkflowController {
      */
     @PostMapping("/executions/{executionId}/cancel")
     public ResponseEntity<?> cancelExecution(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId,
             @RequestBody CancelExecutionRequest request) {
 
         try {
-            executionService.cancelExecution(executionId, request.cancelledBy);
+            executionService.cancelExecution(tenantId, executionId, request.cancelledBy);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("message", "Execution cancelled");
@@ -390,9 +414,11 @@ public class WorkflowController {
      * 重试失败的执行
      */
     @PostMapping("/executions/{executionId}/retry")
-    public ResponseEntity<?> retryExecution(@PathVariable String executionId) {
+    public ResponseEntity<?> retryExecution(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String executionId) {
         try {
-            WorkflowExecution execution = executionService.retryExecution(executionId);
+            WorkflowExecution execution = executionService.retryExecution(tenantId, executionId);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("newExecutionId", execution.getId());
@@ -410,11 +436,13 @@ public class WorkflowController {
      */
     @PostMapping("/executions/{executionId}/approval-callback")
     public ResponseEntity<?> handleApprovalCallback(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId,
             @RequestBody ApprovalCallbackRequest request) {
 
         try {
             executionService.handleApprovalCallback(
+                    tenantId,
                     executionId,
                     request.nodeId,
                     request.action,

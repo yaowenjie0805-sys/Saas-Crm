@@ -6,7 +6,7 @@ import { useAppStore, selectSearchDomainSlice } from '../../store/appStore'
  * 支持快捷键 Cmd/Ctrl+K 唤起
  * 支持拼音搜索
  */
-export function CommandPalette({ isOpen, onClose, onResultSelect }) {
+function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState({})
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -190,7 +190,7 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
                   <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50">
                     {getTypeLabel(type)} ({safeItems.length})
                   </div>
-                  {safeItems.map((item, index) => {
+                  {safeItems.map((item) => {
                     const globalIndex = flatResults.findIndex(
                       (r) => r.id === item.id && r.type === type
                     )
@@ -232,7 +232,7 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
               <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50">
                 最近搜索
               </div>
-              {searchHistory.map((item, index) => (
+              {searchHistory.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => setQuery(item.query)}
@@ -263,11 +263,13 @@ export function CommandPalette({ isOpen, onClose, onResultSelect }) {
 /**
  * 搜索钩子
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function clampSelectedIndex(selectedIndex, flatResultsLength) {
   if (flatResultsLength <= 0) return 0
   return Math.min(Math.max(selectedIndex, 0), flatResultsLength - 1)
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function flattenSearchResults(results) {
   const flat = []
   Object.entries(results || {}).forEach(([type, items]) => {
@@ -278,21 +280,7 @@ export function flattenSearchResults(results) {
   return flat
 }
 
-export function useGlobalSearch() {
-  const [isOpen, setIsOpen] = useState(false)
-
-  // 快捷键监听
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setIsOpen(true)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
-
-  return { isOpen, setIsOpen }
+// 导出组件
+export function CommandPalette(props) {
+  return <CommandPaletteComponent {...props} />
 }

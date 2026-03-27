@@ -1,10 +1,17 @@
 package com.yao.crm.dto.request;
 
+import javax.validation.constraints.Size;
+
 public class UpdateTaskRequest {
 
+    @Size(max = 200, message = "title_too_long")
     private String title;
+
     private String time;
+
+    @Size(max = 20, message = "level_too_long")
     private String level;
+
     private Boolean done;
 
     public String getTitle() {

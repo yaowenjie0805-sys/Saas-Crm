@@ -3,6 +3,7 @@ package com.yao.crm.service;
 import com.yao.crm.entity.SalesForecast;
 import com.yao.crm.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -51,6 +52,7 @@ public class SalesForecastService {
     /**
      * 计算销售预测
      */
+    @Transactional(readOnly = true)
     public SalesForecast calculateForecast(String tenantId, String periodType, LocalDate periodStart) {
         LocalDate periodEnd = calculatePeriodEnd(periodType, periodStart);
         LocalDateTime now = LocalDateTime.now();

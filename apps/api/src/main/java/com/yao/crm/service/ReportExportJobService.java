@@ -20,13 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class ReportExportJobService {
 
-    private final ReportService reportService;
+    private final ReportExportService reportExportService;
     private final ThreadPoolTaskExecutor executor;
     private final Map<String, JobRecord> jobs = new ConcurrentHashMap<String, JobRecord>();
 
-    public ReportExportJobService(ReportService reportService,
+    public ReportExportJobService(ReportExportService reportExportService,
                                 @Qualifier("reportExportExecutor") ThreadPoolTaskExecutor executor) {
-        this.reportService = reportService;
+        this.reportExportService = reportExportService;
         this.executor = executor;
     }
 
@@ -222,7 +222,7 @@ public class ReportExportJobService {
         try {
             record.status = "RUNNING";
             record.progress = 20;
-            String csv = reportService.exportOverviewCsvByTenant(record.tenantId, record.from, record.to, record.role, record.owner, record.department, record.language);
+            String csv = reportExportService.exportOverviewCsvByTenant(record.tenantId, record.from, record.to, record.role, record.owner, record.department, record.language);
             record.progress = 95;
             record.csv = csv;
             record.rowCount = countRows(csv);

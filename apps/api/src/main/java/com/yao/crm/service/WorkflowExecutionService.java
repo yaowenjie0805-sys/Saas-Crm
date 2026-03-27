@@ -11,6 +11,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import com.yao.crm.enums.WorkflowStatus;
+import com.yao.crm.enums.ApprovalStatus;
+import com.yao.crm.enums.WorkflowStatus;
+import com.yao.crm.enums.ApprovalStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -55,25 +59,26 @@ public class WorkflowExecutionService {
     /**
      * 启动工作流执行
      */
-    @Transactional
-    public WorkflowExecution startExecution(String workflowId, String triggerType, String triggerSource,
+    @Transactional(timeout = 30)
+    public WorkflowExecution startExecution(String tenantId, String workflowId, String triggerType, String triggerSource,
                                             String triggerPayload, Map<String, Object> triggerData) {
-        WorkflowDefinition workflow = workflowRepository.findById(workflowId)
+        WorkflowDefinition workflow = workflowRepository.findByIdAndTenantId(workflowId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow not found: " + workflowId));
 
-        if (!"ACTIVE".equals(workflow.getStatus())) {
+        if (!WorkflowStatus.isActive(workflow.getStatus())) {
             throw new IllegalStateException("Workflow is not active: " + workflow.getStatus());
         }
 
         // 创建执行记录
         WorkflowExecution execution = new WorkflowExecution();
         execution.setId(UUID.randomUUID().toString());
+        execution.setTenantId(tenantId);
         execution.setWorkflowId(workflowId);
         execution.setWorkflowVersion(workflow.getVersion());
         execution.setTriggerType(triggerType);
         execution.setTriggerSource(triggerSource);
         execution.setTriggerPayload(triggerPayload);
-        execution.setStatus("RUNNING");
+        execution.setStatus(WorkflowStatus.RUNNING.name());
         execution.setStartedAt(LocalDateTime.now());
 
         // 初始化执行上下文
@@ -109,7 +114,7 @@ public class WorkflowExecutionService {
     /**
      * 异步执行工作流
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public void executeAsync(String executionId) {
         try {
             executeNextNodes(executionId);
@@ -122,12 +127,12 @@ public class WorkflowExecutionService {
     /**
      * 执行下一个节点
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public void executeNextNodes(String executionId) {
         WorkflowExecution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
 
-        if (!"RUNNING".equals(execution.getStatus())) {
+        if (!WorkflowStatus.isRunning(execution.getStatus())) {
             return;
         }
 
@@ -176,7 +181,7 @@ public class WorkflowExecutionService {
             }
 
             // 如果是结束节点，完成执行
-            if ("END".equals(node.getNodeType())) {
+            if ("END".equals(node.getNodeType())) { // Node type is not an enum
                 completeExecution(executionId);
                 return;
             }
@@ -546,10 +551,10 @@ public class WorkflowExecutionService {
     /**
      * 处理审批回调
      */
-    @Transactional
-    public void handleApprovalCallback(String executionId, String nodeId, String action,
+    @Transactional(timeout = 30)
+    public void handleApprovalCallback(String tenantId, String executionId, String nodeId, String action,
                                        String approverId, String comments) {
-        WorkflowExecution execution = executionRepository.findById(executionId)
+        WorkflowExecution execution = executionRepository.findByIdAndTenantId(executionId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
 
         WorkflowExecutionContext context = parseContext(execution);
@@ -560,7 +565,7 @@ public class WorkflowExecutionService {
                 .getOrDefault("approval_" + nodeId, new HashMap<>());
 
         if ("APPROVE".equals(action)) {
-            approvalData.put("status", "APPROVED");
+            approvalData.put("status", ApprovalStatus.APPROVED.name());
             approvalData.put("approverId", approverId);
             approvalData.put("approvedAt", LocalDateTime.now().toString());
             approvalData.put("comments", comments);
@@ -570,7 +575,7 @@ public class WorkflowExecutionService {
             saveContext(execution, context);
             executeNextNodes(executionId);
         } else if ("REJECT".equals(action)) {
-            approvalData.put("status", "REJECTED");
+            approvalData.put("status", ApprovalStatus.REJECTED.name());
             approvalData.put("approverId", approverId);
             approvalData.put("rejectedAt", LocalDateTime.now().toString());
             approvalData.put("rejectionReason", comments);
@@ -655,12 +660,12 @@ public class WorkflowExecutionService {
     /**
      * 完成执行
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public void completeExecution(String executionId) {
         WorkflowExecution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
 
-        execution.setStatus("COMPLETED");
+        execution.setStatus(WorkflowStatus.COMPLETED.name());
         execution.setCompletedAt(LocalDateTime.now());
         execution.setCurrentNodeId(null);
 
@@ -680,12 +685,12 @@ public class WorkflowExecutionService {
     /**
      * 标记执行失败
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public void failExecution(String executionId, String errorMessage, String errorDetails) {
         WorkflowExecution execution = executionRepository.findById(executionId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
 
-        execution.setStatus("FAILED");
+        execution.setStatus(WorkflowStatus.FAILED.name());
         execution.setCompletedAt(LocalDateTime.now());
         execution.setErrorMessage(errorMessage);
         execution.setErrorDetails(errorDetails);
@@ -705,16 +710,16 @@ public class WorkflowExecutionService {
     /**
      * 取消执行
      */
-    @Transactional
-    public void cancelExecution(String executionId, String cancelledBy) {
-        WorkflowExecution execution = executionRepository.findById(executionId)
+    @Transactional(timeout = 30)
+    public void cancelExecution(String tenantId, String executionId, String cancelledBy) {
+        WorkflowExecution execution = executionRepository.findByIdAndTenantId(executionId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
 
-        if (!"RUNNING".equals(execution.getStatus())) {
+        if (!WorkflowStatus.isRunning(execution.getStatus())) {
             throw new IllegalStateException("Cannot cancel execution with status: " + execution.getStatus());
         }
 
-        execution.setStatus("CANCELLED");
+        execution.setStatus(WorkflowStatus.CANCELLED.name());
         execution.setCompletedAt(LocalDateTime.now());
         execution.setErrorMessage("Cancelled by " + cancelledBy);
 
@@ -733,8 +738,9 @@ public class WorkflowExecutionService {
     /**
      * 获取执行详情
      */
-    public Map<String, Object> getExecutionDetail(String executionId) {
-        WorkflowExecution execution = executionRepository.findById(executionId)
+    @Transactional(readOnly = true)
+    public Map<String, Object> getExecutionDetail(String tenantId, String executionId) {
+        WorkflowExecution execution = executionRepository.findByIdAndTenantId(executionId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
 
         Map<String, Object> detail = new HashMap<>();
@@ -750,7 +756,7 @@ public class WorkflowExecutionService {
         }
 
         // 获取工作流信息
-        WorkflowDefinition workflow = workflowRepository.findById(execution.getWorkflowId()).orElse(null);
+        WorkflowDefinition workflow = workflowRepository.findByIdAndTenantId(execution.getWorkflowId(), tenantId).orElse(null);
         detail.put("workflow", workflow);
 
         return detail;
@@ -759,7 +765,10 @@ public class WorkflowExecutionService {
     /**
      * 获取执行历史
      */
-    public List<WorkflowExecution> getExecutionHistory(String workflowId, String status, int page, int size) {
+    @Transactional(readOnly = true)
+    public List<WorkflowExecution> getExecutionHistory(String tenantId, String workflowId, String status, int page, int size) {
+        workflowRepository.findByIdAndTenantId(workflowId, tenantId)
+                .orElseThrow(() -> new IllegalArgumentException("Workflow not found"));
         Pageable pageable = PageRequest.of(page, size);
         if (status != null && !status.isEmpty()) {
             return executionRepository.findByWorkflowIdAndStatusOrderByStartedAtDesc(workflowId, status, pageable);
@@ -770,9 +779,9 @@ public class WorkflowExecutionService {
     /**
      * 重试失败的执行
      */
-    @Transactional
-    public WorkflowExecution retryExecution(String executionId) {
-        WorkflowExecution oldExecution = executionRepository.findById(executionId)
+    @Transactional(timeout = 30)
+    public WorkflowExecution retryExecution(String tenantId, String executionId) {
+        WorkflowExecution oldExecution = executionRepository.findByIdAndTenantId(executionId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
 
         if (!"FAILED".equals(oldExecution.getStatus())) {
@@ -781,6 +790,7 @@ public class WorkflowExecutionService {
 
         // 创建新的执行
         return startExecution(
+                tenantId,
                 oldExecution.getWorkflowId(),
                 oldExecution.getTriggerType(),
                 oldExecution.getTriggerSource(),

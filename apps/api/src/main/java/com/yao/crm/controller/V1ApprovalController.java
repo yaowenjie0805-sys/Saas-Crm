@@ -13,6 +13,7 @@ import com.yao.crm.service.ApprovalSlaService;
 import com.yao.crm.service.ApprovalTemplateVersionService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Tag(name = "Approvals", description = "Approval workflows, templates and tasks")
 @RestController
 @RequestMapping("/api/v1/approval")
 public class V1ApprovalController extends BaseApiController {

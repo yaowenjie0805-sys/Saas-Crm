@@ -110,6 +110,7 @@ export function CollaborationCommentSection({
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityType, entityId, showStats]);
 
   // 加载统计
@@ -170,7 +171,7 @@ export function CollaborationCommentSection({
       } else {
         message.error(data.message || '评论失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('评论失败');
     } finally {
       setSubmitting(false);
@@ -207,7 +208,7 @@ export function CollaborationCommentSection({
       } else {
         message.error(data.message || '回复失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('回复失败');
     } finally {
       setSubmitting(false);
@@ -242,7 +243,7 @@ export function CollaborationCommentSection({
           return c;
         }));
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('操作失败');
     }
   };
@@ -276,7 +277,7 @@ export function CollaborationCommentSection({
           } else {
             message.error(data.message || '删除失败');
           }
-        } catch (error) {
+        } catch (_error) {
           message.error('删除失败');
         }
       }
@@ -307,7 +308,7 @@ export function CollaborationCommentSection({
       } else {
         message.error(data.message || '编辑失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('编辑失败');
     }
   };

@@ -1,5 +1,16 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.dto.request.OrderCreateRequest;
+import com.yao.crm.dto.request.OrderPatchRequest;
+import com.yao.crm.dto.request.PriceBookCreateRequest;
+import com.yao.crm.dto.request.PriceBookItemRequest;
+import com.yao.crm.dto.request.PriceBookPatchRequest;
+import com.yao.crm.dto.request.ProductCreateRequest;
+import com.yao.crm.dto.request.ProductPatchRequest;
+import com.yao.crm.dto.request.QuoteCreateRequest;
+import com.yao.crm.dto.request.QuoteItemRequest;
+import com.yao.crm.dto.request.QuotePatchRequest;
+import com.yao.crm.dto.request.QuoteVersionCreateRequest;
 import com.yao.crm.entity.ContractRecord;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.entity.Opportunity;
@@ -32,16 +43,19 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Tag(name = "Commerce", description = "Products, quotes, orders, contracts and payments")
 @RestController
 @RequestMapping("/api/v1")
 public class V1CommerceController extends BaseApiController {
@@ -132,7 +146,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/products")
-    public ResponseEntity<?> createProduct(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> createProduct(HttpServletRequest request, @Valid @RequestBody ProductCreateRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -153,11 +167,11 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PatchMapping("/products")
-    public ResponseEntity<?> patchProduct(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> patchProduct(HttpServletRequest request, @Valid @RequestBody ProductPatchRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = str(payload.get("id"));
+        String id = payload.getId();
         if (isBlank(id)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
@@ -204,7 +218,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/price-books")
-    public ResponseEntity<?> createPriceBook(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> createPriceBook(HttpServletRequest request, @Valid @RequestBody PriceBookCreateRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -225,11 +239,11 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PatchMapping("/price-books")
-    public ResponseEntity<?> patchPriceBook(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> patchPriceBook(HttpServletRequest request, @Valid @RequestBody PriceBookPatchRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = str(payload.get("id"));
+        String id = payload.getId();
         if (isBlank(id)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
@@ -270,7 +284,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/price-books/{id}/items")
-    public ResponseEntity<?> upsertPriceBookItem(HttpServletRequest request, @PathVariable String id, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> upsertPriceBookItem(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody PriceBookItemRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -278,7 +292,7 @@ public class V1CommerceController extends BaseApiController {
         if (!priceBookRepository.findByIdAndTenantId(id, tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "price_book_not_found", msg(request, "price_book_not_found"), null));
         }
-        String productId = str(payload.get("productId"));
+        String productId = payload.getProductId();
         if (isBlank(productId)) {
             return ResponseEntity.badRequest().body(errorBody(request, "product_id_required", msg(request, "product_id_required"), null));
         }
@@ -290,9 +304,9 @@ public class V1CommerceController extends BaseApiController {
         item.setTenantId(tenantId);
         item.setPriceBookId(id);
         item.setProductId(productId);
-        item.setPrice(readLong(payload.get("price"), 0L));
-        item.setTaxRate(readDouble(payload.get("taxRate"), 0.0));
-        item.setCurrency(upperOrDefault(str(payload.get("currency")), "CNY"));
+        item.setPrice(payload.getPrice() != null ? payload.getPrice() : 0L);
+        item.setTaxRate(payload.getTaxRate() != null ? payload.getTaxRate() : 0.0);
+        item.setCurrency(upperOrDefault(payload.getCurrency(), "CNY"));
         PriceBookItem saved = priceBookItemRepository.save(item);
         auditLogService.record(currentUser(request), currentRole(request), "UPSERT", "PRICE_BOOK_ITEM", saved.getId(), "Upsert price book item", tenantId);
         return ResponseEntity.ok(successWithFields(request, "price_book_item_saved", toPriceBookItemView(saved)));
@@ -334,7 +348,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/quotes")
-    public ResponseEntity<?> createQuote(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> createQuote(HttpServletRequest request, @Valid @RequestBody QuoteCreateRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -354,11 +368,11 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PatchMapping("/quotes")
-    public ResponseEntity<?> patchQuote(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> patchQuote(HttpServletRequest request, @Valid @RequestBody QuotePatchRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = str(payload.get("id"));
+        String id = payload.getId();
         if (isBlank(id)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
@@ -409,7 +423,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/quotes/{id}/items")
-    public ResponseEntity<?> replaceQuoteItems(HttpServletRequest request, @PathVariable String id, @RequestBody List<Map<String, Object>> payload) {
+    public ResponseEntity<?> replaceQuoteItems(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody List<QuoteItemRequest> payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -429,8 +443,8 @@ public class V1CommerceController extends BaseApiController {
         List<Map<String, Object>> savedItems = new ArrayList<Map<String, Object>>();
         if (payload != null) {
             Set<String> productIds = new LinkedHashSet<String>();
-            for (Map<String, Object> itemPayload : payload) {
-                String productId = str(itemPayload.get("productId"));
+            for (QuoteItemRequest itemPayload : payload) {
+                String productId = itemPayload.getProductId();
                 if (!isBlank(productId)) {
                     productIds.add(productId);
                 }
@@ -442,8 +456,8 @@ public class V1CommerceController extends BaseApiController {
                 }
             }
             List<QuoteItem> toSave = new ArrayList<QuoteItem>();
-            for (Map<String, Object> itemPayload : payload) {
-                String productId = str(itemPayload.get("productId"));
+            for (QuoteItemRequest itemPayload : payload) {
+                String productId = itemPayload.getProductId();
                 if (isBlank(productId)) continue;
                 Product product = productsById.get(productId);
                 if (product == null) continue;
@@ -452,11 +466,11 @@ public class V1CommerceController extends BaseApiController {
                 item.setTenantId(tenantId);
                 item.setQuoteId(id);
                 item.setProductId(productId);
-                item.setProductName(isBlank(str(itemPayload.get("productName"))) ? product.getName() : str(itemPayload.get("productName")).trim());
-                item.setQuantity(Math.max(1, readInt(itemPayload.get("quantity"), 1)));
-                item.setUnitPrice(Math.max(0L, readLong(itemPayload.get("unitPrice"), product.getStandardPrice() == null ? 0L : product.getStandardPrice())));
-                item.setDiscountRate(Math.max(0.0, readDouble(itemPayload.get("discountRate"), 0.0)));
-                item.setTaxRate(Math.max(0.0, readDouble(itemPayload.get("taxRate"), product.getTaxRate() == null ? 0.0 : product.getTaxRate())));
+                item.setProductName(isBlank(itemPayload.getProductName()) ? product.getName() : itemPayload.getProductName().trim());
+                item.setQuantity(itemPayload.getQuantity() != null ? Math.max(1, itemPayload.getQuantity()) : 1);
+                item.setUnitPrice(itemPayload.getUnitPrice() != null ? Math.max(0L, itemPayload.getUnitPrice()) : (product.getStandardPrice() == null ? 0L : product.getStandardPrice()));
+                item.setDiscountRate(itemPayload.getDiscountRate() != null ? Math.max(0.0, itemPayload.getDiscountRate()) : 0.0);
+                item.setTaxRate(itemPayload.getTaxRate() != null ? Math.max(0.0, itemPayload.getTaxRate()) : (product.getTaxRate() == null ? 0.0 : product.getTaxRate()));
                 calculateLine(item);
                 toSave.add(item);
             }
@@ -611,7 +625,7 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PostMapping("/orders")
-    public ResponseEntity<?> createOrder(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> createOrder(HttpServletRequest request, @Valid @RequestBody OrderCreateRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -666,7 +680,7 @@ public class V1CommerceController extends BaseApiController {
     @PostMapping("/quotes/{id}/versions")
     public ResponseEntity<?> createQuoteVersion(HttpServletRequest request,
                                                 @PathVariable String id,
-                                                @RequestBody(required = false) Map<String, Object> payload) {
+                                                @Valid @RequestBody(required = false) QuoteVersionCreateRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -689,7 +703,7 @@ public class V1CommerceController extends BaseApiController {
         Map<String, Object> snapshot = new LinkedHashMap<String, Object>();
         snapshot.put("quote", toQuoteView(quote, false));
         snapshot.put("items", lineItems);
-        snapshot.put("remark", payload == null ? "" : str(payload.get("remark")));
+        snapshot.put("remark", payload == null ? "" : (payload.getRemark() == null ? "" : payload.getRemark()));
         snapshot.put("requestId", traceId(request));
         String snapshotJson;
         try {
@@ -720,11 +734,11 @@ public class V1CommerceController extends BaseApiController {
     }
 
     @PatchMapping("/orders")
-    public ResponseEntity<?> patchOrder(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> patchOrder(HttpServletRequest request, @Valid @RequestBody OrderPatchRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = str(payload.get("id"));
+        String id = payload.getId();
         if (isBlank(id)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
@@ -962,62 +976,86 @@ public class V1CommerceController extends BaseApiController {
         item.setTotalAmount(subtotal + tax);
     }
 
-    private String applyProductPayload(Product row, Map<String, Object> payload, boolean creating) {
-        String code = str(payload.get("code"));
-        String name = str(payload.get("name"));
+    private String applyProductPayload(Product row, ProductCreateRequest payload, boolean creating) {
+        String code = payload.getCode();
+        String name = payload.getName();
         if (creating && (isBlank(code) || isBlank(name))) return "product_code_name_required";
         if (!isBlank(code)) row.setCode(code.trim().toUpperCase(Locale.ROOT));
         if (!isBlank(name)) row.setName(name.trim());
-        if (payload.containsKey("category")) row.setCategory(nullable(payload.get("category")));
-        String status = upperOrDefault(str(payload.get("status")), row.getStatus());
+        if (payload.getCategory() != null) row.setCategory(payload.getCategory());
+        String status = upperOrDefault(payload.getStatus(), row.getStatus());
         if (!isBlank(status)) {
             if (!PRODUCT_STATUSES.contains(status)) return "product_status_invalid";
             row.setStatus(status);
         }
-        if (payload.containsKey("standardPrice")) row.setStandardPrice(Math.max(0L, readLong(payload.get("standardPrice"), 0L)));
-        if (payload.containsKey("taxRate")) row.setTaxRate(Math.max(0.0, readDouble(payload.get("taxRate"), 0.0)));
-        if (payload.containsKey("currency")) row.setCurrency(upperOrDefault(str(payload.get("currency")), "CNY"));
-        if (payload.containsKey("unit")) row.setUnit(nullable(payload.get("unit")));
-        if (payload.containsKey("saleRegion")) row.setSaleRegion(nullable(payload.get("saleRegion")));
-        if (payload.containsKey("validFrom")) row.setValidFrom(parseLocalDate(payload.get("validFrom")));
-        if (payload.containsKey("validTo")) row.setValidTo(parseLocalDate(payload.get("validTo")));
-        if (row.getValidFrom() != null && row.getValidTo() != null && row.getValidFrom().isAfter(row.getValidTo())) return "date_range_invalid";
+        if (payload.getStandardPrice() != null) row.setStandardPrice(Math.max(0L, payload.getStandardPrice()));
+        if (payload.getTaxRate() != null) row.setTaxRate(Math.max(0.0, payload.getTaxRate()));
+        if (payload.getCurrency() != null) row.setCurrency(upperOrDefault(payload.getCurrency(), "CNY"));
+        if (payload.getUnit() != null) row.setUnit(payload.getUnit());
         return "";
     }
 
-    private String applyPriceBookPayload(PriceBook row, Map<String, Object> payload, boolean creating) {
-        String name = str(payload.get("name"));
+    private String applyProductPayload(Product row, ProductPatchRequest payload, boolean creating) {
+        String code = payload.getCode();
+        String name = payload.getName();
+        if (creating && (isBlank(code) || isBlank(name))) return "product_code_name_required";
+        if (!isBlank(code)) row.setCode(code.trim().toUpperCase(Locale.ROOT));
+        if (!isBlank(name)) row.setName(name.trim());
+        if (payload.getCategory() != null) row.setCategory(payload.getCategory());
+        String status = upperOrDefault(payload.getStatus(), row.getStatus());
+        if (!isBlank(status)) {
+            if (!PRODUCT_STATUSES.contains(status)) return "product_status_invalid";
+            row.setStatus(status);
+        }
+        if (payload.getStandardPrice() != null) row.setStandardPrice(Math.max(0L, payload.getStandardPrice()));
+        if (payload.getTaxRate() != null) row.setTaxRate(Math.max(0.0, payload.getTaxRate()));
+        if (payload.getCurrency() != null) row.setCurrency(upperOrDefault(payload.getCurrency(), "CNY"));
+        if (payload.getUnit() != null) row.setUnit(payload.getUnit());
+        return "";
+    }
+
+    private String applyPriceBookPayload(PriceBook row, PriceBookCreateRequest payload, boolean creating) {
+        String name = payload.getName();
         if (creating && isBlank(name)) return "price_book_name_required";
         if (!isBlank(name)) row.setName(name.trim());
-        if (payload.containsKey("status")) {
-            String status = upperOrDefault(str(payload.get("status")), "ACTIVE");
+        if (payload.getStatus() != null) {
+            String status = upperOrDefault(payload.getStatus(), "ACTIVE");
             if (!PRICE_BOOK_STATUSES.contains(status)) return "price_book_status_invalid";
             row.setStatus(status);
         }
-        if (payload.containsKey("isDefault")) row.setDefault(Boolean.TRUE.equals(payload.get("isDefault")));
-        if (payload.containsKey("department")) row.setDepartment(nullable(payload.get("department")));
-        if (payload.containsKey("currency")) row.setCurrency(upperOrDefault(str(payload.get("currency")), "CNY"));
-        if (payload.containsKey("validFrom")) row.setValidFrom(parseLocalDate(payload.get("validFrom")));
-        if (payload.containsKey("validTo")) row.setValidTo(parseLocalDate(payload.get("validTo")));
-        if (row.getValidFrom() != null && row.getValidTo() != null && row.getValidFrom().isAfter(row.getValidTo())) return "date_range_invalid";
+        if (payload.getIsDefault() != null) row.setDefault(payload.getIsDefault());
+        if (payload.getCurrency() != null) row.setCurrency(upperOrDefault(payload.getCurrency(), "CNY"));
         return "";
     }
 
-    private String applyQuotePayload(HttpServletRequest request, Quote row, Map<String, Object> payload, boolean creating) {
-        String customerId = str(payload.get("customerId"));
+    private String applyPriceBookPayload(PriceBook row, PriceBookPatchRequest payload, boolean creating) {
+        String name = payload.getName();
+        if (creating && isBlank(name)) return "price_book_name_required";
+        if (!isBlank(name)) row.setName(name.trim());
+        if (payload.getStatus() != null) {
+            String status = upperOrDefault(payload.getStatus(), "ACTIVE");
+            if (!PRICE_BOOK_STATUSES.contains(status)) return "price_book_status_invalid";
+            row.setStatus(status);
+        }
+        if (payload.getIsDefault() != null) row.setDefault(payload.getIsDefault());
+        if (payload.getCurrency() != null) row.setCurrency(upperOrDefault(payload.getCurrency(), "CNY"));
+        return "";
+    }
+
+    private String applyQuotePayload(HttpServletRequest request, Quote row, QuoteCreateRequest payload, boolean creating) {
+        String customerId = payload.getCustomerId();
         if (creating && isBlank(customerId)) return "quote_customer_required";
         if (!isBlank(customerId)) {
             if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
             row.setCustomerId(customerId);
         }
-        String opportunityId = str(payload.get("opportunityId"));
+        String opportunityId = payload.getOpportunityId();
         if (!isBlank(opportunityId)) {
             if (!belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) return "opportunity_not_found";
             row.setOpportunityId(opportunityId);
         }
-        if (payload.containsKey("priceBookId")) row.setPriceBookId(nullable(payload.get("priceBookId")));
-        if (payload.containsKey("owner")) {
-            String owner = str(payload.get("owner"));
+        if (payload.getOwner() != null) {
+            String owner = payload.getOwner();
             if (!isBlank(owner)) {
                 if (isSalesScoped(request) && !ownerMatchesScope(request, owner)) return "scope_forbidden";
                 row.setOwner(owner.trim());
@@ -1025,34 +1063,62 @@ public class V1CommerceController extends BaseApiController {
         } else if (creating) {
             row.setOwner(currentUser(request));
         }
-        if (payload.containsKey("status")) {
-            String status = upperOrDefault(str(payload.get("status")), row.getStatus());
+        if (payload.getStatus() != null) {
+            String status = upperOrDefault(payload.getStatus(), row.getStatus());
             if (!QUOTE_STATUSES.contains(status)) return "quote_status_invalid";
             row.setStatus(status);
         }
-        if (payload.containsKey("validUntil")) row.setValidUntil(parseLocalDate(payload.get("validUntil")));
-        if (payload.containsKey("notes")) row.setNotes(nullable(payload.get("notes")));
-        if (payload.containsKey("version")) row.setVersion(Math.max(1, readInt(payload.get("version"), row.getVersion() == null ? 1 : row.getVersion())));
+        if (payload.getValidUntil() != null) row.setValidUntil(parseLocalDate(payload.getValidUntil()));
         return "";
     }
 
-    private String applyOrderPayload(HttpServletRequest request, OrderRecord row, Map<String, Object> payload, boolean creating) {
-        String customerId = str(payload.get("customerId"));
+    private String applyQuotePayload(HttpServletRequest request, Quote row, QuotePatchRequest payload, boolean creating) {
+        String customerId = payload.getCustomerId();
+        if (creating && isBlank(customerId)) return "quote_customer_required";
+        if (!isBlank(customerId)) {
+            if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
+            row.setCustomerId(customerId);
+        }
+        String opportunityId = payload.getOpportunityId();
+        if (!isBlank(opportunityId)) {
+            if (!belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) return "opportunity_not_found";
+            row.setOpportunityId(opportunityId);
+        }
+        if (payload.getOwner() != null) {
+            String owner = payload.getOwner();
+            if (!isBlank(owner)) {
+                if (isSalesScoped(request) && !ownerMatchesScope(request, owner)) return "scope_forbidden";
+                row.setOwner(owner.trim());
+            }
+        } else if (creating) {
+            row.setOwner(currentUser(request));
+        }
+        if (payload.getStatus() != null) {
+            String status = upperOrDefault(payload.getStatus(), row.getStatus());
+            if (!QUOTE_STATUSES.contains(status)) return "quote_status_invalid";
+            row.setStatus(status);
+        }
+        if (payload.getValidUntil() != null) row.setValidUntil(parseLocalDate(payload.getValidUntil()));
+        return "";
+    }
+
+    private String applyOrderPayload(HttpServletRequest request, OrderRecord row, OrderCreateRequest payload, boolean creating) {
+        String customerId = payload.getCustomerId();
         if (creating && isBlank(customerId)) return "order_customer_required";
         if (!isBlank(customerId)) {
             if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
             row.setCustomerId(customerId);
         }
-        if (payload.containsKey("opportunityId")) {
-            String opportunityId = str(payload.get("opportunityId"));
+        if (payload.getOpportunityId() != null) {
+            String opportunityId = payload.getOpportunityId();
             if (!isBlank(opportunityId) && !belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) {
                 return "opportunity_not_found";
             }
-            row.setOpportunityId(nullable(payload.get("opportunityId")));
+            row.setOpportunityId(opportunityId);
         }
-        if (payload.containsKey("quoteId")) row.setQuoteId(nullable(payload.get("quoteId")));
-        if (payload.containsKey("owner")) {
-            String owner = str(payload.get("owner"));
+        if (payload.getQuoteId() != null) row.setQuoteId(payload.getQuoteId());
+        if (payload.getOwner() != null) {
+            String owner = payload.getOwner();
             if (!isBlank(owner)) {
                 if (isSalesScoped(request) && !ownerMatchesScope(request, owner)) return "scope_forbidden";
                 row.setOwner(owner.trim());
@@ -1060,14 +1126,45 @@ public class V1CommerceController extends BaseApiController {
         } else if (creating) {
             row.setOwner(currentUser(request));
         }
-        if (payload.containsKey("status")) {
-            String status = upperOrDefault(str(payload.get("status")), row.getStatus());
+        if (payload.getStatus() != null) {
+            String status = upperOrDefault(payload.getStatus(), row.getStatus());
             if (!ORDER_STATUSES.contains(status)) return "order_status_invalid";
             row.setStatus(status);
         }
-        if (payload.containsKey("amount")) row.setAmount(Math.max(0L, readLong(payload.get("amount"), row.getAmount() == null ? 0L : row.getAmount())));
-        if (payload.containsKey("signDate")) row.setSignDate(parseLocalDate(payload.get("signDate")));
-        if (payload.containsKey("notes")) row.setNotes(nullable(payload.get("notes")));
+        if (payload.getTotalAmount() != null) row.setAmount(Math.max(0L, payload.getTotalAmount()));
+        return "";
+    }
+
+    private String applyOrderPayload(HttpServletRequest request, OrderRecord row, OrderPatchRequest payload, boolean creating) {
+        String customerId = payload.getCustomerId();
+        if (creating && isBlank(customerId)) return "order_customer_required";
+        if (!isBlank(customerId)) {
+            if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
+            row.setCustomerId(customerId);
+        }
+        if (payload.getOpportunityId() != null) {
+            String opportunityId = payload.getOpportunityId();
+            if (!isBlank(opportunityId) && !belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) {
+                return "opportunity_not_found";
+            }
+            row.setOpportunityId(opportunityId);
+        }
+        if (payload.getQuoteId() != null) row.setQuoteId(payload.getQuoteId());
+        if (payload.getOwner() != null) {
+            String owner = payload.getOwner();
+            if (!isBlank(owner)) {
+                if (isSalesScoped(request) && !ownerMatchesScope(request, owner)) return "scope_forbidden";
+                row.setOwner(owner.trim());
+            }
+        } else if (creating) {
+            row.setOwner(currentUser(request));
+        }
+        if (payload.getStatus() != null) {
+            String status = upperOrDefault(payload.getStatus(), row.getStatus());
+            if (!ORDER_STATUSES.contains(status)) return "order_status_invalid";
+            row.setStatus(status);
+        }
+        if (payload.getTotalAmount() != null) row.setAmount(Math.max(0L, payload.getTotalAmount()));
         return "";
     }
 

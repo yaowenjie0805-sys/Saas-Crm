@@ -4,24 +4,26 @@ on:
   pull_request:
     branches: [ "master" ]
 
+env:
+  AUTH_TOKEN_SECRET: ${{ secrets.CI_AUTH_TOKEN_SECRET }}
+  SECURITY_MFA_STATIC_CODE: ${{ secrets.CI_MFA_STATIC_CODE }}
+  SECURITY_SSO_MODE: oidc
+  AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ${{ secrets.CI_BOOTSTRAP_PASSWORD }}
+  DB_URL: jdbc:mysql://127.0.0.1:3306/crm_local
+  DB_USER: ${{ secrets.CI_DB_USER }}
+  DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+  LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
+  PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
+  PREFLIGHT_SKIP_SLO_EVIDENCE: "true"
+  PREFLIGHT_SKIP_PERF_EVIDENCE: "true"
+  PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
+  PREFLIGHT_SKIP_ALERT_EVIDENCE: "true"
+  PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
+
 jobs:
-  gate:
+  # Job 1: 代码检查（最先执行，快速失败）
+  lint:
     runs-on: windows-latest
-    env:
-      AUTH_TOKEN_SECRET: ${{ secrets.CI_AUTH_TOKEN_SECRET }}
-      SECURITY_MFA_STATIC_CODE: ${{ secrets.CI_MFA_STATIC_CODE }}
-      SECURITY_SSO_MODE: oidc
-      AUTH_BOOTSTRAP_DEFAULT_PASSWORD: ${{ secrets.CI_BOOTSTRAP_PASSWORD }}
-      DB_URL: jdbc:mysql://127.0.0.1:3306/crm_local
-      DB_USER: ${{ secrets.CI_DB_USER }}
-      DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
-      LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
-      PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
-      PREFLIGHT_SKIP_SLO_EVIDENCE: "true"
-      PREFLIGHT_SKIP_PERF_EVIDENCE: "true"
-      PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
-      PREFLIGHT_SKIP_ALERT_EVIDENCE: "true"
-      PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,23 +34,65 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "8"
-
       - name: Install Frontend Dependencies
         run: npm ci
 
       - name: Lint
         run: npm run lint
 
+  # Job 2: 前端构建和测试（依赖 lint）
+  frontend:
+    needs: lint
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
       - name: Build
         run: npm run build
 
+  # Job 3: 后端测试（依赖 lint，与 frontend 并行）
+  backend:
+    needs: lint
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "8"
+
       - name: Backend Tests
         run: npm run test:backend
+
+  # Job 4: 安全和发布检查（依赖 lint，与 frontend/backend 并行）
+  security-release:
+    needs: lint
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Frontend Dependencies
+        run: npm ci
 
       - name: Security Scan
         run: npm run security:scan

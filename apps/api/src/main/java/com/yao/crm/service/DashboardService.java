@@ -9,6 +9,7 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.OpportunityRepository;
 import com.yao.crm.repository.TaskRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
@@ -32,6 +33,7 @@ public class DashboardService {
         this.dashboardMetricsCacheService = dashboardMetricsCacheService;
     }
 
+    @Transactional(readOnly = true)
     public DashboardMetricsCacheService.CachedValue<DashboardResponse> loadByTenantCached(String tenantId, String actor, String actorRole) {
         String key = (actorRole == null ? "" : actorRole.trim().toUpperCase(Locale.ROOT));
         return dashboardMetricsCacheService.getOrLoad(tenantId, "dashboard-overview", key, new java.util.function.Supplier<DashboardResponse>() {
@@ -42,6 +44,7 @@ public class DashboardService {
         });
     }
 
+    @Transactional(readOnly = true)
     public DashboardResponse loadByTenant(String tenantId) {
         long customerCount = customerRepository.countByTenantId(tenantId);
         long totalSales = safeLong(customerRepository.sumValueByTenantId(tenantId));

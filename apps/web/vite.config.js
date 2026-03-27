@@ -8,6 +8,10 @@ const CHUNK_GROUPS = {
     { test: /node_modules\/react-dom/, name: 'vendor-react' },
     { test: /node_modules\/react-router/, name: 'vendor-router' },
     { test: /node_modules\/zustand/, name: 'vendor-state' },
+    { test: /node_modules\/antd/, name: 'vendor-antd' },
+    { test: /node_modules\/@ant-design/, name: 'vendor-antd' },
+    { test: /node_modules\/echarts/, name: 'vendor-charts' },
+    { test: /node_modules\/echarts-for-react/, name: 'vendor-charts' },
     { test: /node_modules\//, name: 'vendor-misc' },
   ],
   appRuntime: [

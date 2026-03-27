@@ -1,10 +1,16 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.dto.request.ChartPreviewRequest;
+import com.yao.crm.dto.request.ChartTemplateCloneRequest;
+import com.yao.crm.dto.request.ChartTemplateCreateRequest;
+import com.yao.crm.dto.request.ChartTemplateUpdateRequest;
 import com.yao.crm.entity.ChartTemplate;
 import com.yao.crm.service.ChartService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -12,6 +18,7 @@ import java.util.*;
  * 图表控制器
  * 提供图表数据、模板管理API
  */
+@Tag(name = "Charts", description = "Chart data and templates")
 @RestController
 @RequestMapping("/api/v2/charts")
 public class ChartController {
@@ -55,14 +62,14 @@ public class ChartController {
     @PostMapping("/preview")
     public ResponseEntity<?> previewChartData(
             @RequestHeader("X-Tenant-Id") String tenantId,
-            @RequestBody PreviewRequest request) {
+            @Valid @RequestBody ChartPreviewRequest request) {
 
         Map<String, Object> filters = new HashMap<>();
-        if (request.fromDate != null) filters.put("fromDate", request.fromDate);
-        if (request.toDate != null) filters.put("toDate", request.toDate);
-        if (request.owner != null) filters.put("owner", request.owner);
+        if (request.getFromDate() != null) filters.put("fromDate", request.getFromDate());
+        if (request.getToDate() != null) filters.put("toDate", request.getToDate());
+        if (request.getOwner() != null) filters.put("owner", request.getOwner());
 
-        Map<String, Object> data = chartService.getChartData(tenantId, request.datasetType, filters);
+        Map<String, Object> data = chartService.getChartData(tenantId, request.getDatasetType(), filters);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -114,20 +121,20 @@ public class ChartController {
     @PostMapping("/templates")
     public ResponseEntity<ChartTemplate> createTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
-            @RequestBody CreateTemplateRequest request) {
+            @Valid @RequestBody ChartTemplateCreateRequest request) {
 
         ChartTemplate template = new ChartTemplate();
         template.setId(UUID.randomUUID().toString());
         template.setTenantId(tenantId);
-        template.setName(request.name);
-        template.setDescription(request.description);
-        template.setChartType(request.chartType);
-        template.setDatasetType(request.datasetType);
-        template.setConfigJson(request.configJson != null ? request.configJson : "{}");
-        template.setLayoutConfig(request.layoutConfig);
-        template.setVisibility(request.visibility != null ? request.visibility : "PRIVATE");
-        template.setOwner(request.owner);
-        template.setDepartment(request.department);
+        template.setName(request.getName());
+        template.setDescription(request.getDescription());
+        template.setChartType(request.getChartType());
+        template.setDatasetType(request.getDatasetType());
+        template.setConfigJson(request.getConfigJson() != null ? request.getConfigJson() : "{}");
+        template.setLayoutConfig(request.getLayoutConfig());
+        template.setVisibility(request.getVisibility() != null ? request.getVisibility() : "PRIVATE");
+        template.setOwner(request.getOwner());
+        template.setDepartment(request.getDepartment());
         template.setVersion(1);
         template.setIsSystem(false);
         template.setCreatedAt(LocalDateTime.now());
@@ -145,7 +152,7 @@ public class ChartController {
     public ResponseEntity<?> updateTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
-            @RequestBody UpdateTemplateRequest request) {
+            @Valid @RequestBody ChartTemplateUpdateRequest request) {
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -176,12 +183,12 @@ public class ChartController {
     public ResponseEntity<?> cloneTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
-            @RequestBody CloneTemplateRequest request) {
+            @Valid @RequestBody ChartTemplateCloneRequest request) {
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("id", UUID.randomUUID().toString());
-        result.put("name", request.newName);
+        result.put("name", request.getNewName());
         result.put("message", "Template cloned");
         return ResponseEntity.ok(result);
     }
@@ -221,49 +228,6 @@ public class ChartController {
         Map<String, Object> result = new HashMap<>();
         result.put("datasets", datasets);
         return ResponseEntity.ok(result);
-    }
-
-    /**
-     * 预览请求
-     */
-    public static class PreviewRequest {
-        public String datasetType;
-        public String fromDate;
-        public String toDate;
-        public String owner;
-    }
-
-    /**
-     * 创建模板请求
-     */
-    public static class CreateTemplateRequest {
-        public String name;
-        public String description;
-        public String chartType;
-        public String datasetType;
-        public String configJson;
-        public String layoutConfig;
-        public String visibility;
-        public String owner;
-        public String department;
-    }
-
-    /**
-     * 更新模板请求
-     */
-    public static class UpdateTemplateRequest {
-        public String name;
-        public String description;
-        public String configJson;
-        public String layoutConfig;
-        public String visibility;
-    }
-
-    /**
-     * 克隆模板请求
-     */
-    public static class CloneTemplateRequest {
-        public String newName;
     }
 
     private Map<String, String> createChartType(String value, String label, String icon) {

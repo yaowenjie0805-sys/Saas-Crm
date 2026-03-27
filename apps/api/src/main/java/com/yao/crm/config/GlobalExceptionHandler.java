@@ -1,8 +1,16 @@
 package com.yao.crm.config;
 
 import com.yao.crm.dto.ApiErrorResponse;
+import com.yao.crm.exception.AccessDeniedException;
+import com.yao.crm.exception.BusinessException;
+import com.yao.crm.exception.BusinessRuleViolationException;
+import com.yao.crm.exception.DuplicateEntityException;
+import com.yao.crm.exception.EntityNotFoundException;
+import com.yao.crm.exception.ValidationException;
 import com.yao.crm.security.TraceIdInterceptor;
 import com.yao.crm.service.I18nService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -20,6 +28,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private final I18nService i18nService;
 
@@ -96,8 +106,158 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    // ============ 业务异常处理 ============
+
+    /**
+     * 处理 EntityNotFoundException - HTTP 404
+     */
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleEntityNotFound(EntityNotFoundException ex, HttpServletRequest request) {
+        log.warn("EntityNotFoundException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.NOT_FOUND.value(),
+                "Not Found",
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId(request)
+        );
+        
+        if (ex.hasField()) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("field", ex.getField());
+            body.setDetails(details);
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    /**
+     * 处理 ValidationException - HTTP 400
+     */
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleValidationException(ValidationException ex, HttpServletRequest request) {
+        log.warn("ValidationException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                "Bad Request",
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId(request)
+        );
+        
+        if (ex.hasField()) {
+            Map<String, String> validationErrors = new LinkedHashMap<String, String>();
+            validationErrors.put(ex.getField(), ex.getMessage());
+            body.setValidationErrors(validationErrors);
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * 处理 AccessDeniedException - HTTP 403
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        log.warn("AccessDeniedException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.FORBIDDEN.value(),
+                "Forbidden",
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId(request)
+        );
+        
+        if (ex.hasField()) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("field", ex.getField());
+            body.setDetails(details);
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
+    /**
+     * 处理 DuplicateEntityException - HTTP 409
+     */
+    @ExceptionHandler(DuplicateEntityException.class)
+    public ResponseEntity<ApiErrorResponse> handleDuplicateEntity(DuplicateEntityException ex, HttpServletRequest request) {
+        log.warn("DuplicateEntityException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.CONFLICT.value(),
+                "Conflict",
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId(request)
+        );
+        
+        if (ex.hasField()) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("field", ex.getField());
+            body.setDetails(details);
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    /**
+     * 处理 BusinessRuleViolationException - HTTP 422
+     */
+    @ExceptionHandler(BusinessRuleViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleBusinessRuleViolation(BusinessRuleViolationException ex, HttpServletRequest request) {
+        log.warn("BusinessRuleViolationException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "Unprocessable Entity",
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId(request)
+        );
+        
+        if (ex.hasField()) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("field", ex.getField());
+            body.setDetails(details);
+        }
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    }
+
+    /**
+     * 处理通用 BusinessException - 作为兜底处理
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiErrorResponse> handleBusinessException(BusinessException ex, HttpServletRequest request) {
+        log.warn("BusinessException at {}: {}", request.getRequestURI(), ex.getMessage());
+        
+        ApiErrorResponse body = ApiErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                "Business Error",
+                ex.getErrorCode(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId(request)
+        );
+        
+        if (ex.hasField()) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("field", ex.getField());
+            body.setDetails(details);
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    // ============ 系统异常处理 ============
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleAnyException(Exception ex, HttpServletRequest request) {
+        log.error("Unexpected exception at {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+        
         ApiErrorResponse body = ApiErrorResponse.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",

@@ -4,7 +4,9 @@ import com.yao.crm.entity.FieldPermission;
 import com.yao.crm.entity.SensitiveFieldConfig;
 import com.yao.crm.repository.FieldPermissionRepository;
 import com.yao.crm.repository.SensitiveFieldConfigRepository;
+import com.yao.crm.enums.UserRole;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -47,6 +49,7 @@ public class FieldPermissionService {
     /**
      * 检查字段权限
      */
+    @Transactional(readOnly = true)
     public FieldPermissionResult checkFieldPermission(String tenantId, String role, String entityType, String fieldName) {
         Optional<FieldPermission> permission = fieldPermissionRepository
                 .findByTenantIdAndRoleAndEntityTypeAndFieldName(tenantId, role, entityType, fieldName);
@@ -62,12 +65,13 @@ public class FieldPermissionService {
         }
 
         // 默认权限：所有人都可以查看和编辑
-        return new FieldPermissionResult(true, true, "ADMIN".equals(role) || "MANAGER".equals(role), false);
+        return new FieldPermissionResult(true, true, UserRole.isAdmin(role) || UserRole.isManager(role), false);
     }
 
     /**
      * 批量检查字段权限
      */
+    @Transactional(readOnly = true)
     public Map<String, FieldPermissionResult> checkFieldPermissions(
             String tenantId, String role, String entityType, List<String> fieldNames) {
 
@@ -89,7 +93,7 @@ public class FieldPermissionService {
                 ));
             } else {
                 // 默认权限
-                results.put(fieldName, new FieldPermissionResult(true, true, "ADMIN".equals(role), false));
+                results.put(fieldName, new FieldPermissionResult(true, true, UserRole.isAdmin(role), false));
             }
         }
 
@@ -99,6 +103,7 @@ public class FieldPermissionService {
     /**
      * 设置字段权限
      */
+    @Transactional(timeout = 30)
     public FieldPermission setFieldPermission(
             String tenantId, String role, String entityType, String fieldName,
             boolean canView, boolean canEdit, boolean canDelete, boolean isHidden) {
@@ -129,6 +134,7 @@ public class FieldPermissionService {
     /**
      * 获取敏感字段配置
      */
+    @Transactional(readOnly = true)
     public Optional<SensitiveFieldConfig> getSensitiveFieldConfig(String tenantId, String entityType, String fieldName) {
         return sensitiveFieldConfigRepository
                 .findByTenantIdAndEntityTypeAndFieldName(tenantId, entityType, fieldName);
@@ -137,6 +143,7 @@ public class FieldPermissionService {
     /**
      * 获取实体的所有敏感字段配置
      */
+    @Transactional(readOnly = true)
     public List<SensitiveFieldConfig> getSensitiveFields(String tenantId, String entityType) {
         return sensitiveFieldConfigRepository.findByTenantIdAndEntityType(tenantId, entityType);
     }
@@ -144,6 +151,7 @@ public class FieldPermissionService {
     /**
      * 配置敏感字段
      */
+    @Transactional(timeout = 30)
     public SensitiveFieldConfig configureSensitiveField(
             String tenantId, String entityType, String fieldName,
             String maskType, String maskPattern, int visibleStart, int visibleEnd, String maskChar) {
@@ -174,6 +182,7 @@ public class FieldPermissionService {
     /**
      * 脱敏处理
      */
+    @Transactional(readOnly = true)
     public String maskSensitiveData(String tenantId, String entityType, String fieldName, String value) {
         if (value == null || value.isEmpty()) {
             return value;
@@ -197,6 +206,7 @@ public class FieldPermissionService {
     /**
      * 批量脱敏处理
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> maskSensitiveData(String tenantId, String entityType, Map<String, Object> data) {
         Map<String, Object> maskedData = new HashMap<>(data);
 
@@ -259,6 +269,7 @@ public class FieldPermissionService {
     /**
      * 获取字段权限矩阵
      */
+    @Transactional(readOnly = true)
     public Map<String, Map<String, FieldPermissionResult>> getPermissionMatrix(String tenantId) {
         List<FieldPermission> permissions = fieldPermissionRepository.findByTenantId(tenantId);
 

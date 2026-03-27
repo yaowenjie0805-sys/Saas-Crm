@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { ROLES, formatDateTime, translateRole } from '../../shared'
 import ServerPager from '../ServerPager'
 import VirtualListTable from '../VirtualListTable'
@@ -173,4 +174,4 @@ function AuditPanel({
   )
 }
 
-export default AuditPanel
+export default memo(AuditPanel)

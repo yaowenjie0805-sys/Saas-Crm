@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
 
 /**

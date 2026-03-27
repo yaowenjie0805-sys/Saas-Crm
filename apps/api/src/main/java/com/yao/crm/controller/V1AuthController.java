@@ -12,6 +12,7 @@ import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.security.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+@Tag(name = "Authentication", description = "Login, logout and token management")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class V1AuthController extends BaseApiController {

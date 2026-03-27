@@ -36,13 +36,14 @@ export function SensitiveField({ value, fieldType, unmasked = false, onRequestUn
         }
         return '**** **** **** ****'
 
-      case 'EMAIL':
+      case 'EMAIL': {
         // 邮箱：t***@example.com
         const atIndex = val.indexOf('@')
         if (atIndex > 1) {
           return val.substring(0, 1) + '***' + val.substring(atIndex)
         }
         return '***'
+      }
 
       case 'ADDRESS':
         // 地址：只显示省市
@@ -146,7 +147,7 @@ export function SensitiveTableCell({ value, fieldType, columnKey }) {
  */
 export function SensitiveFieldConfigPanel() {
   const [configs, setConfigs] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
 
   // 预定义的敏感字段类型
   const fieldTypes = [

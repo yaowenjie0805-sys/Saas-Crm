@@ -3,6 +3,7 @@ package com.yao.crm.service;
 import com.yao.crm.entity.ChartTemplate;
 import com.yao.crm.repository.ChartTemplateRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public class ChartService {
     /**
      * 获取图表数据
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> getChartData(String tenantId, String datasetType, Map<String, Object> filters) {
         LocalDate fromDate = filters.containsKey("fromDate")
                 ? LocalDate.parse((String) filters.get("fromDate"))
@@ -375,6 +377,7 @@ public class ChartService {
     /**
      * 创建图表模板
      */
+    @Transactional(timeout = 30)
     public ChartTemplate createTemplate(ChartTemplate template) {
         template.setId(UUID.randomUUID().toString());
         template.setVersion(1);
@@ -387,6 +390,7 @@ public class ChartService {
     /**
      * 获取图表模板
      */
+    @Transactional(readOnly = true)
     public List<ChartTemplate> getTemplates(String tenantId, String chartType) {
         if (chartType != null && !chartType.isEmpty()) {
             return chartTemplateRepository.findByTenantIdAndChartType(tenantId, chartType);
@@ -397,6 +401,7 @@ public class ChartService {
     /**
      * 获取系统默认模板
      */
+    @Transactional(readOnly = true)
     public List<ChartTemplate> getSystemTemplates(String tenantId) {
         List<ChartTemplate> templates = new ArrayList<>();
 

@@ -18,6 +18,7 @@ import com.yao.crm.repository.TaskRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.repository.LeadRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,6 +31,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static com.yao.crm.service.ReportUtils.isBlank;
+import static com.yao.crm.service.ReportUtils.endOfDay;
+import static com.yao.crm.service.ReportUtils.normalizeFromDate;
+import static com.yao.crm.service.ReportUtils.normalizeToDate;
+import static com.yao.crm.service.ReportUtils.normalized;
+import static com.yao.crm.service.ReportUtils.startOfDay;
+
 @Service
 public class ReportService {
     private static final List<String> QUOTE_APPROVED_OR_ACCEPTED =
@@ -37,8 +45,6 @@ public class ReportService {
     private static final List<String> QUOTE_ACCEPTED_ONLY = java.util.Collections.singletonList("ACCEPTED");
     private static final List<String> PAYMENT_RECEIVED_ONLY = java.util.Collections.singletonList("RECEIVED");
     private static final long IDENTITY_SCOPE_CACHE_TTL_MS = 30_000L;
-    private static final LocalDate OPEN_RANGE_START = LocalDate.of(1970, 1, 1);
-    private static final LocalDate OPEN_RANGE_END = LocalDate.of(2099, 12, 31);
 
     private final CustomerRepository customerRepository;
     private final OpportunityRepository opportunityRepository;
@@ -51,6 +57,7 @@ public class ReportService {
     private final LeadRepository leadRepository;
     private final ValueNormalizerService valueNormalizerService;
     private final DashboardMetricsCacheService dashboardMetricsCacheService;
+    private final ReportAggregationService reportAggregationService;
     private final Map<String, IdentityScopeCacheEntry> roleIdentityCache = new ConcurrentHashMap<String, IdentityScopeCacheEntry>();
     private final Map<String, IdentityScopeCacheEntry> departmentIdentityCache = new ConcurrentHashMap<String, IdentityScopeCacheEntry>();
 
@@ -64,7 +71,8 @@ public class ReportService {
                          UserAccountRepository userAccountRepository,
                          LeadRepository leadRepository,
                          ValueNormalizerService valueNormalizerService,
-                         DashboardMetricsCacheService dashboardMetricsCacheService) {
+                         DashboardMetricsCacheService dashboardMetricsCacheService,
+                         ReportAggregationService reportAggregationService) {
         this.customerRepository = customerRepository;
         this.opportunityRepository = opportunityRepository;
         this.taskRepository = taskRepository;
@@ -76,12 +84,15 @@ public class ReportService {
         this.leadRepository = leadRepository;
         this.valueNormalizerService = valueNormalizerService;
         this.dashboardMetricsCacheService = dashboardMetricsCacheService;
+        this.reportAggregationService = reportAggregationService;
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> overview(LocalDate fromDate, LocalDate toDate, String role) {
         return overviewByTenant("tenant_default", fromDate, toDate, role, "", "");
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> overviewByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String role, String owner, String department) {
         if (fromDate == null && toDate == null && isBlank(role) && isBlank(owner) && isBlank(department)) {
             return overviewByTenantFastPath(tenantId);
@@ -212,21 +223,21 @@ public class ReportService {
                                                               LocalDateTime to,
                                                               Set<String> owners) {
         if (owners != null && owners.isEmpty()) {
-            return emptyOverviewBody();
+            return reportAggregationService.emptyOverviewBody();
         }
 
         final boolean scoped = owners != null;
         long customerCount = scoped
                 ? customerRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : customerRepository.countByTenantIdAndCreatedAtBetween(tenantId, from, to);
-        long totalRevenue = safeLong(scoped
+        long totalRevenue = ReportUtils.safeLong(scoped
                 ? customerRepository.sumValueByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : customerRepository.sumValueByTenantIdAndCreatedAtBetween(tenantId, from, to));
 
         long opportunitiesCount = scoped
                 ? opportunityRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : opportunityRepository.countByTenantIdAndCreatedAtBetween(tenantId, from, to);
-        long weightedAmountRaw = safeLong(scoped
+        long weightedAmountRaw = ReportUtils.safeLong(scoped
                 ? opportunityRepository.sumWeightedAmountRawByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : opportunityRepository.sumWeightedAmountRawByTenantIdAndCreatedAtBetween(tenantId, from, to));
         long weightedAmount = Math.round(weightedAmountRaw / 100.0d);
@@ -265,10 +276,10 @@ public class ReportService {
         long orderCompleted = scoped
                 ? orderRecordRepository.countByTenantIdAndOwnerInAndStatusAndCreatedAtBetween(tenantId, owners, "COMPLETED", from, to)
                 : orderRecordRepository.countByTenantIdAndStatusAndCreatedAtBetween(tenantId, "COMPLETED", from, to);
-        long orderAmountTotal = safeLong(scoped
+        long orderAmountTotal = ReportUtils.safeLong(scoped
                 ? orderRecordRepository.sumAmountByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : orderRecordRepository.sumAmountByTenantIdAndCreatedAtBetween(tenantId, from, to));
-        long orderPaymentReceived = safeLong(scoped
+        long orderPaymentReceived = ReportUtils.safeLong(scoped
                 ? paymentRecordRepository.sumAmountByTenantIdAndOwnerInAndStatusInUppercaseAndCreatedAtBetween(
                 tenantId, owners, PAYMENT_RECEIVED_ONLY, from, to)
                 : paymentRecordRepository.sumAmountByTenantIdAndStatusInUppercaseAndCreatedAtBetween(
@@ -284,27 +295,27 @@ public class ReportService {
 
         Map<String, Integer> customerByOwner = customerCount <= 0
                 ? new HashMap<String, Integer>()
-                : toIntMap(scoped
+                : ReportUtils.toIntMap(scoped
                 ? customerRepository.countByOwnerGroupedAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : customerRepository.countByOwnerGroupedAndCreatedAtBetween(tenantId, from, to));
         Map<String, Long> revenueByStatus = customerCount <= 0
                 ? new HashMap<String, Long>()
-                : toLongMap(scoped
+                : ReportUtils.toLongMap(scoped
                 ? customerRepository.sumValueByStatusGroupedAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : customerRepository.sumValueByStatusGroupedAndCreatedAtBetween(tenantId, from, to));
         Map<String, Integer> opportunityByStage = opportunitiesCount <= 0
                 ? new HashMap<String, Integer>()
-                : toIntMap(scoped
+                : ReportUtils.toIntMap(scoped
                 ? opportunityRepository.countByStageGroupedAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : opportunityRepository.countByStageGroupedAndCreatedAtBetween(tenantId, from, to));
         Map<String, Integer> quoteByStatus = quotes <= 0
                 ? new HashMap<String, Integer>()
-                : toIntMap(scoped
+                : ReportUtils.toIntMap(scoped
                 ? quoteRepository.countByStatusGroupedAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : quoteRepository.countByStatusGroupedAndCreatedAtBetween(tenantId, from, to));
         Map<String, Integer> orderByStatus = orders <= 0
                 ? new HashMap<String, Integer>()
-                : toIntMap(scoped
+                : ReportUtils.toIntMap(scoped
                 ? orderRecordRepository.countByStatusGroupedAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to)
                 : orderRecordRepository.countByStatusGroupedAndCreatedAtBetween(tenantId, from, to));
 
@@ -314,9 +325,9 @@ public class ReportService {
                     ? followUpRepository.countByChannelGroupedAndAuthorInAndCreatedAtBetween(tenantId, owners, from, to)
                     : followUpRepository.countByChannelGroupedAndCreatedAtBetween(tenantId, from, to);
             for (Object[] row : channelRows) {
-                String channel = normalizeBucket(row.length > 0 ? row[0] : null);
+                String channel = ReportUtils.normalizeBucket(row.length > 0 ? row[0] : null);
                 channel = valueNormalizerService.normalizeFollowUpChannel(channel);
-                int count = asInt(row.length > 1 ? row[1] : null);
+                int count = ReportUtils.asInt(row.length > 1 ? row[1] : null);
                 followUpByChannel.put(channel, followUpByChannel.containsKey(channel)
                         ? followUpByChannel.get(channel) + count
                         : count);
@@ -357,241 +368,15 @@ public class ReportService {
     }
 
     private Map<String, Object> overviewByTenantFastPath(String tenantId) {
-        long customerCount = customerRepository.countByTenantId(tenantId);
-        long totalRevenue = safeLong(customerRepository.sumValueByTenantId(tenantId));
-        long opportunitiesCount = opportunityRepository.countByTenantId(tenantId);
-        long weightedAmountRaw = safeLong(opportunityRepository.sumWeightedAmountRawByTenantId(tenantId));
-        long weightedAmount = Math.round(weightedAmountRaw / 100.0d);
-        long highProgressCount = opportunityRepository.countByTenantIdAndProgressGte(tenantId, 80);
-
-        long doneTasks = taskRepository.countByTenantIdAndDoneTrue(tenantId);
-        long pendingTasks = taskRepository.countByTenantIdAndDoneFalse(tenantId);
-        long taskTotal = doneTasks + pendingTasks;
-
-        long followUps = followUpRepository.countByTenantId(tenantId);
-        long quotes = quoteRepository.countByTenantId(tenantId);
-        long quoteApproved = quoteRepository.countByTenantIdAndStatusInUppercase(
-                tenantId,
-                QUOTE_APPROVED_OR_ACCEPTED
-        );
-        long quoteAccepted = quoteRepository.countByTenantIdAndStatusInUppercase(
-                tenantId,
-                QUOTE_ACCEPTED_ONLY
-        );
-        long orders = orderRecordRepository.countByTenantId(tenantId);
-        long orderCompleted = orderRecordRepository.countByTenantIdAndStatus(tenantId, "COMPLETED");
-        long orderAmountTotal = safeLong(orderRecordRepository.sumAmountByTenantId(tenantId));
-        long orderPaymentReceived = safeLong(paymentRecordRepository.sumAmountByTenantIdAndStatusInUppercase(
-                tenantId,
-                PAYMENT_RECEIVED_ONLY
-        ));
-        long orderPaymentOutstanding = Math.max(0L, orderAmountTotal - orderPaymentReceived);
-
-        double winRate = opportunitiesCount == 0 ? 0.0 : Math.round((highProgressCount * 1000.0 / opportunitiesCount)) / 10.0;
-        double taskDoneRate = taskTotal == 0 ? 0.0 : Math.round((doneTasks * 1000.0 / taskTotal)) / 10.0;
-        double quoteApproveRate = quotes == 0 ? 0.0 : Math.round((quoteApproved * 1000.0 / quotes)) / 10.0;
-        double quoteToOrderRate = quoteAccepted == 0 ? 0.0 : Math.round((orders * 1000.0 / quoteAccepted)) / 10.0;
-        double orderCompleteRate = orders == 0 ? 0.0 : Math.round((orderCompleted * 1000.0 / orders)) / 10.0;
-        double orderCollectionRate = orderAmountTotal <= 0 ? 0.0 : Math.round((orderPaymentReceived * 1000.0 / orderAmountTotal)) / 10.0;
-
-        Map<String, Integer> customerByOwner = customerCount <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(customerRepository.countByOwnerGrouped(tenantId));
-        Map<String, Long> revenueByStatus = customerCount <= 0
-                ? new HashMap<String, Long>()
-                : toLongMap(customerRepository.sumValueByStatusGrouped(tenantId));
-        Map<String, Integer> opportunityByStage = opportunitiesCount <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(opportunityRepository.countByStageGrouped(tenantId));
-        Map<String, Integer> quoteByStatus = quotes <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(quoteRepository.countByStatusGrouped(tenantId));
-        Map<String, Integer> orderByStatus = orders <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(orderRecordRepository.countByStatusGrouped(tenantId));
-
-        Map<String, Integer> followUpByChannel = new HashMap<String, Integer>();
-        if (followUps > 0) {
-            for (Object[] row : followUpRepository.countByChannelGrouped(tenantId)) {
-                String channel = normalizeBucket(row.length > 0 ? row[0] : null);
-                channel = valueNormalizerService.normalizeFollowUpChannel(channel);
-                int count = asInt(row.length > 1 ? row[1] : null);
-                followUpByChannel.put(channel, followUpByChannel.containsKey(channel)
-                        ? followUpByChannel.get(channel) + count
-                        : count);
-            }
-        }
-
-        Map<String, Object> summary = new HashMap<String, Object>();
-        summary.put("customers", customerCount);
-        summary.put("revenue", totalRevenue);
-        summary.put("opportunities", opportunitiesCount);
-        summary.put("weightedAmount", weightedAmount);
-        summary.put("winRate", winRate);
-        summary.put("taskDoneRate", taskDoneRate);
-        summary.put("followUps", followUps);
-        summary.put("quotes", quotes);
-        summary.put("orders", orders);
-        summary.put("quoteApproveRate", quoteApproveRate);
-        summary.put("quoteToOrderRate", quoteToOrderRate);
-        summary.put("orderCompleteRate", orderCompleteRate);
-        summary.put("orderPaymentReceived", orderPaymentReceived);
-        summary.put("orderPaymentOutstanding", orderPaymentOutstanding);
-        summary.put("orderCollectionRate", orderCollectionRate);
-
-        Map<String, Integer> taskStatus = new HashMap<String, Integer>();
-        taskStatus.put("done", (int) doneTasks);
-        taskStatus.put("pending", (int) pendingTasks);
-
-        Map<String, Object> body = new HashMap<String, Object>();
-        body.put("summary", summary);
-        body.put("customerByOwner", customerByOwner);
-        body.put("revenueByStatus", revenueByStatus);
-        body.put("opportunityByStage", opportunityByStage);
-        body.put("taskStatus", taskStatus);
-        body.put("followUpByChannel", followUpByChannel);
-        body.put("quoteByStatus", quoteByStatus);
-        body.put("orderByStatus", orderByStatus);
-        return body;
+        return reportAggregationService.aggregateWithoutScope(tenantId);
     }
 
     private Map<String, Object> overviewByTenantScopedFastPath(String tenantId, Set<String> owners) {
-        if (owners == null || owners.isEmpty()) {
-            return emptyOverviewBody();
-        }
-        long customerCount = customerRepository.countByTenantIdAndOwnerIn(tenantId, owners);
-        long totalRevenue = safeLong(customerRepository.sumValueByTenantIdAndOwnerIn(tenantId, owners));
-        long opportunitiesCount = opportunityRepository.countByTenantIdAndOwnerIn(tenantId, owners);
-        long weightedAmountRaw = safeLong(opportunityRepository.sumWeightedAmountRawByTenantIdAndOwnerIn(tenantId, owners));
-        long weightedAmount = Math.round(weightedAmountRaw / 100.0d);
-        long highProgressCount = opportunityRepository.countByTenantIdAndOwnerInAndProgressGte(tenantId, owners, 80);
-
-        long doneTasks = taskRepository.countByTenantIdAndDoneTrueAndOwnerIn(tenantId, owners);
-        long pendingTasks = taskRepository.countByTenantIdAndDoneFalseAndOwnerIn(tenantId, owners);
-        long taskTotal = doneTasks + pendingTasks;
-
-        long followUps = followUpRepository.countByTenantIdAndAuthorIn(tenantId, owners);
-        long quotes = quoteRepository.countByTenantIdAndOwnerIn(tenantId, owners);
-        long quoteApproved = quoteRepository.countByTenantIdAndOwnerInAndStatusInUppercase(
-                tenantId,
-                owners,
-                QUOTE_APPROVED_OR_ACCEPTED
-        );
-        long quoteAccepted = quoteRepository.countByTenantIdAndOwnerInAndStatusInUppercase(
-                tenantId,
-                owners,
-                QUOTE_ACCEPTED_ONLY
-        );
-        long orders = orderRecordRepository.countByTenantIdAndOwnerIn(tenantId, owners);
-        long orderCompleted = orderRecordRepository.countByTenantIdAndOwnerInAndStatus(tenantId, owners, "COMPLETED");
-        long orderAmountTotal = safeLong(orderRecordRepository.sumAmountByTenantIdAndOwnerIn(tenantId, owners));
-        long orderPaymentReceived = safeLong(paymentRecordRepository.sumAmountByTenantIdAndOwnerInAndStatusInUppercase(
-                tenantId,
-                owners,
-                PAYMENT_RECEIVED_ONLY
-        ));
-        long orderPaymentOutstanding = Math.max(0L, orderAmountTotal - orderPaymentReceived);
-
-        double winRate = opportunitiesCount == 0 ? 0.0 : Math.round((highProgressCount * 1000.0 / opportunitiesCount)) / 10.0;
-        double taskDoneRate = taskTotal == 0 ? 0.0 : Math.round((doneTasks * 1000.0 / taskTotal)) / 10.0;
-        double quoteApproveRate = quotes == 0 ? 0.0 : Math.round((quoteApproved * 1000.0 / quotes)) / 10.0;
-        double quoteToOrderRate = quoteAccepted == 0 ? 0.0 : Math.round((orders * 1000.0 / quoteAccepted)) / 10.0;
-        double orderCompleteRate = orders == 0 ? 0.0 : Math.round((orderCompleted * 1000.0 / orders)) / 10.0;
-        double orderCollectionRate = orderAmountTotal <= 0 ? 0.0 : Math.round((orderPaymentReceived * 1000.0 / orderAmountTotal)) / 10.0;
-
-        Map<String, Integer> customerByOwner = customerCount <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(customerRepository.countByOwnerGroupedAndOwnerIn(tenantId, owners));
-        Map<String, Long> revenueByStatus = customerCount <= 0
-                ? new HashMap<String, Long>()
-                : toLongMap(customerRepository.sumValueByStatusGroupedAndOwnerIn(tenantId, owners));
-        Map<String, Integer> opportunityByStage = opportunitiesCount <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(opportunityRepository.countByStageGroupedAndOwnerIn(tenantId, owners));
-        Map<String, Integer> quoteByStatus = quotes <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(quoteRepository.countByStatusGroupedAndOwnerIn(tenantId, owners));
-        Map<String, Integer> orderByStatus = orders <= 0
-                ? new HashMap<String, Integer>()
-                : toIntMap(orderRecordRepository.countByStatusGroupedAndOwnerIn(tenantId, owners));
-
-        Map<String, Integer> followUpByChannel = new HashMap<String, Integer>();
-        if (followUps > 0) {
-            for (Object[] row : followUpRepository.countByChannelGroupedAndAuthorIn(tenantId, owners)) {
-                String channel = normalizeBucket(row.length > 0 ? row[0] : null);
-                channel = valueNormalizerService.normalizeFollowUpChannel(channel);
-                int count = asInt(row.length > 1 ? row[1] : null);
-                followUpByChannel.put(channel, followUpByChannel.containsKey(channel)
-                        ? followUpByChannel.get(channel) + count
-                        : count);
-            }
-        }
-
-        Map<String, Object> summary = new HashMap<String, Object>();
-        summary.put("customers", customerCount);
-        summary.put("revenue", totalRevenue);
-        summary.put("opportunities", opportunitiesCount);
-        summary.put("weightedAmount", weightedAmount);
-        summary.put("winRate", winRate);
-        summary.put("taskDoneRate", taskDoneRate);
-        summary.put("followUps", followUps);
-        summary.put("quotes", quotes);
-        summary.put("orders", orders);
-        summary.put("quoteApproveRate", quoteApproveRate);
-        summary.put("quoteToOrderRate", quoteToOrderRate);
-        summary.put("orderCompleteRate", orderCompleteRate);
-        summary.put("orderPaymentReceived", orderPaymentReceived);
-        summary.put("orderPaymentOutstanding", orderPaymentOutstanding);
-        summary.put("orderCollectionRate", orderCollectionRate);
-
-        Map<String, Integer> taskStatus = new HashMap<String, Integer>();
-        taskStatus.put("done", (int) doneTasks);
-        taskStatus.put("pending", (int) pendingTasks);
-
-        Map<String, Object> body = new HashMap<String, Object>();
-        body.put("summary", summary);
-        body.put("customerByOwner", customerByOwner);
-        body.put("revenueByStatus", revenueByStatus);
-        body.put("opportunityByStage", opportunityByStage);
-        body.put("taskStatus", taskStatus);
-        body.put("followUpByChannel", followUpByChannel);
-        body.put("quoteByStatus", quoteByStatus);
-        body.put("orderByStatus", orderByStatus);
-        return body;
+        return reportAggregationService.aggregateWithScope(tenantId, owners);
     }
 
     private Map<String, Object> emptyOverviewBody() {
-        Map<String, Object> summary = new HashMap<String, Object>();
-        summary.put("customers", 0);
-        summary.put("revenue", 0);
-        summary.put("opportunities", 0);
-        summary.put("weightedAmount", 0);
-        summary.put("winRate", 0.0);
-        summary.put("taskDoneRate", 0.0);
-        summary.put("followUps", 0);
-        summary.put("quotes", 0);
-        summary.put("orders", 0);
-        summary.put("quoteApproveRate", 0.0);
-        summary.put("quoteToOrderRate", 0.0);
-        summary.put("orderCompleteRate", 0.0);
-        summary.put("orderPaymentReceived", 0);
-        summary.put("orderPaymentOutstanding", 0);
-        summary.put("orderCollectionRate", 0.0);
-
-        Map<String, Integer> taskStatus = new HashMap<String, Integer>();
-        taskStatus.put("done", 0);
-        taskStatus.put("pending", 0);
-
-        Map<String, Object> body = new HashMap<String, Object>();
-        body.put("summary", summary);
-        body.put("customerByOwner", new HashMap<String, Integer>());
-        body.put("revenueByStatus", new HashMap<String, Long>());
-        body.put("opportunityByStage", new HashMap<String, Integer>());
-        body.put("taskStatus", taskStatus);
-        body.put("followUpByChannel", new HashMap<String, Integer>());
-        body.put("quoteByStatus", new HashMap<String, Integer>());
-        body.put("orderByStatus", new HashMap<String, Integer>());
-        return body;
+        return reportAggregationService.emptyOverviewBody();
     }
 
     public DashboardMetricsCacheService.CachedValue<Map<String, Object>> overviewByTenantCached(String tenantId,
@@ -604,9 +389,9 @@ public class ReportService {
                                                                                                  String department) {
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
-        final String cacheKey = normalizeDate(safeFromDate)
-                + "|" + normalizeDate(safeToDate)
-                + "|" + normalizeRole(role)
+        final String cacheKey = ReportUtils.normalizeDate(safeFromDate)
+                + "|" + ReportUtils.normalizeDate(safeToDate)
+                + "|" + ReportUtils.normalizeRole(role)
                 + "|" + normalized(owner)
                 + "|" + normalized(department);
         return dashboardMetricsCacheService.getOrLoad(tenantId, "reports-overview", cacheKey,
@@ -626,8 +411,8 @@ public class ReportService {
                                                                                                String owner) {
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
-        final String cacheKey = normalizeDate(safeFromDate)
-                + "|" + normalizeDate(safeToDate)
+        final String cacheKey = ReportUtils.normalizeDate(safeFromDate)
+                + "|" + ReportUtils.normalizeDate(safeToDate)
                 + "|" + normalized(owner);
         return dashboardMetricsCacheService.getOrLoad(tenantId, "reports-funnel", cacheKey,
                 new java.util.function.Supplier<Map<String, Object>>() {
@@ -636,10 +421,6 @@ public class ReportService {
                         return funnelByTenant(tenantId, safeFromDate, safeToDate, owner);
                     }
                 });
-    }
-
-    public String exportOverviewCsv(LocalDate fromDate, LocalDate toDate, String role) {
-        return exportOverviewCsvByTenant("tenant_default", fromDate, toDate, role, "", "", "en");
     }
 
     public Map<String, Object> funnelByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String owner) {
@@ -701,79 +482,6 @@ public class ReportService {
         rates.put("quoteToOrder", quoteToOrder);
         out.put("rates", rates);
         return out;
-    }
-
-    public String exportOverviewCsvByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String role, String owner, String department) {
-        return exportOverviewCsvByTenant(tenantId, fromDate, toDate, role, owner, department, "en");
-    }
-
-    public String exportOverviewCsvByTenant(String tenantId,
-                                            LocalDate fromDate,
-                                            LocalDate toDate,
-                                            String role,
-                                            String owner,
-                                            String department,
-                                            String language) {
-        Map<String, Object> report = overviewByTenant(tenantId, fromDate, toDate, role, owner, department);
-        return toCsv(report, fromDate, toDate, role, language);
-    }
-
-    private String toCsv(Map<String, Object> report, LocalDate fromDate, LocalDate toDate, String role, String language) {
-        Map<String, Object> summary = castMap(report.get("summary"));
-        Map<String, Integer> taskStatus = castMap(report.get("taskStatus"));
-        boolean zh = language != null && language.trim().toLowerCase().startsWith("zh");
-
-        StringBuilder sb = new StringBuilder();
-        sb.append('\uFEFF');
-        sb.append(zh ? "分组,字段,值\n" : "section,key,value\n");
-        sb.append(row(zh ? "筛选" : "filter", zh ? "开始" : "from", fromDate == null ? "" : fromDate.toString()));
-        sb.append(row(zh ? "筛选" : "filter", zh ? "结束" : "to", toDate == null ? "" : toDate.toString()));
-        sb.append(row(zh ? "筛选" : "filter", zh ? "角色" : "role", role == null ? "" : role.trim().toUpperCase()));
-
-        appendMapRows(sb, zh ? "汇总" : "summary", summary);
-        appendMapRows(sb, zh ? "客户负责人分布" : "customerByOwner", castMap(report.get("customerByOwner")));
-        appendMapRows(sb, zh ? "客户状态营收" : "revenueByStatus", castMap(report.get("revenueByStatus")));
-        appendMapRows(sb, zh ? "商机阶段分布" : "opportunityByStage", castMap(report.get("opportunityByStage")));
-        appendMapRows(sb, zh ? "任务状态" : "taskStatus", taskStatus);
-        appendMapRows(sb, zh ? "跟进渠道分布" : "followUpByChannel", castMap(report.get("followUpByChannel")));
-        appendMapRows(sb, zh ? "报价状态分布" : "quoteByStatus", castMap(report.get("quoteByStatus")));
-        appendMapRows(sb, zh ? "订单状态分布" : "orderByStatus", castMap(report.get("orderByStatus")));
-        return sb.toString();
-    }
-
-    private void appendMapRows(StringBuilder sb, String section, Map<String, ?> map) {
-        if (map == null) {
-            return;
-        }
-        for (Map.Entry<String, ?> entry : map.entrySet()) {
-            sb.append(row(section, entry.getKey(), entry.getValue()));
-        }
-    }
-
-    private String row(String section, String key, Object value) {
-        return csv(section) + "," + csv(key) + "," + csv(value == null ? "" : String.valueOf(value)) + "\n";
-    }
-
-    private String csv(String text) {
-        String safe = text == null ? "" : text;
-        String escaped = safe.replace("\"", "\"\"");
-        return "\"" + escaped + "\"";
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> Map<String, T> castMap(Object obj) {
-        if (!(obj instanceof Map)) {
-            return new HashMap<String, T>();
-        }
-        return (Map<String, T>) obj;
-    }
-
-    private LocalDateTime startOfDay(LocalDate value) {
-        return value == null ? null : value.atStartOfDay();
-    }
-
-    private LocalDateTime endOfDay(LocalDate value) {
-        return value == null ? null : value.plusDays(1).atStartOfDay().minusNanos(1);
     }
 
     private Set<String> mergeOwnerScope(Set<String> roleIdentities, Set<String> departmentIdentities, String ownerFilter) {
@@ -890,7 +598,7 @@ public class ReportService {
 
     private Set<String> loadRoleIdentities(String tenantId, String role) {
         if (isBlank(role)) return null;
-        String normalizedRole = normalizeRole(role);
+        String normalizedRole = ReportUtils.normalizeRole(role);
         String cacheKey = tenantId + "|" + normalizedRole;
         IdentityScopeCacheEntry cached = roleIdentityCache.get(cacheKey);
         long now = System.currentTimeMillis();
@@ -942,83 +650,6 @@ public class ReportService {
         return identities;
     }
 
-    private String normalized(String text) {
-        return isBlank(text) ? "" : text.trim().toLowerCase();
-    }
-
-    private String normalizeRole(String role) {
-        return normalizeCacheValue(role).toUpperCase();
-    }
-
-    private boolean isBlank(String s) {
-        return s == null || s.trim().isEmpty();
-    }
-
-    private String normalizeCacheValue(String value) {
-        return value == null ? "" : value.trim();
-    }
-
-    private String normalizeDate(LocalDate value) {
-        return value == null ? "" : value.toString();
-    }
-
-    private LocalDate normalizeFromDate(LocalDate fromDate, LocalDate toDate) {
-        if (fromDate != null) return fromDate;
-        if (toDate != null) return OPEN_RANGE_START;
-        return null;
-    }
-
-    private LocalDate normalizeToDate(LocalDate fromDate, LocalDate toDate) {
-        if (toDate != null) return toDate;
-        if (fromDate != null) return OPEN_RANGE_END;
-        return null;
-    }
-
-    private long safeLong(Long value) {
-        return value == null ? 0L : value.longValue();
-    }
-
-    private Map<String, Integer> toIntMap(List<Object[]> rows) {
-        Map<String, Integer> out = new HashMap<String, Integer>();
-        if (rows == null) return out;
-        for (Object[] row : rows) {
-            String key = normalizeBucket(row != null && row.length > 0 ? row[0] : null);
-            int value = asInt(row != null && row.length > 1 ? row[1] : null);
-            out.put(key, value);
-        }
-        return out;
-    }
-
-    private Map<String, Long> toLongMap(List<Object[]> rows) {
-        Map<String, Long> out = new HashMap<String, Long>();
-        if (rows == null) return out;
-        for (Object[] row : rows) {
-            String key = normalizeBucket(row != null && row.length > 0 ? row[0] : null);
-            long value = asLong(row != null && row.length > 1 ? row[1] : null);
-            out.put(key, value);
-        }
-        return out;
-    }
-
-    private String normalizeBucket(Object keyRaw) {
-        String key = keyRaw == null ? "" : String.valueOf(keyRaw);
-        return isBlank(key) ? "Unknown" : key;
-    }
-
-    private int asInt(Object value) {
-        return (int) asLong(value);
-    }
-
-    private long asLong(Object value) {
-        if (value == null) return 0L;
-        if (value instanceof Number) return ((Number) value).longValue();
-        try {
-            return Long.parseLong(String.valueOf(value));
-        } catch (Exception ex) {
-            return 0L;
-        }
-    }
-
     private static final class IdentityScopeCacheEntry {
         private final Set<String> identities;
         private final long expiresAtMs;
@@ -1029,4 +660,3 @@ public class ReportService {
         }
     }
 }
-

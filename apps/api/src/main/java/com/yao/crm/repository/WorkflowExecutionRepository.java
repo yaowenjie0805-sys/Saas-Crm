@@ -12,6 +12,8 @@ import java.util.List;
 @Repository
 public interface WorkflowExecutionRepository extends JpaRepository<WorkflowExecution, String> {
 
+    java.util.Optional<WorkflowExecution> findByIdAndTenantId(String id, String tenantId);
+
     List<WorkflowExecution> findByWorkflowId(String workflowId);
 
     List<WorkflowExecution> findByWorkflowIdAndStatus(String workflowId, String status);

@@ -1,6 +1,8 @@
 package com.yao.crm.service;
 
+import com.yao.crm.enums.UserRole;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -8,7 +10,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class PermissionMatrixService {
 
-    private final List<String> roles = Arrays.asList("ADMIN", "MANAGER", "SALES", "ANALYST");
+    private final List<String> roles = Arrays.asList(
+            UserRole.ADMIN.name(),
+            UserRole.MANAGER.name(),
+            UserRole.SALES.name(),
+            UserRole.ANALYST.name()
+    );
     private final List<String> operations = Arrays.asList(
             "opViewDashboard",
             "opViewReports",
@@ -24,16 +31,16 @@ public class PermissionMatrixService {
     private final Map<String, Deque<Set<String>>> history = new ConcurrentHashMap<String, Deque<Set<String>>>();
 
     public PermissionMatrixService() {
-        byRole.put("ADMIN", new HashSet<String>(operations));
-        byRole.put("MANAGER", new HashSet<String>(operations));
-        byRole.put("SALES", new HashSet<String>(Arrays.asList(
+        byRole.put(UserRole.ADMIN.name(), new HashSet<String>(operations));
+        byRole.put(UserRole.MANAGER.name(), new HashSet<String>(operations));
+        byRole.put(UserRole.SALES.name(), new HashSet<String>(Arrays.asList(
                 "opViewDashboard",
                 "opManageCustomers",
                 "opManageTasks",
                 "opManageFollowUps",
                 "opCreateOpportunity"
         )));
-        byRole.put("ANALYST", new HashSet<String>(Arrays.asList(
+        byRole.put(UserRole.ANALYST.name(), new HashSet<String>(Arrays.asList(
                 "opViewDashboard",
                 "opViewReports"
         )));
@@ -42,6 +49,7 @@ public class PermissionMatrixService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> matrixRows() {
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         for (String operation : operations) {
@@ -59,11 +67,13 @@ public class PermissionMatrixService {
         return rows;
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> roleView(String role) {
         String normalized = normalizeRole(role);
         return roleViewBySet(normalized, byRole.get(normalized));
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> previewRole(String role, List<String> grant, List<String> revoke) {
         String normalized = normalizeRole(role);
         Set<String> snapshot = new HashSet<String>(byRole.get(normalized));
@@ -73,6 +83,7 @@ public class PermissionMatrixService {
         return body;
     }
 
+    @Transactional(timeout = 30)
     public Map<String, Object> updateRole(String role, List<String> grant, List<String> revoke) {
         String normalized = normalizeRole(role);
         Set<String> current = byRole.get(normalized);
@@ -84,6 +95,7 @@ public class PermissionMatrixService {
         return body;
     }
 
+    @Transactional(timeout = 30)
     public Map<String, Object> rollbackRole(String role) {
         String normalized = normalizeRole(role);
         Deque<Set<String>> stack = history.get(normalized);
@@ -98,6 +110,7 @@ public class PermissionMatrixService {
         return body;
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, String>> conflicts() {
         List<Map<String, String>> rows = new ArrayList<Map<String, String>>();
         for (String role : roles) {
@@ -112,6 +125,7 @@ public class PermissionMatrixService {
         return rows;
     }
 
+    @Transactional(readOnly = true)
     public List<String> roles() {
         return roles;
     }
@@ -169,14 +183,14 @@ public class PermissionMatrixService {
             warnings.add("edit_amount_requires_create_opportunity");
         }
 
-        if ("ANALYST".equals(role)) {
+        if (UserRole.ANALYST.name().equals(role)) {
             if (set.contains("opManageCustomers") || set.contains("opDeleteCustomers") || set.contains("opManageTasks")
                     || set.contains("opManageFollowUps") || set.contains("opCreateOpportunity") || set.contains("opEditOpportunityAmount")) {
                 warnings.add("analyst_should_be_read_only");
             }
         }
 
-        if ("SALES".equals(role)) {
+        if (UserRole.SALES.name().equals(role)) {
             if (set.contains("opDeleteCustomers") || set.contains("opEditOpportunityAmount")) {
                 warnings.add("sales_should_not_have_high_risk_write");
             }

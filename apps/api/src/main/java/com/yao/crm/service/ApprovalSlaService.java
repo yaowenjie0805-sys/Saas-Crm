@@ -6,6 +6,7 @@ import com.yao.crm.entity.ApprovalTask;
 import com.yao.crm.repository.ApprovalEventRepository;
 import com.yao.crm.repository.ApprovalInstanceRepository;
 import com.yao.crm.repository.ApprovalTaskRepository;
+import com.yao.crm.enums.ApprovalStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,17 +38,17 @@ public class ApprovalSlaService {
         this.notificationJobService = notificationJobService;
     }
 
-    @Transactional
+    @Transactional(timeout = 30)
     public ScanResult scanOverdueAndEscalate() {
         LocalDateTime now = LocalDateTime.now();
-        List<ApprovalTask> overdue = taskRepository.findByStatusAndDeadlineAtBefore("PENDING", now);
+        List<ApprovalTask> overdue = taskRepository.findByStatusAndDeadlineAtBefore(ApprovalStatus.PENDING.name(), now);
         int handled = 0;
         Map<String, Integer> tierStats = new LinkedHashMap<String, Integer>();
         tierStats.put("P1", 0);
         tierStats.put("P2", 0);
         tierStats.put("P3", 0);
         for (ApprovalTask task : overdue) {
-            if ("ESCALATED".equalsIgnoreCase(task.getStatus())) {
+            if (ApprovalStatus.isEscalated(task.getStatus())) {
                 continue;
             }
             int overdueMinutes = resolveOverdueMinutes(task, now);
@@ -62,7 +63,7 @@ public class ApprovalSlaService {
             if (!existingEsc.isEmpty()) {
                 continue;
             }
-            task.setStatus("ESCALATED");
+            task.setStatus(ApprovalStatus.ESCALATED.name());
             task.setEscalationLevel((task.getEscalationLevel() == null ? 0 : task.getEscalationLevel()) + 1);
             taskRepository.save(task);
 
@@ -85,7 +86,7 @@ public class ApprovalSlaService {
                 esc.setEscalateToRoles(task.getEscalateToRoles());
                 esc.setEscalationLevel(task.getEscalationLevel());
                 esc.setEscalationSourceTaskId(task.getId());
-                esc.setStatus(i == 0 ? "PENDING" : "WAITING");
+                esc.setStatus(i == 0 ? ApprovalStatus.PENDING.name() : ApprovalStatus.WAITING.name());
                 esc.setDeadlineAt(LocalDateTime.now().plusMinutes(esc.getSlaMinutes()));
                 taskRepository.save(esc);
             }
@@ -93,7 +94,7 @@ public class ApprovalSlaService {
             Optional<ApprovalInstance> instOpt = instanceRepository.findByIdAndTenantId(task.getInstanceId(), task.getTenantId());
             if (instOpt.isPresent()) {
                 ApprovalInstance inst = instOpt.get();
-                inst.setStatus("PENDING");
+                inst.setStatus(ApprovalStatus.PENDING.name());
                 instanceRepository.save(inst);
             }
             recordEvent(task, "SLA_ESCALATED", "system", "approval_sla_escalated | tier=" + tier + " | overdueMinutes=" + overdueMinutes);

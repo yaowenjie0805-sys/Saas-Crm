@@ -93,7 +93,7 @@ public class LeadImportService {
         this.mqPublishEnabled = mqPublishEnabled && !testProfile;
     }
 
-    @Transactional
+    @Transactional(timeout = 30)
     public LeadImportJob createAsyncImportJob(String tenantId, String operator, String requestId, MultipartFile file) {
         validateUpload(file);
         ensureTenantImportCapacity(tenantId);

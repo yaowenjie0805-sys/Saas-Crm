@@ -26,7 +26,7 @@ public class GlobalSearchService {
     /**
      * 索引业务对象
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public void indexEntity(String tenantId, String entityType, String entityId, String... searchableFields) {
         StringBuilder searchContent = new StringBuilder();
         StringBuilder pinyinContent = new StringBuilder();
@@ -62,6 +62,7 @@ public class GlobalSearchService {
     /**
      * 搜索业务对象
      */
+    @Transactional(readOnly = true)
     public SearchResult search(String tenantId, String keyword, int limit) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return new SearchResult(Collections.emptyMap(), 0);
@@ -95,7 +96,7 @@ public class GlobalSearchService {
     /**
      * 删除索引
      */
-    @Transactional
+    @Transactional(timeout = 30)
     public void deleteIndex(String tenantId, String entityType, String entityId) {
         searchIndexRepository.deleteByTenantAndEntity(tenantId, entityType, entityId);
     }

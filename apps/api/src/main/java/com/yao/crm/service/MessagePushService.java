@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ public class MessagePushService {
     /**
      * 发送消息。
      */
+    @Transactional(timeout = 30)
     public PushMessage sendMessage(String tenantId, String userId, String channel,
                                    String title, String content, String relatedType, String relatedId) {
         PushMessage message = new PushMessage();
@@ -180,6 +182,7 @@ public class MessagePushService {
         });
     }
 
+    @Transactional(readOnly = true)
     public long getUnreadCount(String tenantId, String userId) {
         return pushMessageRepository.countUnreadByUserId(tenantId, userId);
     }

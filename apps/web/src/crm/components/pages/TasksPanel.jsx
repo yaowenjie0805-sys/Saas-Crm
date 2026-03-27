@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { translateTaskLevel, translateTimeLabel } from '../../shared'
 
 function TasksPanel({ activePage, t, tasks, canWrite, toggleTaskDone }) {
@@ -43,4 +44,4 @@ function TasksPanel({ activePage, t, tasks, canWrite, toggleTaskDone }) {
   )
 }
 
-export default TasksPanel
+export default memo(TasksPanel)

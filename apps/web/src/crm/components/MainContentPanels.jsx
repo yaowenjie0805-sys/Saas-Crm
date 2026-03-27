@@ -1,4 +1,4 @@
-import { lazy } from 'react'
+import { lazy, memo } from 'react'
 
 const DashboardPanel = lazy(() => import('./pages/DashboardPanel'))
 const PermissionsPanel = lazy(() => import('./pages/PermissionsPanel'))
@@ -19,7 +19,7 @@ const OrdersPanel = lazy(() => import('./pages/OrdersPanel'))
 const ApprovalsPageContainer = lazy(() => import('./pages/ApprovalsPageContainer'))
 const GovernancePageContainer = lazy(() => import('./pages/GovernancePageContainer'))
 
-export default function MainContentPanels({
+function MainContentPanels({
   activePage,
   t,
   canWrite,
@@ -142,3 +142,5 @@ export default function MainContentPanels({
     </>
   )
 }
+
+export default memo(MainContentPanels)

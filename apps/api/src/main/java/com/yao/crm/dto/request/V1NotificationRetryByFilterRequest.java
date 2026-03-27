@@ -1,8 +1,19 @@
 package com.yao.crm.dto.request;
 
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.Size;
+
 public class V1NotificationRetryByFilterRequest {
+
+    @Size(max = 40, message = "status_too_long")
     private String status;
+
+    @Min(value = 1, message = "page_gte_1")
     private Integer page;
+
+    @Min(value = 1, message = "size_gte_1")
+    @Max(value = 100, message = "size_lte_100")
     private Integer size;
 
     public String getStatus() {

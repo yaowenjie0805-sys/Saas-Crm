@@ -2,14 +2,16 @@ package com.yao.crm.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -25,8 +27,12 @@ public class CacheService {
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    // 本地缓存（作为Redis的备份或替代）
-    private final Map<String, CacheEntry> localCache = new ConcurrentHashMap<>();
+    // 本地缓存（作为Redis的备份或替代，使用 Caffeine 提供自动淘汰和统计）
+    private final Cache<String, CacheEntry> localCache = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .expireAfterWrite(10, TimeUnit.MINUTES)
+        .recordStats()
+        .build();
 
     // 缓存配置
     private static final Duration DEFAULT_TTL = Duration.ofMinutes(10);
@@ -49,6 +55,7 @@ public class CacheService {
     /**
      * 获取缓存值
      */
+    @Transactional(readOnly = true)
     public <T> Optional<T> get(String key, Class<T> type) {
         try {
             String value = redisTemplate.opsForValue().get(PREFIX + key);
@@ -65,6 +72,7 @@ public class CacheService {
     /**
      * 获取缓存值（支持泛型）
      */
+    @Transactional(readOnly = true)
     public <T> Optional<T> get(String key, java.lang.reflect.Type type) {
         try {
             String value = redisTemplate.opsForValue().get(PREFIX + key);
@@ -83,6 +91,7 @@ public class CacheService {
     /**
      * 设置缓存值
      */
+    @Transactional(timeout = 30)
     public void set(String key, Object value) {
         set(key, value, DEFAULT_TTL);
     }
@@ -90,6 +99,7 @@ public class CacheService {
     /**
      * 设置缓存值（指定TTL）
      */
+    @Transactional(timeout = 30)
     public void set(String key, Object value, Duration ttl) {
         try {
             String json = objectMapper.writeValueAsString(value);
@@ -116,10 +126,10 @@ public class CacheService {
      * 获取本地缓存
      */
     public <T> Optional<T> getLocal(String key, Class<T> type) {
-        CacheEntry entry = localCache.get(key);
+        CacheEntry entry = localCache.getIfPresent(key);
         if (entry != null) {
             if (entry.isExpired()) {
-                localCache.remove(key);
+                localCache.invalidate(key); // 清理过期条目
                 return Optional.empty();
             }
             try {
@@ -136,7 +146,7 @@ public class CacheService {
      */
     public void delete(String key) {
         redisTemplate.delete(PREFIX + key);
-        localCache.remove(key);
+        localCache.invalidate(key);
         log.debug("Cache deleted: {}", key);
     }
 
@@ -148,13 +158,14 @@ public class CacheService {
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
         }
-        localCache.keySet().removeIf(k -> k.startsWith(prefix));
+        localCache.asMap().keySet().removeIf(k -> k.startsWith(prefix));
         log.debug("Cache deleted by prefix: {}", prefix);
     }
 
     /**
      * 检查缓存是否存在
      */
+    @Transactional(readOnly = true)
     public boolean exists(String key) {
         Boolean exists = redisTemplate.hasKey(PREFIX + key);
         return exists != null && exists;
@@ -293,21 +304,28 @@ public class CacheService {
         if (keys != null && !keys.isEmpty()) {
             redisTemplate.delete(keys);
         }
-        localCache.clear();
+        localCache.invalidateAll();
         log.info("Invalidated all caches");
     }
 
     /**
      * 获取缓存统计信息
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> getCacheStats() {
         Map<String, Object> stats = new HashMap<>();
 
         try {
             Set<String> keys = redisTemplate.keys(PREFIX + "*");
             stats.put("redisKeyCount", keys != null ? keys.size() : 0);
-            stats.put("localCacheSize", localCache.size());
-            stats.put("localCacheKeys", new ArrayList<>(localCache.keySet()));
+            stats.put("localCacheSize", localCache.estimatedSize());
+            stats.put("localCacheKeys", new ArrayList<>(localCache.asMap().keySet()));
+            
+            // Caffeine 统计
+            com.github.benmanes.caffeine.cache.stats.CacheStats caffeineStats = localCache.stats();
+            stats.put("caffeine_hit_rate", caffeineStats.hitRate());
+            stats.put("caffeine_eviction_count", caffeineStats.evictionCount());
+            stats.put("caffeine_estimated_size", localCache.estimatedSize());
         } catch (Exception e) {
             log.error("Failed to get cache stats", e);
         }

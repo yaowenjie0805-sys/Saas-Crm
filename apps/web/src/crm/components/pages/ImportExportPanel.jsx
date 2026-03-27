@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -45,12 +45,8 @@ export function ImportExportPanel() {
   const [selectedEntityType, setSelectedEntityType] = useState('Customer');
 
   const {
-    createImportJob,
-    getImportJobStatus,
     cancelImportJob,
     getImportTemplate,
-    createExportJob,
-    getExportJobStatus,
     downloadExportFile
   } = useImportExport();
 
@@ -68,8 +64,8 @@ export function ImportExportPanel() {
       if (data.items) {
         setImportJobs(data.items);
       }
-    } catch (error) {
-      console.error('Failed to load import jobs:', error);
+    } catch (_error) {
+      console.error('Failed to load import jobs:', _error);
     } finally {
       setLoading(false);
     }
@@ -89,8 +85,8 @@ export function ImportExportPanel() {
       if (data.items) {
         setExportJobs(data.items);
       }
-    } catch (error) {
-      console.error('Failed to load export jobs:', error);
+    } catch (_error) {
+      console.error('Failed to load export jobs:', _error);
     } finally {
       setLoading(false);
     }
@@ -132,7 +128,7 @@ export function ImportExportPanel() {
       } else {
         message.error(data.message || '导入失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('导入失败');
     } finally {
       setUploading(false);
@@ -154,7 +150,7 @@ export function ImportExportPanel() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       message.success('模板下载成功');
-    } catch (error) {
+    } catch (_error) {
       message.error('模板下载失败');
     }
   };
@@ -169,7 +165,7 @@ export function ImportExportPanel() {
           await cancelImportJob(jobId);
           message.success('任务已取消');
           loadImportJobs();
-        } catch (error) {
+        } catch (_error) {
           message.error('取消失败');
         }
       }
@@ -191,7 +187,7 @@ export function ImportExportPanel() {
         window.URL.revokeObjectURL(url);
         message.success('文件下载成功');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('文件下载失败');
     }
   };
@@ -498,4 +494,4 @@ export function ImportExportPanel() {
   );
 }
 
-export default ImportExportPanel;
+export default memo(ImportExportPanel);

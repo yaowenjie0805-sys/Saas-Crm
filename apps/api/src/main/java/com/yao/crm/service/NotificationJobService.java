@@ -38,7 +38,7 @@ public class NotificationJobService {
         this.providers = providers == null ? "" : providers;
     }
 
-    @Transactional
+    @Transactional(timeout = 30)
     public void enqueueSlaEscalated(String tenantId, String instanceId, String taskId, String approverRole) {
         String[] configuredTargets = providers.split(",");
         List<String> targets = new ArrayList<String>();
@@ -87,7 +87,7 @@ public class NotificationJobService {
         }
     }
 
-    @Transactional
+    @Transactional(timeout = 30)
     public int processQueue() {
         List<NotificationJob> jobs = jobRepository.findByStatusInAndNextRetryAtBeforeOrderByCreatedAtAsc(Arrays.asList("PENDING", "RETRY"), LocalDateTime.now());
         int processed = 0;

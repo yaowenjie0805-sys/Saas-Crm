@@ -38,7 +38,7 @@ import {
  */
 export function WorkflowExecutionMonitor({
   executionId,
-  workflowId,
+  _workflowId,
   visible,
   onClose,
   onRetrySuccess
@@ -70,7 +70,7 @@ export function WorkflowExecutionMonitor({
       } else {
         message.error(data.message || '加载失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('加载失败');
     } finally {
       setLoading(false);
@@ -119,7 +119,7 @@ export function WorkflowExecutionMonitor({
           } else {
             message.error(data.message || '取消失败');
           }
-        } catch (error) {
+        } catch (_error) {
           message.error('取消失败');
         }
       }
@@ -147,7 +147,7 @@ export function WorkflowExecutionMonitor({
       } else {
         message.error(data.message || '重试失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('重试失败');
     }
   };

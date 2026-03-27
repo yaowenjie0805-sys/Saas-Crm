@@ -23,7 +23,7 @@ public class V1InviteUserRequest {
     @Size(max = 80, message = "bad_request")
     private String department;
 
-    @Pattern(regexp = "SELF|DEPARTMENT|GLOBAL", message = "bad_request")
+    @Pattern(regexp = "SELF|TEAM|DEPT|ALL", message = "bad_request")
     private String dataScope;
 
     private Integer expiresInHours;

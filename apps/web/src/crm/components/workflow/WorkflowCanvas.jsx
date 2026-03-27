@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
  * 支持拖拽式节点编辑、连线和配置
  */
 export function WorkflowCanvas({
-  workflowId,
+  _workflowId,
   nodes = [],
   connections = [],
   onNodesChange,
@@ -23,7 +23,6 @@ export function WorkflowCanvas({
     if (readOnly) return
     e.stopPropagation()
 
-    const rect = e.currentTarget.getBoundingClientRect()
     setDragState({
       nodeId: node.id,
       startX: e.clientX,
@@ -90,11 +89,16 @@ export function WorkflowCanvas({
     })
   }
 
+  // 生成唯一ID
+  const generateId = useCallback(() => {
+    return `conn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  }, [])
+
   // 结束连线
-  const handleConnectionEnd = (node) => {
+  const handleConnectionEnd = useCallback((node) => {
     if (connecting && connecting.sourceNodeId !== node.id) {
       const newConnection = {
-        id: `conn-${Date.now()}`,
+        id: generateId(),
         sourceNodeId: connecting.sourceNodeId,
         targetNodeId: node.id,
         connectionType: 'DEFAULT',
@@ -106,7 +110,7 @@ export function WorkflowCanvas({
       }
     }
     setConnecting(null)
-  }
+  }, [connecting, connections, generateId, onConnectionsChange])
 
   // 获取节点颜色
   const getNodeColor = (nodeType) => {
@@ -161,6 +165,16 @@ export function WorkflowCanvas({
     })
   }
 
+  // 计算连接线的坐标偏移
+  const [canvasOffset, setCanvasOffset] = useState({ left: 0, top: 0 })
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      setCanvasOffset({ left: rect.left, top: rect.top })
+    }
+  }, [connecting])
+
   // 渲染正在连线的临时路径
   const renderConnectingLine = () => {
     if (!connecting) return null
@@ -170,7 +184,7 @@ export function WorkflowCanvas({
 
     return (
       <path
-        d={`M ${sourceNode.positionX + 100} ${sourceNode.positionY + 30} L ${connecting.currentX - (canvasRef.current?.getBoundingClientRect().left || 0)} ${connecting.currentY - (canvasRef.current?.getBoundingClientRect().top || 0)}`}
+        d={`M ${sourceNode.positionX + 100} ${sourceNode.positionY + 30} L ${connecting.currentX - canvasOffset.left} ${connecting.currentY - canvasOffset.top}`}
         fill="none"
         stroke="#3B82F6"
         strokeWidth={2}
@@ -374,7 +388,7 @@ export function NodePalette({ onDragStart }) {
 /**
  * 工作流编辑器容器
  */
-export function WorkflowEditor({ workflowId, initialData }) {
+export function WorkflowEditor({ _workflowId, initialData }) {
   const [nodes, setNodes] = useState(initialData?.nodes || [])
   const [connections, setConnections] = useState(initialData?.connections || [])
   const [selectedNode, setSelectedNode] = useState(null)

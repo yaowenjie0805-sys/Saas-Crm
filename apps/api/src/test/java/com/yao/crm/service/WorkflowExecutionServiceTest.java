@@ -24,6 +24,7 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class WorkflowExecutionServiceTest {
+    private static final String TENANT_ID = "tenant_1";
 
     @Mock
     private WorkflowDefinitionRepository workflowRepository;
@@ -61,26 +62,26 @@ class WorkflowExecutionServiceTest {
     void testStartExecution_Success() {
         // Given
         String workflowId = "wf_test_123";
-        String tenantId = "tenant_1";
-
         WorkflowDefinition workflow = new WorkflowDefinition();
         workflow.setId(workflowId);
+        workflow.setTenantId(TENANT_ID);
         workflow.setStatus("ACTIVE");
         workflow.setVersion(1);
         workflow.setExecutionCount(0);
 
-        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(workflowRepository.save(any())).thenReturn(workflow);
         when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         doNothing().when(executionService).executeAsync(anyString());
 
         // When
         WorkflowExecution execution = executionService.startExecution(
-                workflowId, "MANUAL", "user123", null, null
+                TENANT_ID, workflowId, "MANUAL", "user123", null, null
         );
 
         // Then
         assertNotNull(execution);
+        assertEquals(TENANT_ID, execution.getTenantId());
         assertEquals(workflowId, execution.getWorkflowId());
         assertEquals("RUNNING", execution.getStatus());
         verify(workflowRepository).save(any());
@@ -90,11 +91,11 @@ class WorkflowExecutionServiceTest {
     void testStartExecution_WorkflowNotFound() {
         // Given
         String workflowId = "wf_nonexistent";
-        when(workflowRepository.findById(workflowId)).thenReturn(Optional.empty());
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.empty());
 
         // When & Then
         assertThrows(IllegalArgumentException.class, () ->
-                executionService.startExecution(workflowId, "MANUAL", null, null, null)
+                executionService.startExecution(TENANT_ID, workflowId, "MANUAL", null, null, null)
         );
     }
 
@@ -105,13 +106,14 @@ class WorkflowExecutionServiceTest {
 
         WorkflowDefinition workflow = new WorkflowDefinition();
         workflow.setId(workflowId);
+        workflow.setTenantId(TENANT_ID);
         workflow.setStatus("DRAFT"); // Not ACTIVE
 
-        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
 
         // When & Then
         assertThrows(IllegalStateException.class, () ->
-                executionService.startExecution(workflowId, "MANUAL", null, null, null)
+                executionService.startExecution(TENANT_ID, workflowId, "MANUAL", null, null, null)
         );
     }
 
@@ -156,13 +158,14 @@ class WorkflowExecutionServiceTest {
 
         WorkflowExecution execution = new WorkflowExecution();
         execution.setId(executionId);
+        execution.setTenantId(TENANT_ID);
         execution.setStatus("RUNNING");
 
-        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(executionRepository.findByIdAndTenantId(executionId, TENANT_ID)).thenReturn(Optional.of(execution));
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // When
-        executionService.cancelExecution(executionId, "user123");
+        executionService.cancelExecution(TENANT_ID, executionId, "user123");
 
         // Then
         verify(executionRepository).save(argThat(exec ->
@@ -177,13 +180,14 @@ class WorkflowExecutionServiceTest {
 
         WorkflowExecution execution = new WorkflowExecution();
         execution.setId(executionId);
+        execution.setTenantId(TENANT_ID);
         execution.setStatus("COMPLETED");
 
-        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(executionRepository.findByIdAndTenantId(executionId, TENANT_ID)).thenReturn(Optional.of(execution));
 
         // When & Then
         assertThrows(IllegalStateException.class, () ->
-                executionService.cancelExecution(executionId, "user123")
+                executionService.cancelExecution(TENANT_ID, executionId, "user123")
         );
     }
 
@@ -195,24 +199,26 @@ class WorkflowExecutionServiceTest {
 
         WorkflowExecution oldExecution = new WorkflowExecution();
         oldExecution.setId(oldExecutionId);
+        oldExecution.setTenantId(TENANT_ID);
         oldExecution.setWorkflowId(workflowId);
         oldExecution.setStatus("FAILED");
         oldExecution.setTriggerType("MANUAL");
 
         WorkflowDefinition workflow = new WorkflowDefinition();
         workflow.setId(workflowId);
+        workflow.setTenantId(TENANT_ID);
         workflow.setStatus("ACTIVE");
         workflow.setVersion(1);
         workflow.setExecutionCount(0);
 
-        when(executionRepository.findById(oldExecutionId)).thenReturn(Optional.of(oldExecution));
-        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(executionRepository.findByIdAndTenantId(oldExecutionId, TENANT_ID)).thenReturn(Optional.of(oldExecution));
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(workflowRepository.save(any())).thenReturn(workflow);
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         doNothing().when(executionService).executeAsync(anyString());
 
         // When
-        WorkflowExecution newExecution = executionService.retryExecution(oldExecutionId);
+        WorkflowExecution newExecution = executionService.retryExecution(TENANT_ID, oldExecutionId);
 
         // Then
         assertNotNull(newExecution);
@@ -227,13 +233,14 @@ class WorkflowExecutionServiceTest {
 
         WorkflowExecution execution = new WorkflowExecution();
         execution.setId(executionId);
+        execution.setTenantId(TENANT_ID);
         execution.setStatus("RUNNING");
 
-        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(executionRepository.findByIdAndTenantId(executionId, TENANT_ID)).thenReturn(Optional.of(execution));
 
         // When & Then
         assertThrows(IllegalStateException.class, () ->
-                executionService.retryExecution(executionId)
+                executionService.retryExecution(TENANT_ID, executionId)
         );
     }
 
@@ -245,19 +252,21 @@ class WorkflowExecutionServiceTest {
 
         WorkflowExecution execution = new WorkflowExecution();
         execution.setId(executionId);
+        execution.setTenantId(TENANT_ID);
         execution.setWorkflowId(workflowId);
         execution.setStatus("RUNNING");
         execution.setExecutionContext("{}");
 
         WorkflowDefinition workflow = new WorkflowDefinition();
         workflow.setId(workflowId);
+        workflow.setTenantId(TENANT_ID);
         workflow.setName("Test Workflow");
 
-        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
-        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(executionRepository.findByIdAndTenantId(executionId, TENANT_ID)).thenReturn(Optional.of(execution));
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
 
         // When
-        Map<String, Object> detail = executionService.getExecutionDetail(executionId);
+        Map<String, Object> detail = executionService.getExecutionDetail(TENANT_ID, executionId);
 
         // Then
         assertNotNull(detail);
@@ -276,11 +285,16 @@ class WorkflowExecutionServiceTest {
                 createExecution("exec_3", "FAILED")
         );
 
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId(workflowId);
+        workflow.setTenantId(TENANT_ID);
+
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(executionRepository.findByWorkflowIdOrderByStartedAtDesc(eq(workflowId), any(Pageable.class)))
                 .thenReturn(executions);
 
         // When
-        List<WorkflowExecution> result = executionService.getExecutionHistory(workflowId, null, 0, 20);
+        List<WorkflowExecution> result = executionService.getExecutionHistory(TENANT_ID, workflowId, null, 0, 20);
 
         // Then
         assertEquals(3, result.size());
@@ -296,20 +310,46 @@ class WorkflowExecutionServiceTest {
                 createExecution("exec_1", status)
         );
 
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId(workflowId);
+        workflow.setTenantId(TENANT_ID);
+
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(executionRepository.findByWorkflowIdAndStatusOrderByStartedAtDesc(eq(workflowId), eq(status), any(Pageable.class)))
                 .thenReturn(executions);
 
         // When
-        List<WorkflowExecution> result = executionService.getExecutionHistory(workflowId, status, 0, 20);
+        List<WorkflowExecution> result = executionService.getExecutionHistory(TENANT_ID, workflowId, status, 0, 20);
 
         // Then
         assertEquals(1, result.size());
         assertEquals(status, result.get(0).getStatus());
     }
 
+    @Test
+    void testGetExecutionDetail_WrongTenantRejected() {
+        String executionId = "exec_123";
+        when(executionRepository.findByIdAndTenantId(executionId, TENANT_ID)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () ->
+                executionService.getExecutionDetail(TENANT_ID, executionId)
+        );
+    }
+
+    @Test
+    void testGetExecutionHistory_WrongTenantRejected() {
+        String workflowId = "wf_123";
+        when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () ->
+                executionService.getExecutionHistory(TENANT_ID, workflowId, null, 0, 20)
+        );
+    }
+
     private WorkflowExecution createExecution(String id, String status) {
         WorkflowExecution execution = new WorkflowExecution();
         execution.setId(id);
+        execution.setTenantId(TENANT_ID);
         execution.setStatus(status);
         execution.setWorkflowId("wf_123");
         return execution;

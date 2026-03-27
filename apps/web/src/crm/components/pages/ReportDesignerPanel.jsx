@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, memo, Suspense } from 'react'
 import { translateDataset, translateOwnerAlias, translateVisibility } from '../../shared'
 
 const ReportDesignerPreviewSection = lazy(() => import('./reportDesigner/ReportDesignerPreviewSection'))
@@ -71,4 +71,4 @@ function ReportDesignerPanel({
   )
 }
 
-export default ReportDesignerPanel
+export default memo(ReportDesignerPanel)

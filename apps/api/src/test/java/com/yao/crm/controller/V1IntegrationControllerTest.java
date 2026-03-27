@@ -1,5 +1,6 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.dto.request.WebhookRequest;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.IntegrationWebhookService;
@@ -42,9 +43,9 @@ class V1IntegrationControllerTest {
         request.setAttribute("authUsername", "boss");
         request.setAttribute("authTenantId", "tenant_default");
 
-        Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("title", "审批升级");
-        payload.put("text", "请尽快处理");
+        WebhookRequest payload = new WebhookRequest();
+        payload.setTitle("审批升级");
+        payload.setText("请尽快处理");
 
         when(integrationWebhookService.sendMessage("WECOM", "tenant_default", "审批升级", "请尽快处理", "boss"))
                 .thenReturn(true);
@@ -67,8 +68,8 @@ class V1IntegrationControllerTest {
         request.setAttribute("authUsername", "ops");
         request.setAttribute("authTenantId", "tenant_cn");
 
-        Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("event", "approval_sla_escalated");
+        WebhookRequest payload = new WebhookRequest();
+        payload.setBody("{\"event\": \"approval_sla_escalated\"}");
 
         when(integrationWebhookService.sendMessage(
                 eq("DINGTALK"),
@@ -95,7 +96,7 @@ class V1IntegrationControllerTest {
         request.setAttribute("authUsername", "viewer");
         request.setAttribute("authTenantId", "tenant_default");
 
-        ResponseEntity<?> response = controller.feishu(request, new LinkedHashMap<String, Object>());
+        ResponseEntity<?> response = controller.feishu(request, new WebhookRequest());
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();

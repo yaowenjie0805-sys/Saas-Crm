@@ -83,7 +83,7 @@ export function ApprovalDelegationModal({
       } else {
         message.error(data.message || '委托失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('委托失败');
     } finally {
       setLoading(false);
@@ -118,7 +118,7 @@ export function ApprovalDelegationModal({
       } else {
         message.error(data.message || '加签失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('加签失败');
     } finally {
       setLoading(false);
@@ -152,7 +152,7 @@ export function ApprovalDelegationModal({
       } else {
         message.error(data.message || '转交失败');
       }
-    } catch (error) {
+    } catch (_error) {
       message.error('转交失败');
     } finally {
       setLoading(false);

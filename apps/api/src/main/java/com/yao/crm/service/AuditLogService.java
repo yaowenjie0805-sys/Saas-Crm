@@ -3,6 +3,7 @@ package com.yao.crm.service;
 import com.yao.crm.entity.AuditLog;
 import com.yao.crm.repository.AuditLogRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -15,10 +16,12 @@ public class AuditLogService {
         this.auditLogRepository = auditLogRepository;
     }
 
+    @Transactional(timeout = 30)
     public void record(String username, String role, String action, String resource, String resourceId, String details) {
         record(username, role, action, resource, resourceId, details, "tenant_default");
     }
 
+    @Transactional(timeout = 30)
     public void record(String username, String role, String action, String resource, String resourceId, String details, String tenantId) {
         AuditLog log = new AuditLog();
         log.setId(newId("log"));
@@ -32,10 +35,12 @@ public class AuditLogService {
         auditLogRepository.save(log);
     }
 
+    @Transactional(readOnly = true)
     public List<AuditLog> latest() {
         return auditLogRepository.findTop100ByOrderByCreatedAtDesc();
     }
 
+    @Transactional(readOnly = true)
     public List<AuditLog> latestByTenant(String tenantId) {
         return auditLogRepository.findTop100ByTenantIdOrderByCreatedAtDesc(
                 (tenantId == null || tenantId.trim().isEmpty()) ? "tenant_default" : tenantId.trim()

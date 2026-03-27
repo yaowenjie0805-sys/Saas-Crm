@@ -1,5 +1,6 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.dto.request.TenantConfigPatchRequest;
 import com.yao.crm.entity.Tenant;
 import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.I18nService;
@@ -11,9 +12,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -43,7 +46,7 @@ public class V2TenantConfigController extends BaseApiController {
     }
 
     @PatchMapping("/tenant-config")
-    public ResponseEntity<?> patchTenantConfig(HttpServletRequest request, @RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> patchTenantConfig(HttpServletRequest request, @Valid @RequestBody TenantConfigPatchRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -54,7 +57,7 @@ public class V2TenantConfigController extends BaseApiController {
         }
         Tenant tenant = optional.get();
 
-        String marketProfile = upper(str(payload.get("marketProfile")));
+        String marketProfile = upper(payload.getMarketProfile());
         if (!isBlank(marketProfile)) {
             if (!MARKET_PROFILES.contains(marketProfile)) {
                 return ResponseEntity.badRequest().body(errorBody(request, "tenant_market_profile_invalid", msg(request, "tenant_market_profile_invalid"), null));
@@ -62,10 +65,10 @@ public class V2TenantConfigController extends BaseApiController {
             tenant.setMarketProfile(marketProfile);
         }
 
-        String taxRule = upper(str(payload.get("taxRule")));
+        String taxRule = upper(payload.getTaxRule());
         if (!isBlank(taxRule)) tenant.setTaxRule(taxRule);
 
-        String approvalMode = upper(str(payload.get("approvalMode")));
+        String approvalMode = upper(payload.getApprovalMode());
         if (!isBlank(approvalMode)) {
             if (!APPROVAL_MODES.contains(approvalMode)) {
                 return ResponseEntity.badRequest().body(errorBody(request, "tenant_approval_mode_invalid", msg(request, "tenant_approval_mode_invalid"), null));
@@ -73,30 +76,25 @@ public class V2TenantConfigController extends BaseApiController {
             tenant.setApprovalMode(approvalMode);
         }
 
-        if (payload.containsKey("channels")) {
-            Object channels = payload.get("channels");
-            if (channels instanceof Iterable) {
-                StringBuilder merged = new StringBuilder("[");
-                boolean first = true;
-                for (Object item : (Iterable<?>) channels) {
-                    String text = upper(str(item));
-                    if (isBlank(text)) continue;
-                    if (!first) merged.append(',');
-                    merged.append('"').append(text).append('"');
-                    first = false;
-                }
-                merged.append(']');
-                tenant.setChannelsJson(merged.toString());
-            } else {
-                String raw = str(channels);
-                if (!isBlank(raw)) tenant.setChannelsJson(raw.trim());
+        List<String> channels = payload.getChannels();
+        if (channels != null) {
+            StringBuilder merged = new StringBuilder("[");
+            boolean first = true;
+            for (String item : channels) {
+                String text = upper(item);
+                if (isBlank(text)) continue;
+                if (!first) merged.append(',');
+                merged.append('"').append(text).append('"');
+                first = false;
             }
+            merged.append(']');
+            tenant.setChannelsJson(merged.toString());
         }
 
-        String dataResidency = upper(str(payload.get("dataResidency")));
+        String dataResidency = upper(payload.getDataResidency());
         if (!isBlank(dataResidency)) tenant.setDataResidency(dataResidency);
 
-        String maskLevel = upper(str(payload.get("maskLevel")));
+        String maskLevel = upper(payload.getMaskLevel());
         if (!isBlank(maskLevel)) tenant.setMaskLevel(maskLevel);
 
         tenant = tenantRepository.save(tenant);

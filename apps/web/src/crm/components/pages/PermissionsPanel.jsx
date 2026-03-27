@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { ROLES, translateRole } from '../../shared'
 
 function PermissionsPanel({
@@ -61,4 +62,4 @@ function PermissionsPanel({
   )
 }
 
-export default PermissionsPanel
+export default memo(PermissionsPanel)

@@ -2,6 +2,7 @@ package com.yao.crm.controller;
 
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ReportExportJobService;
+import com.yao.crm.service.ReportExportService;
 import com.yao.crm.service.ReportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -24,13 +25,16 @@ import java.util.Map;
 public class ReportController extends BaseApiController {
 
     private final ReportService reportService;
+    private final ReportExportService reportExportService;
     private final ReportExportJobService reportExportJobService;
 
     public ReportController(ReportService reportService,
+                            ReportExportService reportExportService,
                             ReportExportJobService reportExportJobService,
                             I18nService i18nService) {
         super(i18nService);
         this.reportService = reportService;
+        this.reportExportService = reportExportService;
         this.reportExportJobService = reportExportJobService;
     }
 
@@ -82,7 +86,7 @@ public class ReportController extends BaseApiController {
 
         boolean zh = request.getHeader("Accept-Language") != null
                 && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
-        String csv = reportService.exportOverviewCsvByTenant(currentTenant(request), range.from, range.to, role, "", "", zh ? "zh" : "en");
+        String csv = reportExportService.exportOverviewCsvByTenant(currentTenant(request), range.from, range.to, role, "", "", zh ? "zh" : "en");
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         String fileName = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + date + ".csv";
 
