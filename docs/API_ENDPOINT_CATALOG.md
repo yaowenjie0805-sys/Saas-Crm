@@ -126,6 +126,10 @@ Controller：`SearchController`、`QuickFilterController`、`ChartController`、
 
 Controller：`ReportController`、`V1ReportController`、`V1ReportDesignerController`、`AuditController`、`V1OpsController`
 
+Service 分层（报表模块已拆分）：
+- `ReportAggregationService`：报表数据聚合与统计
+- `ReportExportService`：报表导出任务管理（Excel/PDF）
+
 核心端点：
 - `GET /api/reports/overview`
 - `POST /api/reports/export-jobs`
@@ -170,21 +174,59 @@ Controller：`HealthController`
 curl "http://localhost:8080/api/health"
 ```
 
-## 11. 建议联调顺序
+## 11. API 文档（OpenAPI/Swagger）
+
+配置：`OpenApiConfig`
+
+端点：
+- `GET /swagger-ui.html` — Swagger UI 交互式文档
+- `GET /swagger-ui/index.html` — Swagger UI 备用入口
+- `GET /api-docs` — OpenAPI 3.0 JSON 规范
+- `GET /api-docs.yaml` — OpenAPI 3.0 YAML 规范
+
+示例：
+```bash
+# 获取 OpenAPI JSON
+curl "http://localhost:8080/api-docs"
+```
+
+## 12. 常见错误码（ErrorCode 枚举）
+
+业务异常通过 `BusinessException` 抛出，错误码定义于 `exception/ErrorCode` 枚举：
+
+| 错误码 | 说明 | HTTP 状态码 |
+|--------|------|-------------|
+| `ENTITY_NOT_FOUND` | 实体不存在 | 404 |
+| `DUPLICATE_ENTITY` | 实体重复 | 409 |
+| `INVALID_STATE` | 状态非法 | 400 |
+| `PERMISSION_DENIED` | 权限不足 | 403 |
+| `VALIDATION_ERROR` | 参数校验失败 | 400 |
+| `EXTERNAL_SERVICE_ERROR` | 外部服务调用失败 | 502 |
+
+错误响应格式：
+```json
+{
+  "code": "ENTITY_NOT_FOUND",
+  "message": "客户 ID=123 不存在",
+  "timestamp": "2026-03-27T10:30:00Z"
+}
+```
+
+## 13. 建议联调顺序
 
 1. 先通 `GET /api/health`。
 2. 再通登录拿 token。
 3. 先跑客户/线索等主链路。
 4. 最后联调审批、报表、三方通知。
 
-## 12. 配套文档
+## 14. 配套文档
 
 - `docs/MODULE_CAPABILITY_MATRIX.md`
 - `docs/PROJECT_FLOW_MAP.md`
 - `docs/PROJECT_TROUBLESHOOTING.md`
 - `docs/DEVELOPMENT_HOTSPOTS.md`
 
-## 13. Postman 快速联调
+## 15. Postman 快速联调
 
 - Collection: `docs/postman/crm-api.postman_collection.json`
 - Environment: `docs/postman/crm-local.postman_environment.json`

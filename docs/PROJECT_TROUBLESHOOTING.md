@@ -199,7 +199,141 @@ INTEGRATION_DINGTALK_SECRET=
 
 ---
 
-## 9. 前端 build 告警/打包分块异常
+## 8.1 Caffeine 本地缓存问题
+
+### 现象
+
+- 缓存数据不一致
+- 缓存未生效导致数据库压力增大
+
+### 快速判断
+
+- `CacheService` 是否正确配置 Caffeine
+- 缓存键是否包含租户隔离前缀
+- 缓存过期时间是否合理
+
+### 修复动作
+
+1. 检查 `apps/api/src/main/java/com/yao/crm/service/CacheService.java`
+2. 确认 Caffeine 配置：`maximumSize`、`expireAfterWrite`
+3. 验证缓存键格式：`tenantId:entity:id`
+
+关键配置：
+```properties
+cache.caffeine.maximum-size=1000
+cache.caffeine.expire-after-write=300s
+```
+
+---
+
+## 9. 业务异常与 ErrorCode 排查
+
+### 现象
+
+- 接口返回 4xx/5xx 错误码
+- 错误响应包含 `code` 字段
+
+### 快速判断
+
+| ErrorCode | 含义 | 常见原因 |
+|-----------|------|----------|
+| `ENTITY_NOT_FOUND` | 实体不存在 | ID 错误、数据已删除 |
+| `DUPLICATE_ENTITY` | 实体重复 | 唯一约束冲突 |
+| `INVALID_STATE` | 状态非法 | 状态机转换不满足条件 |
+| `PERMISSION_DENIED` | 权限不足 | 角色权限不足、租户隔离 |
+| `VALIDATION_ERROR` | 参数校验失败 | 字段格式错误、必填项为空 |
+| `EXTERNAL_SERVICE_ERROR` | 外部服务调用失败 | 第三方 API 超时、网络问题 |
+
+### 修复动作
+
+1. 查看响应 `code` 字段定位错误类型
+2. 查看 `message` 字段获取详细信息
+3. 对照 `exception/ErrorCode.java` 确认错误码定义
+
+关键文件：
+- `apps/api/src/main/java/com/yao/crm/exception/ErrorCode.java`
+- `apps/api/src/main/java/com/yao/crm/exception/BusinessException.java`
+
+---
+
+## 10. 参数校验失败（400 Bad Request）
+
+### 现象
+
+- 接口返回 400 错误
+- 响应包含字段级错误信息
+
+### 快速判断
+
+- 请求体是否满足 DTO 定义的 JSR-303 注解约束
+- 是否缺少必填字段
+
+### 修复动作
+
+1. 检查 Controller 方法参数是否有 `@Valid` 注解
+2. 检查 DTO 字段注解：
+   - `@NotNull`：不能为 null
+   - `@NotBlank`：字符串非空
+   - `@Size(min, max)`：长度范围
+   - `@Pattern(regexp)`：正则匹配
+   - `@Email`：邮箱格式
+   - `@Min`/`@Max`：数值范围
+
+错误响应示例：
+```json
+{
+  "code": "VALIDATION_ERROR",
+  "message": "参数校验失败",
+  "errors": [
+    {"field": "name", "message": "不能为空"},
+    {"field": "email", "message": "邮箱格式不正确"}
+  ]
+}
+```
+
+关键文件：
+- `apps/api/src/main/java/com/yao/crm/dto/request/` — 请求 DTO 定义
+
+---
+
+## 11. Swagger UI 无法访问
+
+### 现象
+
+- 访问 `/swagger-ui.html` 返回 404
+- 访问 `/api-docs` 无响应
+
+### 快速判断
+
+- `springdoc-openapi` 依赖是否已添加
+- `OpenApiConfig` 配置是否正确
+- Security 配置是否放行了 swagger 相关路径
+
+### 修复动作
+
+1. 确认依赖已添加到 `pom.xml`：
+```xml
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-ui</artifactId>
+    <version>1.7.0</version>
+</dependency>
+```
+
+2. 检查 Security 配置是否放行：
+```java
+.antMatchers("/swagger-ui/**", "/api-docs/**").permitAll()
+```
+
+3. 检查 `OpenApiConfig` 配置类
+
+关键文件：
+- `apps/api/src/main/java/com/yao/crm/config/OpenApiConfig.java`
+- `apps/api/src/main/java/com/yao/crm/security/SecurityConfig.java`
+
+---
+
+## 12. 前端 build 告警/打包分块异常
 
 ### 现象
 
@@ -216,7 +350,7 @@ INTEGRATION_DINGTALK_SECRET=
 
 ---
 
-## 10. CI 或本地测试偶发失败
+## 13. CI 或本地测试偶发失败
 
 ### 现象
 

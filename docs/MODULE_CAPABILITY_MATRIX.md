@@ -31,7 +31,7 @@
 
 | 模块 | 主要前端页面/组件 | 主要后端接口 | 主要实体/表 | 备注 |
 |---|---|---|---|---|
-| 报表总览 | `ReportDesignerPanel.jsx` + 报表相关组件 | `/api/reports/*`, `/api/v1/reports/*` | `report_designer_templates`, 导出任务表 | 总览、漏斗、导出作业 |
+| 报表总览 | `ReportDesignerPanel.jsx` + 报表相关组件 | `/api/reports/*`, `/api/v1/reports/*` | `report_designer_templates`, 导出任务表 | 总览、漏斗、导出作业（由 `ReportAggregationService` 负责汇总、`ReportExportService` 负责导出、`ReportUtils` 提供通用工具方法） |
 | 审计与运维 | `AuditPanel.jsx`, 治理页 | `/api/audit-logs*`, `/api/v1/ops/*` | `audit_logs` + 运营指标聚合 | 审计检索、导出与健康指标 |
 
 ## 4. 三方集成能力
@@ -42,7 +42,15 @@
 | 钉钉 | webhook（可签名） | `/api/v1/integrations/webhooks/dingtalk` + `IntegrationWebhookService` | `INTEGRATION_DINGTALK_WEBHOOK_URL`, `INTEGRATION_DINGTALK_SECRET` |
 | 飞书 | App 模式优先，webhook 兜底 | `/api/v1/integrations/webhooks/feishu` + `IntegrationWebhookService` | `INTEGRATION_FEISHU_APP_ID`, `INTEGRATION_FEISHU_APP_SECRET`, `INTEGRATION_FEISHU_RECEIVE_ID` |
 
-## 5. 代码阅读顺序建议
+## 5. 核心基础设施模块
+
+| 模块 | 对应目录/组件 | 说明 | 备注 |
+|---|---|---|---|
+| 异常处理模块 | `apps/api/src/main/java/com/yao/crm/exception/` | 基于 `BusinessException` 抽象和 `ErrorCode` 枚举构建统一业务异常体系，所有业务异常通过统一错误码和国际化消息对外暴露。 | 统一错误响应格式（含 `traceId`、`errorCode` 等），便于前后端协同排障。 |
+| 枚举管理模块 | `apps/api/src/main/java/com/yao/crm/enums/` | 集中管理角色、数据范围、实体状态、审批状态、工作流状态等核心枚举，保证跨模块语义一致性。 | 枚举值不可随意修改，对应配置与前端常量需同步维护。 |
+| 事件驱动模块 | `apps/api/src/main/java/com/yao/crm/event/` | 提供 `DomainEvent` 抽象、`DomainEventPublisher` 接口和基于 Spring 的发布实现，支持缓存失效等业务事件（如 `CacheInvalidationListener`）。 | 适用于跨聚合解耦、缓存刷新、审计扩展等场景。 |
+
+## 6. 代码阅读顺序建议
 
 1. 前端入口与面板装配：`apps/web/src/crm/components/MainContentPanels.jsx`
 2. 对应页面：`apps/web/src/crm/components/pages/*`

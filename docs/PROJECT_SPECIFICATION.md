@@ -84,10 +84,11 @@
 - **Spring Data JPA**: 数据访问抽象
 - **Spring Security**: 安全认证框架
 - **Spring Boot Actuator**: 监控和管理
+- **springdoc-openapi**: 统一生成 OpenAPI 规范与 Swagger UI（`/swagger-ui.html`）
 
 #### 2.3.2 数据存储
 - **MySQL**: 8.0.33 - 主数据库
-- **Redis**: 缓存和会话存储
+- **Redis + Caffeine**: Redis 作为集中缓存与会话存储，Caffeine 作为本地内存缓存（用于热点数据、10K 上限 + LRU 淘汰策略）
 - **Flyway**: 9.22.3 - 数据库版本管理
 
 #### 2.3.3 消息队列
@@ -121,11 +122,14 @@ crm/
 │   │   │   │   │   ├── service/         # 业务服务层
 │   │   │   │   │   ├── entity/          # JPA 实体层
 │   │   │   │   │   ├── repository/      # 数据访问层
-│   │   │   │   │   ├── dto/             # 数据传输对象
+│   │   │   │   │   ├── dto/             # 数据传输对象（入参/出参 DTO，带 JSR-303 校验注解）
 │   │   │   │   │   ├── security/        # 安全认证模块
-│   │   │   │   │   ├── config/          # Spring 配置类
+│   │   │   │   │   ├── config/          # Spring 配置类（安全头、安全启动校验、MDC 日志、AOP 性能、OpenAPI 等）
 │   │   │   │   │   ├── integration/     # 第三方集成
 │   │   │   │   │   ├── workflow/        # 工作流引擎
+│   │   │   │   │   ├── exception/       # 业务异常体系（BusinessException + ErrorCode + 各类业务异常）
+│   │   │   │   │   ├── enums/           # 业务常量枚举（UserRole, DataScope, EntityStatus 等）
+│   │   │   │   │   ├── event/           # 领域事件基础设施（DomainEvent, Publisher, 业务事件监听器）
 │   │   │   │   │   └── audit/           # 审计日志
 │   │   │   │   └── resources/
 │   │   │   │       ├── application.properties
@@ -259,12 +263,14 @@ crm/
 - **Service 层**: 业务逻辑处理，事务管理
 - **Repository 层**: 数据访问，使用 Spring Data JPA
 - **Entity 层**: 数据库实体映射
-
+ 
 #### 4.2.2 API 设计规范
 - **RESTful 风格**: 遵循 RESTful API 设计原则
 - **HTTP 方法**: 正确使用 GET、POST、PUT、DELETE
 - **状态码**: 使用合适的 HTTP 状态码
 - **版本控制**: API 路径包含版本号，如 `/api/v1/customers`
+- **参数校验**: Controller 层接收的 DTO 必须使用 JSR-303 注解（如 `@NotNull`, `@Size` 等），并在方法签名中通过 `@Valid` 触发校验，禁止在 Service 层重复编写入参校验逻辑。
+- **DTO 规范**: 输入 DTO 与输出 DTO 分离，避免直接暴露实体；字段命名与前端保持一致，必要时通过 `@JsonProperty` 映射；为每个公开 API 定义清晰的请求和响应模型。
 
 #### 4.2.3 数据库规范
 - **表命名**: 小写+下划线，如 `customer_contacts`
@@ -276,9 +282,22 @@ crm/
 
 #### 4.2.4 异常处理规范
 - **异常分类**: 区分业务异常和系统异常
-- **异常处理**: 使用 @ControllerAdvice 统一处理
-- **错误响应**: 统一的错误响应格式
-- **日志记录**: 重要异常必须记录日志
+- **异常层级**: 所有业务异常统一继承 `BusinessException` 基类，通过 `ErrorCode` 枚举（包含稳定的业务错误码、国际化消息 key、HTTP 状态码映射）进行归类管理。
+- **异常处理**: 使用 `@ControllerAdvice` + 全局异常处理器，将 `BusinessException`、校验异常（如 `MethodArgumentNotValidException`）和系统异常映射为统一错误响应。
+- **错误响应**: 统一的错误响应格式，至少包含 `traceId`、`errorCode`、`message`、`timestamp`；前端据此进行文案与兜底处理。
+- **日志记录**: 重要异常必须记录日志，对系统异常记录 `ERROR` 级别，对可预期的业务异常记录 `WARN` 级别，结合 MDC（tenantId/userId/traceId）便于排查。
+
+#### 4.2.5 事务管理规范
+- **查询事务**: 所有只读查询 Service 方法必须标记为 `@Transactional(readOnly = true)`，确保不会误产生写入，并优化底层事务与缓存行为。
+- **写入事务**: 所有写操作（新增、更新、删除）必须在 Service 层开启事务，统一添加 `timeout = 30` 秒的超时约束，避免长事务阻塞数据库连接池。
+- **事务边界**: 禁止在 Controller 层直接开启事务；事务边界应与领域服务操作保持一致，一个事务仅覆盖必要的聚合修改范围。
+- **异常与回滚**: 业务异常（`BusinessException`）与系统运行时异常默认触发回滚；如需要跨服务补偿，需设计显式的补偿流程而不是关闭回滚。
+
+#### 4.2.6 事件驱动架构
+- **领域事件模型**: 通过 `DomainEvent` 抽象表达领域内的重要状态变更（如审批通过、报表导出完成、缓存失效等），避免在 Service 之间直接强耦合调用。
+- **发布与订阅**: 统一通过 `DomainEventPublisher` 接口发布事件，由 Spring 实现类（如 `SpringDomainEventPublisher`）适配到应用事件机制，监听器通过 `@EventListener` 订阅处理。
+- **典型用例**: 使用 `CacheInvalidationListener` 等监听器，在实体变更后自动触发 Caffeine/Redis 缓存失效；后续可以扩展用于审计扩展、异步通知等。
+- **规范要求**: 新增跨聚合协作逻辑优先考虑基于领域事件实现，避免在一个 Service 中直接注入过多其他 Service 造成“上帝服务”。
 
 ### 4.3 数据库迁移规范
 - **迁移脚本**: 使用 Flyway 管理数据库版本
@@ -295,11 +314,18 @@ crm/
 - **本地配置**: `.env.backend.local` (不提交到版本控制)
 - **配置模板**: `.env.backend.local.example`
 
-### 5.2 配置项说明
+#### 5.2 配置项说明
 ```properties
 # 服务器配置
 server.port=8080
 spring.profiles.active=dev
+
+# 连接池配置（生产环境建议使用 HikariCP）
+spring.datasource.type=com.zaxxer.hikari.HikariDataSource
+spring.datasource.hikari.maximum-pool-size=30
+spring.datasource.hikari.minimum-idle=5
+spring.datasource.hikari.idle-timeout=600000
+spring.datasource.hikari.max-lifetime=1800000
 
 # 认证配置
 auth.token.secret=crm-secret-change-me

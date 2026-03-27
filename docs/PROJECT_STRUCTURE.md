@@ -58,6 +58,10 @@
 | `src/main/java/com/yao/crm/repository/` | Spring Data 仓库 | Spring Data repositories. |
 | `src/main/java/com/yao/crm/service/` | 领域服务和 i18n 支持 | domain services and i18n support. |
 | `src/main/java/com/yao/crm/security/` | 认证和权限控制 | authentication and authorization. |
+| `src/main/java/com/yao/crm/config/` | 跨领域配置（SecurityHeadersFilter, SecurityStartupValidator, MdcFilter, ServiceLoggingAspect, OpenApiConfig 等） | cross-cutting configuration (SecurityHeadersFilter, SecurityStartupValidator, MdcFilter, ServiceLoggingAspect, OpenApiConfig, etc.). |
+| `src/main/java/com/yao/crm/exception/` | 业务异常体系（BusinessException 基类 + ErrorCode 枚举 + 业务异常子类） | business exception model (BusinessException base class, ErrorCode enum, and business exception subclasses). |
+| `src/main/java/com/yao/crm/enums/` | 业务枚举（UserRole, DataScope, EntityStatus, ApprovalStatus, WorkflowStatus 等） | business enums (UserRole, DataScope, EntityStatus, ApprovalStatus, WorkflowStatus, etc.). |
+| `src/main/java/com/yao/crm/event/` | 领域事件基础设施（DomainEvent, DomainEventPublisher, 业务事件, CacheInvalidationListener） | domain event infrastructure (DomainEvent, DomainEventPublisher, business events, CacheInvalidationListener). |
 | `src/main/resources/` | 应用配置 | application config. |
 | `src/main/resources/db/migration/` | Flyway 数据库迁移 | Flyway database migrations. |
 | `src/test/java/` | 集成测试和单元测试 | integration and unit tests. |
@@ -72,6 +76,13 @@
 | 2 | `MainContent.jsx`: 分组属性路由到页面面板 | `MainContent.jsx`: grouped props routing into page panels. |
 | 3 | `pages/*.jsx`: 具体业务面板 (CRUD/报表/权限/审计) | `pages/*.jsx`: concrete business panels (CRUD/report/permissions/audit). |
 | 4 | `shared.js` + `i18n.js`: 可复用基础设施 | `shared.js` + `i18n.js`: reusable infra. |
+
+### 前端性能与构建优化 | Frontend Performance & Build Optimization
+
+| 项 | 中文 | English |
+|----|------|---------|
+| 构建拆分 | 使用 Vite 将 `antd` 与 `echarts` 拆分为独立 chunk，减少首屏 bundle 体积，加快加载速度。 | Use Vite to split `antd` and `echarts` into dedicated chunks to reduce initial bundle size and improve load time. |
+| 组件优化 | 对高频渲染组件使用 `React.memo` 和合适的 memoization，以降低重复渲染开销。 | Apply `React.memo` and memoization to frequently rendered components to reduce unnecessary re-renders. |
 
 ---
 

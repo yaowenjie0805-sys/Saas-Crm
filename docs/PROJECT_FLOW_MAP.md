@@ -89,7 +89,7 @@ Browser (React/Vite)
 
 | API 域 | Controller | 主要 Service | 主要表 |
 |---|---|---|---|
-| `/api/reports/*`, `/api/v1/reports/*` | `ReportController`, `V1ReportController` | `ReportService`, `ReportExportJobService` | 聚合多业务表 + 导出作业表 |
+| `/api/reports/*`, `/api/v1/reports/*` | `ReportController`, `V1ReportController` | `ReportAggregationService`, `ReportExportService`, `ReportUtils`, `ReportExportJobService` | 聚合多业务表 + 导出作业表 |
 | `/api/v1/reports/designer/*` | `V1ReportDesignerController` | 模板查询 + 审计 | `report_designer_templates` |
 | `/api/v2/charts/*` | `ChartController` | `ChartService` | `chart_templates` |
 | `/api/v2/search/*`, `/api/v2/filters/*` | `SearchController`, `QuickFilterController` | `GlobalSearchService` | `saved_searches`, `search_index`, `quick_filters` |

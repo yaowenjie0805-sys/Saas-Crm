@@ -122,3 +122,51 @@ domain/
 └── helpers/                # 辅助函数
     └── domainHelpers.js
 ```
+
+## 性能优化模式
+
+### React.memo 优化
+
+表格行组件（`*Row.jsx`）和列表项组件推荐使用 `React.memo` 包裹，避免因父组件状态变化导致的不必要重渲染。
+
+适用场景：
+- 数据量大、渲染频繁的列表项
+- 接收复杂对象 props 的组件
+- 纯展示型组件
+
+示例：
+```jsx
+const CustomerRow = React.memo(function CustomerRow({ customer, onEdit }) {
+  return (
+    <tr>
+      <td>{customer.name}</td>
+      <td>{customer.email}</td>
+      <td><button onClick={() => onEdit(customer)}>编辑</button></td>
+    </tr>
+  );
+});
+```
+
+### Vite 分块策略
+
+`vite.config.js` 中的 `manualChunks` 配置将第三方库拆分为独立 chunk，优化首屏加载：
+
+| Chunk 名称 | 包含内容 | 加载时机 |
+|------------|----------|----------|
+| `vendor-antd` | Ant Design 组件库 | 使用 Antd 组件时按需加载 |
+| `vendor-charts` | 图表库（echarts/recharts） | 使用图表组件时按需加载 |
+| `vendor-react` | React 核心库 | 首屏必须 |
+
+配置示例：
+```javascript
+manualChunks: {
+  'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+  'vendor-antd': ['antd', '@ant-design/icons'],
+  'vendor-charts': ['echarts', 'echarts-for-react'],
+}
+```
+
+优化效果：
+- 减少首屏包体积
+- 利用浏览器缓存（vendor 包变化频率低）
+- 并行加载多个 chunk

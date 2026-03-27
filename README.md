@@ -23,6 +23,9 @@ crm/
         repository/           # 数据访问
         config/               # Spring 配置
         security/             # 鉴权与安全相关
+        exception/            # 业务异常体系（BusinessException、ErrorCode）
+        enums/                # 常量枚举（状态码、类型枚举）
+        event/                # 领域事件（事件发布与监听）
       src/main/resources/
         db/migration/         # Flyway 脚本 V1~V17
     web/                      # React 前端
@@ -55,7 +58,8 @@ crm/
 ## 4. 技术栈
 
 - 前端：React 19、Vite、React Router、Zustand
-- 后端：Spring Boot 2.7、Spring Data JPA、Flyway、Redis、RabbitMQ
+- 后端：Spring Boot 2.7、Spring Data JPA、Flyway、Redis、Caffeine（本地缓存）、RabbitMQ
+- API 文档：springdoc-openapi（Swagger UI）
 - 数据库：MySQL 8+
 - 测试：JUnit（后端）、Playwright（前端 E2E）
 
@@ -102,6 +106,8 @@ npm run dev
 - 前端：`http://localhost:5173`
 - 后端：`http://localhost:8080`
 - 健康检查：`http://localhost:8080/api/health`
+- API 文档（Swagger UI）：`http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON：`http://localhost:8080/api-docs`
 
 ## 6. 数据库迁移与修复
 
