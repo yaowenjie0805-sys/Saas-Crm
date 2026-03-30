@@ -19,6 +19,8 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,8 +39,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +49,7 @@ import java.util.stream.Collectors;
  * 负责导出业务逻辑、文件生成、任务管理
  */
 @Service
+@EnableAsync
 @Slf4j
 public class DataExportService {
 
@@ -56,9 +60,7 @@ public class DataExportService {
         PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
     }
 
-    // 导出任务缓存
-    private final Map<String, ExportJobContext> exportJobs = new ConcurrentHashMap<>();
-
+    private final CacheService cacheService;
     private final ObjectMapper objectMapper;
     private final DataMappingService dataMappingService;
     private final CustomerRepository customerRepository;
@@ -67,12 +69,14 @@ public class DataExportService {
     private final ProductRepository productRepository;
 
     public DataExportService(
+            CacheService cacheService,
             ObjectMapper objectMapper,
             DataMappingService dataMappingService,
             CustomerRepository customerRepository,
             ContactRepository contactRepository,
             LeadRepository leadRepository,
             ProductRepository productRepository) {
+        this.cacheService = cacheService;
         this.objectMapper = objectMapper;
         this.dataMappingService = dataMappingService;
         this.customerRepository = customerRepository;
@@ -106,7 +110,7 @@ public class DataExportService {
             context.setFormat(format);
             context.setCreatedAt(LocalDateTime.now());
 
-            exportJobs.put(jobId, context);
+            cacheService.setExportJobContext(jobId, context);
 
             // 异步生成文件
             generateExportFileAsync(jobId);
@@ -171,36 +175,43 @@ public class DataExportService {
     /**
      * 异步生成导出文件
      */
-    private void generateExportFileAsync(String jobId) {
-        ExportJobContext context = exportJobs.get(jobId);
-        if (context == null) return;
+    @Async
+    public CompletableFuture<Void> generateExportFileAsync(String jobId) {
+        return CompletableFuture.runAsync(() -> {
+            Optional<ExportJobContext> optContext = cacheService.getExportJobContext(jobId, ExportJobContext.class);
+            if (!optContext.isPresent()) return;
 
-        context.setStatus(ExportJobStatus.RUNNING);
+            ExportJobContext context = optContext.get();
+            context.setStatus(ExportJobStatus.RUNNING);
+            cacheService.setExportJobContext(jobId, context);
 
-        try {
-            String fileName = generateFileName(context.getEntityType(), context.getFormat());
-            Path tempDir = Files.createTempDirectory("crm_export");
-            Path filePath = tempDir.resolve(fileName);
+            try {
+                String fileName = generateFileName(context.getEntityType(), context.getFormat());
+                Path tempDir = Files.createTempDirectory("crm_export");
+                Path filePath = tempDir.resolve(fileName);
 
-            if ("xlsx".equalsIgnoreCase(context.getFormat())) {
-                generateExcelFile(context.getData(), context.getFields(), filePath);
-            } else if ("csv".equalsIgnoreCase(context.getFormat())) {
-                generateCsvFile(context.getData(), context.getFields(), filePath);
-            } else if ("json".equalsIgnoreCase(context.getFormat())) {
-                generateJsonFile(context.getData(), filePath);
+                if ("xlsx".equalsIgnoreCase(context.getFormat())) {
+                    generateExcelFile(context.getData(), context.getFields(), filePath);
+                } else if ("csv".equalsIgnoreCase(context.getFormat())) {
+                    generateCsvFile(context.getData(), context.getFields(), filePath);
+                } else if ("json".equalsIgnoreCase(context.getFormat())) {
+                    generateJsonFile(context.getData(), filePath);
+                }
+
+                context.setFilePath(filePath.toString());
+                context.setStatus(ExportJobStatus.COMPLETED);
+                context.setCompletedAt(LocalDateTime.now());
+
+                log.info("Export file generated: {}", filePath);
+                cacheService.setExportJobContext(jobId, context);
+
+            } catch (Exception e) {
+                log.error("Export job failed: jobId={}", jobId, e);
+                context.setStatus(ExportJobStatus.FAILED);
+                context.setErrorMessage(e.getMessage());
+                cacheService.setExportJobContext(jobId, context);
             }
-
-            context.setFilePath(filePath.toString());
-            context.setStatus(ExportJobStatus.COMPLETED);
-            context.setCompletedAt(LocalDateTime.now());
-
-            log.info("Export file generated: {}", filePath);
-
-        } catch (Exception e) {
-            log.error("Export job failed: jobId={}", jobId, e);
-            context.setStatus(ExportJobStatus.FAILED);
-            context.setErrorMessage(e.getMessage());
-        }
+        });
     }
 
     /**
@@ -300,10 +311,11 @@ public class DataExportService {
      * 获取导出任务状态
      */
     public ExportJobResult getExportJobStatus(String jobId) {
-        ExportJobContext context = exportJobs.get(jobId);
-        if (context == null) {
+        Optional<ExportJobContext> optContext = cacheService.getExportJobContext(jobId, ExportJobContext.class);
+        if (!optContext.isPresent()) {
             return null;
         }
+        ExportJobContext context = optContext.get();
         return new ExportJobResult(
                 jobId,
                 context.getStatus().name(),
@@ -317,11 +329,11 @@ public class DataExportService {
      * 获取导出文件
      */
     public byte[] getExportFile(String jobId) throws IOException {
-        ExportJobContext context = exportJobs.get(jobId);
-        if (context == null || context.getFilePath() == null) {
+        Optional<ExportJobContext> optContext = cacheService.getExportJobContext(jobId, ExportJobContext.class);
+        if (!optContext.isPresent() || optContext.get().getFilePath() == null) {
             return null;
         }
-        Path filePath = Paths.get(context.getFilePath());
+        Path filePath = Paths.get(optContext.get().getFilePath());
         if (!Files.exists(filePath)) {
             return null;
         }

@@ -12,8 +12,8 @@ import com.yao.crm.repository.LeadImportJobChunkRepository;
 import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.LeadRepository;
+import com.yao.crm.enums.LeadStatusEnum;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import java.util.HashSet;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
@@ -45,17 +45,6 @@ import java.util.concurrent.ConcurrentMap;
 @Service
 public class LeadImportService {
 
-    private static final Set<String> LEAD_STATUSES;
-
-    static {
-        Set<String> statuses = new HashSet<>();
-        statuses.add("NEW");
-        statuses.add("QUALIFIED");
-        statuses.add("NURTURING");
-        statuses.add("CONVERTED");
-        statuses.add("DISQUALIFIED");
-        LEAD_STATUSES = Collections.unmodifiableSet(statuses);
-    }
     private static final int DEDUPE_BATCH_SIZE = 500;
     private static final int SAVE_BATCH_SIZE = 100;
 
@@ -599,7 +588,7 @@ public class LeadImportService {
         if (!isBlank(row.email) && !row.email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             throw new IllegalArgumentException("contact_email_invalid");
         }
-        if (!LEAD_STATUSES.contains(row.status)) {
+        if (!LeadStatusEnum.isValid(row.status)) {
             throw new IllegalArgumentException("invalid_lead_status");
         }
     }

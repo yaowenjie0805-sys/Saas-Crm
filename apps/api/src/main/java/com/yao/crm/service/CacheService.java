@@ -45,6 +45,11 @@ public class CacheService {
     private static final String WORKFLOW_PREFIX = PREFIX + "workflow:";
     private static final String REPORT_PREFIX = PREFIX + "report:";
     private static final String SEARCH_PREFIX = PREFIX + "search:";
+    private static final String IMPORT_JOB_PREFIX = PREFIX + "job:import:";
+    private static final String EXPORT_JOB_PREFIX = PREFIX + "job:export:";
+
+    // 任务缓存TTL
+    private static final Duration JOB_TTL = Duration.ofHours(24);
 
     public CacheService(RedisTemplate<String, String> redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
@@ -288,6 +293,50 @@ public class CacheService {
         deleteByPrefix("report:" + tenantId);
         deleteByPrefix("search:" + tenantId);
         log.info("Invalidated all caches for tenant: {}", tenantId);
+    }
+
+    // ========== 任务缓存方法 ==========
+
+    /**
+     * 保存导入任务上下文到Redis
+     */
+    public void setImportJobContext(String jobId, Object context) {
+        set(IMPORT_JOB_PREFIX + jobId, context, JOB_TTL);
+    }
+
+    /**
+     * 获取导入任务上下文
+     */
+    public <T> Optional<T> getImportJobContext(String jobId, Class<T> type) {
+        return get(IMPORT_JOB_PREFIX + jobId, type);
+    }
+
+    /**
+     * 删除导入任务上下文
+     */
+    public void deleteImportJobContext(String jobId) {
+        delete(IMPORT_JOB_PREFIX + jobId);
+    }
+
+    /**
+     * 保存导出任务上下文到Redis
+     */
+    public void setExportJobContext(String jobId, Object context) {
+        set(EXPORT_JOB_PREFIX + jobId, context, JOB_TTL);
+    }
+
+    /**
+     * 获取导出任务上下文
+     */
+    public <T> Optional<T> getExportJobContext(String jobId, Class<T> type) {
+        return get(EXPORT_JOB_PREFIX + jobId, type);
+    }
+
+    /**
+     * 删除导出任务上下文
+     */
+    public void deleteExportJobContext(String jobId) {
+        delete(EXPORT_JOB_PREFIX + jobId);
     }
 
     /**

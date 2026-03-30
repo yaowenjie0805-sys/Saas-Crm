@@ -20,6 +20,7 @@ import com.yao.crm.service.LeadAutomationService;
 import com.yao.crm.service.LeadImportFailedRowsExportJobService;
 import com.yao.crm.service.LeadImportService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.enums.LeadStatusEnum;
 import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -40,7 +41,6 @@ import java.util.*;
 @RequestMapping("/api/v1/leads")
 public class V1LeadController extends BaseApiController {
 
-    private static final Set<String> LEAD_STATUSES = CollectionsUtil.setOf("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
     private static final Set<String> CONVERT_ALLOWED_STATUSES = CollectionsUtil.setOf("NEW", "QUALIFIED", "NURTURING");
     private static final Set<String> IMPORT_CANCEL_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("PENDING", "RUNNING"));
     private static final Set<String> IMPORT_RETRY_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("FAILED", "CANCELED"));
@@ -594,7 +594,7 @@ public class V1LeadController extends BaseApiController {
         lead.setSource(isBlank(payload.getSource()) ? null : payload.getSource().trim());
 
         String status = isBlank(payload.getStatus()) ? (creating ? "NEW" : lead.getStatus()) : payload.getStatus().trim().toUpperCase(Locale.ROOT);
-        if (!LEAD_STATUSES.contains(status)) {
+        if (!LeadStatusEnum.isValid(status)) {
             throw new IllegalArgumentException("invalid_lead_status");
         }
         if (!creating && !canTransitLeadStatus(lead.getStatus(), status)) {

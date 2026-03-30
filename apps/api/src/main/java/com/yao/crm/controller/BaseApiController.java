@@ -2,6 +2,7 @@ package com.yao.crm.controller;
 
 import com.yao.crm.security.TraceIdInterceptor;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.StringUtils;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -44,7 +45,7 @@ abstract class BaseApiController {
     }
 
     protected boolean isBlank(String s) {
-        return s == null || s.trim().isEmpty();
+        return StringUtils.isBlank(s);
     }
 
     protected boolean hasAnyRole(HttpServletRequest request, String... roles) {

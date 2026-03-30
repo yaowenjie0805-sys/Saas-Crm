@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import com.yao.crm.util.StringUtils;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -55,7 +57,7 @@ public final class ReportUtils {
      * 规范化字符串（转为小写，去除空白）
      */
     public static String normalized(String text) {
-        return isBlank(text) ? "" : text.trim().toLowerCase();
+        return StringUtils.isBlank(text) ? "" : text.trim().toLowerCase();
     }
 
     /**

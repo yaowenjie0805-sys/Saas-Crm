@@ -10,6 +10,8 @@ import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.service.DataMappingService.EntityType;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,16 +21,16 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 数据导入服务
  * 负责导入业务逻辑、任务管理、异步处理
  */
 @Service
+@EnableAsync
 @Slf4j
 public class DataImportService {
 
@@ -37,12 +39,7 @@ public class DataImportService {
         PENDING, RUNNING, COMPLETED, FAILED, PARTIAL_SUCCESS, CANCELLED
     }
 
-    // 导入任务缓存
-    private final Map<String, ImportJobContext> importJobs = new ConcurrentHashMap<>();
-    private static final long JOB_RETENTION_HOURS = 24L;
-    private static final long CLEANUP_INTERVAL_MS = TimeUnit.MINUTES.toMillis(10);
-    private static final int CLEANUP_TRIGGER_SIZE = 128;
-    private final AtomicLong lastCleanupAt = new AtomicLong(0L);
+    private final CacheService cacheService;
 
     private final FileParsingService fileParsingService;
     private final DataMappingService dataMappingService;
@@ -52,12 +49,14 @@ public class DataImportService {
     private final ProductRepository productRepository;
 
     public DataImportService(
+            CacheService cacheService,
             FileParsingService fileParsingService,
             DataMappingService dataMappingService,
             CustomerRepository customerRepository,
             ContactRepository contactRepository,
             LeadRepository leadRepository,
             ProductRepository productRepository) {
+        this.cacheService = cacheService;
         this.fileParsingService = fileParsingService;
         this.dataMappingService = dataMappingService;
         this.customerRepository = customerRepository;
@@ -72,7 +71,6 @@ public class DataImportService {
     @Transactional
     public ImportJobResult createImportJob(String tenantId, String operator, String entityType,
                                            InputStream inputStream, String fileName, String fileExtension) {
-        cleanupExpiredJobs();
         String jobId = UUID.randomUUID().toString();
 
         try {
@@ -96,7 +94,7 @@ public class DataImportService {
             context.setErrors(new ArrayList<>());
             context.setCreatedAt(LocalDateTime.now());
 
-            importJobs.put(jobId, context);
+            cacheService.setImportJobContext(jobId, context);
 
             // 异步处理导入
             processImportAsync(jobId);
@@ -113,61 +111,70 @@ public class DataImportService {
     /**
      * 异步处理导入
      */
-    private void processImportAsync(String jobId) {
-        ImportJobContext context = importJobs.get(jobId);
-        if (context == null) return;
+    @Async
+    public CompletableFuture<Void> processImportAsync(String jobId) {
+        return CompletableFuture.runAsync(() -> {
+            Optional<ImportJobContext> optContext = cacheService.getImportJobContext(jobId, ImportJobContext.class);
+            if (!optContext.isPresent()) return;
 
-        context.setStatus(ImportJobStatus.RUNNING);
+            ImportJobContext context = optContext.get();
+            context.setStatus(ImportJobStatus.RUNNING);
+            cacheService.setImportJobContext(jobId, context);
 
-        try {
-            List<Map<String, String>> data = context.getData();
-            List<String> headers = context.getHeaders();
-            EntityType entityType = EntityType.fromCode(context.getEntityType());
+            try {
+                List<Map<String, String>> data = context.getData();
+                List<String> headers = context.getHeaders();
+                EntityType entityType = EntityType.fromCode(context.getEntityType());
 
-            for (int i = 0; i < data.size(); i++) {
-                if (context.getStatus() == ImportJobStatus.CANCELLED) {
-                    break;
+                for (int i = 0; i < data.size(); i++) {
+                    if (context.getStatus() == ImportJobStatus.CANCELLED) {
+                        break;
+                    }
+
+                    Map<String, String> row = data.get(i);
+                    try {
+                        Object entity = dataMappingService.mapRowToEntity(row, headers, entityType, context.getTenantId());
+                        saveEntity(entity, entityType);
+                        context.setSuccessCount(context.getSuccessCount() + 1);
+                    } catch (Exception e) {
+                        context.setFailCount(context.getFailCount() + 1);
+                        ImportError error = new ImportError();
+                        error.setRowNumber(i + 2); // Excel行号从1开始，标题行是1
+                        error.setErrorMessage(e.getMessage());
+                        error.setRawData(dataMappingService.rowToString(row));
+                        context.getErrors().add(error);
+                    }
+
+                    context.setProcessedRows(context.getProcessedRows() + 1);
                 }
 
-                Map<String, String> row = data.get(i);
-                try {
-                    Object entity = dataMappingService.mapRowToEntity(row, headers, entityType, context.getTenantId());
-                    saveEntity(entity, entityType);
-                    context.setSuccessCount(context.getSuccessCount() + 1);
-                } catch (Exception e) {
-                    context.setFailCount(context.getFailCount() + 1);
-                    ImportError error = new ImportError();
-                    error.setRowNumber(i + 2); // Excel行号从1开始，标题行是1
-                    error.setErrorMessage(e.getMessage());
-                    error.setRawData(dataMappingService.rowToString(row));
-                    context.getErrors().add(error);
+                // 更新最终状态
+                if (context.getStatus() != ImportJobStatus.CANCELLED) {
+                    if (context.getFailCount() == 0) {
+                        context.setStatus(ImportJobStatus.COMPLETED);
+                    } else if (context.getSuccessCount() > 0) {
+                        context.setStatus(ImportJobStatus.PARTIAL_SUCCESS);
+                    } else {
+                        context.setStatus(ImportJobStatus.FAILED);
+                    }
+                }
+                if (isTerminal(context.getStatus())) {
+                    markFinished(context);
+                    releaseTransientJobData(context);
                 }
 
-                context.setProcessedRows(context.getProcessedRows() + 1);
-            }
+                // 保存最终状态到Redis
+                cacheService.setImportJobContext(jobId, context);
 
-            // 更新最终状态
-            if (context.getStatus() != ImportJobStatus.CANCELLED) {
-                if (context.getFailCount() == 0) {
-                    context.setStatus(ImportJobStatus.COMPLETED);
-                } else if (context.getSuccessCount() > 0) {
-                    context.setStatus(ImportJobStatus.PARTIAL_SUCCESS);
-                } else {
-                    context.setStatus(ImportJobStatus.FAILED);
-                }
-            }
-            if (isTerminal(context.getStatus())) {
+            } catch (Exception e) {
+                log.error("Import job failed: jobId={}", jobId, e);
+                context.setStatus(ImportJobStatus.FAILED);
+                context.setErrorMessage(e.getMessage());
                 markFinished(context);
                 releaseTransientJobData(context);
+                cacheService.setImportJobContext(jobId, context);
             }
-
-        } catch (Exception e) {
-            log.error("Import job failed: jobId={}", jobId, e);
-            context.setStatus(ImportJobStatus.FAILED);
-            context.setErrorMessage(e.getMessage());
-            markFinished(context);
-            releaseTransientJobData(context);
-        }
+        });
     }
 
     /**
@@ -196,11 +203,11 @@ public class DataImportService {
      * 获取导入任务状态
      */
     public ImportJobResult getImportJobStatus(String jobId) {
-        cleanupExpiredJobs();
-        ImportJobContext context = importJobs.get(jobId);
-        if (context == null) {
+        Optional<ImportJobContext> optContext = cacheService.getImportJobContext(jobId, ImportJobContext.class);
+        if (!optContext.isPresent()) {
             return null;
         }
+        ImportJobContext context = optContext.get();
         return new ImportJobResult(
                 jobId,
                 context.getStatus().name(),
@@ -217,37 +224,15 @@ public class DataImportService {
      * 取消导入任务
      */
     public void cancelImportJob(String jobId) {
-        cleanupExpiredJobs();
-        ImportJobContext context = importJobs.get(jobId);
-        if (context != null && (context.getStatus() == ImportJobStatus.PENDING ||
-                context.getStatus() == ImportJobStatus.RUNNING)) {
+        Optional<ImportJobContext> optContext = cacheService.getImportJobContext(jobId, ImportJobContext.class);
+        if (!optContext.isPresent()) return;
+
+        ImportJobContext context = optContext.get();
+        if (context.getStatus() == ImportJobStatus.PENDING ||
+                context.getStatus() == ImportJobStatus.RUNNING) {
             context.setStatus(ImportJobStatus.CANCELLED);
             markFinished(context);
-        }
-    }
-
-    private void cleanupExpiredJobs() {
-        long now = System.currentTimeMillis();
-        long previous = lastCleanupAt.get();
-        if (importJobs.size() < CLEANUP_TRIGGER_SIZE && now - previous < CLEANUP_INTERVAL_MS) {
-            return;
-        }
-        if (!lastCleanupAt.compareAndSet(previous, now)) {
-            return;
-        }
-        LocalDateTime threshold = LocalDateTime.now().minusHours(JOB_RETENTION_HOURS);
-        for (Map.Entry<String, ImportJobContext> entry : importJobs.entrySet()) {
-            ImportJobContext context = entry.getValue();
-            if (context == null || !isTerminal(context.getStatus())) {
-                continue;
-            }
-            LocalDateTime finishedAt = context.getFinishedAt();
-            if (finishedAt == null) {
-                finishedAt = context.getCreatedAt();
-            }
-            if (finishedAt != null && finishedAt.isBefore(threshold)) {
-                importJobs.remove(entry.getKey(), context);
-            }
+            cacheService.setImportJobContext(jobId, context);
         }
     }
 
