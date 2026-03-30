@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- V12: 鎼滅储绱㈠紩鍜屽揩鎹风瓫閫夊姛鑳?
 -- 鏀寔鍏ㄥ眬鎼滅储锛堝惈鎷奸煶鎼滅储锛夊拰蹇嵎绛涢€夋爣绛?
 -- ============================================================
@@ -16,8 +16,12 @@ CREATE TABLE IF NOT EXISTS search_index (
     INDEX idx_search_index_entity_id (entity_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 添加兼容 MySQL/H2 的搜索索引
-CREATE INDEX IF NOT EXISTS idx_search_content ON search_index(search_content, pinyin_content);
+-- 添加兼容 MySQL 的搜索索引
+SET @exist = (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'search_index' AND index_name = 'idx_search_content');
+SET @sql = IF(@exist = 0, 'CREATE INDEX idx_search_content ON search_index(search_content(255), pinyin_content)', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- 淇濆瓨鐨勬悳绱㈠巻鍙?
 CREATE TABLE IF NOT EXISTS saved_searches (

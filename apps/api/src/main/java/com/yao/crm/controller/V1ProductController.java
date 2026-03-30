@@ -14,6 +14,7 @@ import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,8 +33,8 @@ import java.util.*;
 @Validated
 public class V1ProductController extends CommerceControllerSupport {
 
-    private static final Set<String> PRODUCT_STATUSES = Set.of("ACTIVE", "INACTIVE");
-    private static final Set<String> PRICE_BOOK_STATUSES = Set.of("ACTIVE", "INACTIVE");
+    private static final Set<String> PRODUCT_STATUSES = CollectionsUtil.setOf("ACTIVE", "INACTIVE");
+    private static final Set<String> PRICE_BOOK_STATUSES = CollectionsUtil.setOf("ACTIVE", "INACTIVE");
 
     private final ProductRepository productRepository;
     private final PriceBookRepository priceBookRepository;
@@ -74,7 +75,7 @@ public class V1ProductController extends CommerceControllerSupport {
             return ResponseEntity.badRequest().body(errorBody(request, "product_status_invalid", msg(request, "product_status_invalid"), null));
         }
         Pageable pageable = buildPageable(page, normalizedSize, "updatedAt", "desc",
-                Set.of("createdAt", "updatedAt", "name", "code"), "updatedAt");
+                CollectionsUtil.setOf("createdAt", "updatedAt", "name", "code"), "updatedAt");
         Page<Product> result = isBlank(normalizedStatus)
                 ? productRepository.findByTenantId(tenantId, pageable)
                 : productRepository.findByTenantIdAndStatus(tenantId, normalizedStatus, pageable);
@@ -107,12 +108,12 @@ public class V1ProductController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = payload.getId();
-        if (isBlank(id)) {
+        String normalizedId = normalizeId(payload.getId());
+        if (isBlank(normalizedId)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
         String tenantId = currentTenant(request);
-        Optional<Product> optional = productRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Product> optional = productRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "product_not_found", msg(request, "product_not_found"), null));
         }
@@ -124,7 +125,7 @@ public class V1ProductController extends CommerceControllerSupport {
         }
         if (!beforeCode.equalsIgnoreCase(product.getCode())) {
             Optional<Product> conflict = productRepository.findByTenantIdAndCode(tenantId, product.getCode());
-            if (conflict.isPresent() && !id.equals(conflict.get().getId())) {
+            if (conflict.isPresent() && !normalizedId.equals(conflict.get().getId())) {
                 return ResponseEntity.status(409).body(errorBody(request, "product_code_exists", msg(request, "product_code_exists"), null));
             }
         }
@@ -150,7 +151,7 @@ public class V1ProductController extends CommerceControllerSupport {
             return ResponseEntity.badRequest().body(errorBody(request, "price_book_status_invalid", msg(request, "price_book_status_invalid"), null));
         }
         Pageable pageable = buildPageable(page, normalizedSize, "updatedAt", "desc",
-                Set.of("createdAt", "updatedAt", "name", "status"), "updatedAt");
+                CollectionsUtil.setOf("createdAt", "updatedAt", "name", "status"), "updatedAt");
         Page<PriceBook> result = commerceFacadeService.findPriceBooks(tenantId, normalizedStatus, pageable);
         return ResponseEntity.ok(successWithFields(request, "price_books_listed", pageBody(result, page, normalizedSize)));
     }
@@ -181,12 +182,12 @@ public class V1ProductController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = payload.getId();
-        if (isBlank(id)) {
+        String normalizedId = normalizeId(payload.getId());
+        if (isBlank(normalizedId)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
         String tenantId = currentTenant(request);
-        Optional<PriceBook> optional = priceBookRepository.findByIdAndTenantId(id, tenantId);
+        Optional<PriceBook> optional = priceBookRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "price_book_not_found", msg(request, "price_book_not_found"), null));
         }
@@ -208,11 +209,15 @@ public class V1ProductController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        if (!priceBookRepository.findByIdAndTenantId(id, tenantId).isPresent()) {
+        if (!priceBookRepository.findByIdAndTenantId(normalizedId, tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "price_book_not_found", msg(request, "price_book_not_found"), null));
         }
-        List<PriceBookItem> items = priceBookItemRepository.findByTenantIdAndPriceBookIdOrderByUpdatedAtDesc(tenantId, id);
+        List<PriceBookItem> items = priceBookItemRepository.findByTenantIdAndPriceBookIdOrderByUpdatedAtDesc(tenantId, normalizedId);
         List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
         for (PriceBookItem item : items) out.add(toPriceBookItemView(item));
         Map<String, Object> body = new LinkedHashMap<>();
@@ -226,21 +231,25 @@ public class V1ProductController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedPriceBookId = normalizeId(id);
+        if (isBlank(normalizedPriceBookId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        if (!priceBookRepository.findByIdAndTenantId(id, tenantId).isPresent()) {
+        if (!priceBookRepository.findByIdAndTenantId(normalizedPriceBookId, tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "price_book_not_found", msg(request, "price_book_not_found"), null));
         }
-        String productId = payload.getProductId();
+        String productId = normalizeId(payload.getProductId());
         if (isBlank(productId)) {
             return ResponseEntity.badRequest().body(errorBody(request, "product_id_required", msg(request, "product_id_required"), null));
         }
         if (!productRepository.findByIdAndTenantId(productId, tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "product_not_found", msg(request, "product_not_found"), null));
         }
-        PriceBookItem item = priceBookItemRepository.findByTenantIdAndPriceBookIdAndProductId(tenantId, id, productId).orElseGet(PriceBookItem::new);
+        PriceBookItem item = priceBookItemRepository.findByTenantIdAndPriceBookIdAndProductId(tenantId, normalizedPriceBookId, productId).orElseGet(PriceBookItem::new);
         if (isBlank(item.getId())) item.setId(newId("pbi"));
         item.setTenantId(tenantId);
-        item.setPriceBookId(id);
+        item.setPriceBookId(normalizedPriceBookId);
         item.setProductId(productId);
         item.setPrice(payload.getPrice() != null ? payload.getPrice() : 0L);
         item.setTaxRate(payload.getTaxRate() != null ? payload.getTaxRate() : 0.0);
@@ -376,5 +385,9 @@ public class V1ProductController extends CommerceControllerSupport {
         out.put("currency", row.getCurrency());
         out.put("updatedAt", row.getUpdatedAt());
         return out;
+    }
+
+    private String normalizeId(String value) {
+        return isBlank(value) ? "" : value.trim();
     }
 }

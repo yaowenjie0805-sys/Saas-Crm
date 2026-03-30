@@ -19,6 +19,7 @@ public interface OpportunityRepository extends JpaRepository<Opportunity, String
     java.util.List<Opportunity> findByTenantIdAndOwnerInAndCreatedAtBetween(String tenantId, Collection<String> owners, LocalDateTime from, LocalDateTime to);
     java.util.Optional<Opportunity> findByIdAndTenantId(String id, String tenantId);
     boolean existsByIdAndTenantId(String id, String tenantId);
+    long deleteByIdAndTenantId(String id, String tenantId);
     long countByTenantId(String tenantId);
     long countByTenantIdAndOwnerIn(String tenantId, Collection<String> owners);
     long countByTenantIdAndCreatedAtBetween(String tenantId, LocalDateTime from, LocalDateTime to);

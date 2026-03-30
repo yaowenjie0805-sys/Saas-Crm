@@ -85,8 +85,8 @@ public class WorkflowService {
         WorkflowNode node = new WorkflowNode();
         node.setId(UUID.randomUUID().toString());
         node.setWorkflowId(workflowId);
-        node.setNodeType(nodeType);
-        node.setNodeSubtype(nodeSubtype);
+        node.setNodeType(normalizeUpper(nodeType));
+        node.setNodeSubtype(normalizeUpper(nodeSubtype));
         node.setName(name);
         node.setPositionX(positionX);
         node.setPositionY(positionY);
@@ -110,7 +110,8 @@ public class WorkflowService {
         connection.setWorkflowId(workflowId);
         connection.setSourceNodeId(sourceNodeId);
         connection.setTargetNodeId(targetNodeId);
-        connection.setConnectionType(connectionType != null ? connectionType : "DEFAULT");
+        String normalizedConnectionType = normalizeUpper(connectionType);
+        connection.setConnectionType(normalizedConnectionType == null ? "DEFAULT" : normalizedConnectionType);
         connection.setLabel(label);
         connection.setDisplayOrder(0);
         connection.setCreatedAt(LocalDateTime.now());
@@ -131,13 +132,13 @@ public class WorkflowService {
         List<String> warnings = new ArrayList<>();
 
         // 检查是否有触发器节点
-        boolean hasTrigger = nodes.stream().anyMatch(n -> "TRIGGER".equals(n.getNodeType()));
+        boolean hasTrigger = nodes.stream().anyMatch(n -> "TRIGGER".equalsIgnoreCase(normalizeNodeType(n)));
         if (!hasTrigger) {
             errors.add("工作流必须包含至少一个触发器节点");
         }
 
         // 检查是否有结束节点
-        boolean hasEnd = nodes.stream().anyMatch(n -> "END".equals(n.getNodeType()));
+        boolean hasEnd = nodes.stream().anyMatch(n -> "END".equalsIgnoreCase(normalizeNodeType(n)));
         if (!hasEnd) {
             warnings.add("建议添加结束节点");
         }
@@ -156,7 +157,7 @@ public class WorkflowService {
 
         // 检查无效配置
         nodes.forEach(n -> {
-            if ("INVALID".equals(n.getConfigValidation())) {
+            if ("INVALID".equalsIgnoreCase(n.getConfigValidation())) {
                 errors.add("节点 '" + n.getName() + "' 配置无效: " + n.getValidationMessage());
             }
         });
@@ -332,5 +333,23 @@ public class WorkflowService {
     private WorkflowDefinition requireWorkflow(String tenantId, String workflowId) {
         return workflowRepository.findByIdAndTenantId(workflowId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow not found"));
+    }
+
+    private String normalizeUpper(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return normalized.toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeNodeType(WorkflowNode node) {
+        if (node == null || node.getNodeType() == null) {
+            return "";
+        }
+        return node.getNodeType().trim();
     }
 }

@@ -9,6 +9,7 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -19,6 +20,7 @@ import javax.persistence.criteria.Predicate;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @RestController
@@ -64,24 +66,27 @@ public class ContractController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<>(Set.of("customerId", "contractNo", "title", "amount", "status", "owner", "signDate", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("customerId", "contractNo", "title", "amount", "status", "owner", "signDate", "createdAt", "updatedAt"),
                 "updatedAt"
         );
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
         final String tenantId = currentTenant(request);
+        final String normalizedCustomerId = normalizeOptional(customerId);
+        final String normalizedStatus = normalizeOptional(status);
+        final String normalizedQuery = normalizeOptional(q);
         Specification<ContractRecord> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
-            if (!isBlank(customerId)) {
-                predicates.add(cb.equal(root.get("customerId"), customerId));
+            if (normalizedCustomerId != null) {
+                predicates.add(cb.equal(root.get("customerId"), normalizedCustomerId));
             }
-            if (!isBlank(status)) {
-                predicates.add(cb.equal(cb.lower(root.get("status")), valueNormalizerService.normalizeContractStatus(status).toLowerCase(Locale.ROOT)));
+            if (normalizedStatus != null) {
+                predicates.add(cb.equal(cb.lower(root.get("status")), valueNormalizerService.normalizeContractStatus(normalizedStatus).toLowerCase(Locale.ROOT)));
             }
-            if (!isBlank(q)) {
-                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
+            if (normalizedQuery != null) {
+                String pattern = "%" + escapeLike(normalizedQuery.toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("contractNo")), pattern, '\\'),
                         cb.like(cb.lower(root.get("title")), pattern, '\\')
@@ -92,7 +97,8 @@ public class ContractController extends BaseApiController {
                 Predicate scopeOwner = cb.equal(root.get("owner"), ownerScope);
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<ContractRecord> result = contractRepository.findAll(spec, pageable);
@@ -112,7 +118,11 @@ public class ContractController extends BaseApiController {
         }
 
         String tenantId = currentTenant(request);
-        Optional<Customer> customer = customerRepository.findByIdAndTenantId(payload.getCustomerId(), tenantId);
+        String normalizedCustomerId = normalizeRequired(payload.getCustomerId());
+        if (normalizedCustomerId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        Optional<Customer> customer = customerRepository.findByIdAndTenantId(normalizedCustomerId, tenantId);
         if (!customer.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -123,7 +133,7 @@ public class ContractController extends BaseApiController {
         ContractRecord contract = new ContractRecord();
         contract.setId(newId("cr"));
         contract.setTenantId(tenantId);
-        contract.setCustomerId(payload.getCustomerId());
+        contract.setCustomerId(normalizedCustomerId);
         contract.setContractNo(isBlank(payload.getContractNo()) ? newContractNo() : payload.getContractNo().trim());
         contract.setTitle(payload.getTitle());
         contract.setAmount(payload.getAmount() == null ? 0L : payload.getAmount());
@@ -143,7 +153,7 @@ public class ContractController extends BaseApiController {
         if (isSalesScoped(request)) {
             contract.setOwner(currentOwnerScope(request));
         } else {
-            contract.setOwner(isBlank(payload.getOwner()) ? customer.get().getOwner() : payload.getOwner());
+            contract.setOwner(isBlank(payload.getOwner()) ? customer.get().getOwner() : payload.getOwner().trim());
         }
 
         ContractRecord saved = contractRepository.save(contract);
@@ -156,9 +166,13 @@ public class ContractController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
 
         String tenantId = currentTenant(request);
-        Optional<ContractRecord> optional = contractRepository.findByIdAndTenantId(id, tenantId);
+        Optional<ContractRecord> optional = contractRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contract_not_found", "NOT_FOUND", null));
         }
@@ -168,21 +182,25 @@ public class ContractController extends BaseApiController {
         }
 
         if (patch.getCustomerId() != null) {
-            Optional<Customer> customer = customerRepository.findByIdAndTenantId(patch.getCustomerId(), tenantId);
+            String normalizedCustomerId = normalizeRequired(patch.getCustomerId());
+            if (normalizedCustomerId == null) {
+                return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+            }
+            Optional<Customer> customer = customerRepository.findByIdAndTenantId(normalizedCustomerId, tenantId);
             if (!customer.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
             if (isSalesScoped(request) && !ownerMatchesScope(request, customer.get().getOwner())) {
                 return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
             }
-            contract.setCustomerId(patch.getCustomerId());
+            contract.setCustomerId(normalizedCustomerId);
             if (isSalesScoped(request)) {
                 contract.setOwner(currentOwnerScope(request));
             }
         }
 
-        if (patch.getContractNo() != null) contract.setContractNo(patch.getContractNo());
-        if (patch.getTitle() != null) contract.setTitle(patch.getTitle());
+        if (patch.getContractNo() != null) contract.setContractNo(patch.getContractNo().trim());
+        if (patch.getTitle() != null) contract.setTitle(patch.getTitle().trim());
         if (patch.getAmount() != null) contract.setAmount(patch.getAmount());
         if (patch.getStatus() != null) {
             if (!valueNormalizerService.isValidContractStatus(patch.getStatus())) {
@@ -201,7 +219,7 @@ public class ContractController extends BaseApiController {
                 contract.setSignDate(parsed);
             }
         }
-        if (patch.getOwner() != null && !isSalesScoped(request)) contract.setOwner(patch.getOwner());
+        if (patch.getOwner() != null && !isSalesScoped(request)) contract.setOwner(patch.getOwner().trim());
 
         ContractRecord saved = contractRepository.save(contract);
         auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTRACT", saved.getId(), "Updated contract");
@@ -213,14 +231,18 @@ public class ContractController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
 
         String tenantId = currentTenant(request);
-        if (!contractRepository.existsByIdAndTenantId(id, tenantId)) {
+        long deleted = contractRepository.deleteByIdAndTenantId(normalizedId, tenantId);
+        if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contract_not_found", "NOT_FOUND", null));
         }
 
-        contractRepository.deleteById(id);
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTRACT", id, "Deleted contract");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTRACT", normalizedId, "Deleted contract");
         return ResponseEntity.noContent().build();
     }
 
@@ -233,8 +255,46 @@ public class ContractController extends BaseApiController {
     }
 
     private LocalDate parseDateOrNull(HttpServletRequest request, String value) {
-        return parseLocalDate(request, value);
+        String normalized = normalizeRequired(value);
+        if (normalized == null) {
+            return null;
+        }
+        LocalDate parsed = parseLocalDate(request, normalized);
+        if (parsed == null) {
+            return null;
+        }
+        if (!isCanonicalDate(request, normalized, parsed)) {
+            return null;
+        }
+        return parsed;
+    }
+
+    private boolean isCanonicalDate(HttpServletRequest request, String rawInput, LocalDate parsed) {
+        Set<String> formats = new LinkedHashSet<String>();
+        formats.add(currentTenantDateFormat(request));
+        formats.addAll(supportedDateFormats());
+        for (String format : formats) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                LocalDate reparsed = LocalDate.parse(rawInput, formatter);
+                if (parsed.equals(reparsed) && rawInput.equals(reparsed.format(formatter))) {
+                    return true;
+                }
+            } catch (Exception ignore) {
+                // continue
+            }
+        }
+        return false;
+    }
+
+    private String normalizeRequired(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeOptional(String value) {
+        return normalizeRequired(value);
     }
 }
-
-

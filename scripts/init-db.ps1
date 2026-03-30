@@ -9,14 +9,14 @@ param(
 $ErrorActionPreference = "Stop"
 
 Write-Host "[db:init] Checking MySQL connectivity $DbHost`:$DbPort ..."
-mysql --protocol=TCP -h$DbHost -P$DbPort -u$DbUser -p$DbPassword -e "SELECT 1;" | Out-Null
+mysql --protocol=TCP -h $DbHost -P $DbPort -u $DbUser -p$DbPassword -e "SELECT 1;" | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw "[db:init] Cannot connect to MySQL. Please start MySQL and verify credentials."
 }
 
 $sql = "CREATE DATABASE IF NOT EXISTS $DbName CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 Write-Host "[db:init] Creating database '$DbName' with user '$DbUser'"
-mysql --protocol=TCP -h$DbHost -P$DbPort -u$DbUser -p$DbPassword -e $sql
+mysql --protocol=TCP -h $DbHost -P $DbPort -u $DbUser -p$DbPassword -e $sql
 if ($LASTEXITCODE -ne 0) {
   throw "[db:init] create database failed"
 }
@@ -39,7 +39,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[db:init] Applying dual-market demo SQL seed ..."
-mysql --protocol=TCP -h$DbHost -P$DbPort -u$DbUser -p$DbPassword $DbName -e "source scripts/seed-dual-market-demo.sql"
+mysql --protocol=TCP -h $DbHost -P $DbPort -u $DbUser -p$DbPassword $DbName -e "source scripts/seed-dual-market-demo.sql"
 if ($LASTEXITCODE -ne 0) {
   throw "[db:init] dual-market seed failed"
 }

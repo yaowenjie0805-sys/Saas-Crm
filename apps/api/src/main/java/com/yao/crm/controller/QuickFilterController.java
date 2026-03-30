@@ -8,10 +8,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.*;
 
-/**
- * 快捷筛选控制器 - 国内特色
- * 提供快捷筛选的CRUD操作
- */
 @RestController
 @RequestMapping("/api/v2/filters")
 public class QuickFilterController {
@@ -22,28 +18,33 @@ public class QuickFilterController {
         this.quickFilterRepository = quickFilterRepository;
     }
 
-    /**
-     * 获取快捷筛选列表
-     */
     @GetMapping("/quick")
     public ResponseEntity<?> getQuickFilters(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String entityType,
             @RequestParam(required = false) String owner) {
 
+        String normalizedTenantId = normalizeRequired(tenantId);
+        if (normalizedTenantId == null) {
+            return badRequest("tenantId");
+        }
+
+        String normalizedEntityType = normalizeRequired(entityType);
+        if (normalizedEntityType == null) {
+            return badRequest("entityType");
+        }
+
+        String normalizedOwner = normalizeOptional(owner);
         List<QuickFilter> filters;
 
-        if (owner != null && !owner.isEmpty()) {
-            // 返回用户个人和公共筛选
+        if (normalizedOwner != null) {
             filters = quickFilterRepository.findByTenantIdAndOwnerAndEntityTypeOrderByDisplayOrderAsc(
-                    tenantId, owner, entityType);
+                    normalizedTenantId, normalizedOwner, normalizedEntityType);
 
-            // 合并公共筛选（owner为null或特殊值）
             List<QuickFilter> publicFilters = quickFilterRepository
                     .findByTenantIdAndOwnerAndEntityTypeOrderByDisplayOrderAsc(
-                            tenantId, "", entityType);
+                            normalizedTenantId, "", normalizedEntityType);
 
-            // 去重合并
             Set<String> addedNames = new HashSet<>();
             filters.removeIf(f -> {
                 boolean duplicate = addedNames.contains(f.getName());
@@ -53,7 +54,7 @@ public class QuickFilterController {
             filters.addAll(publicFilters);
         } else {
             filters = quickFilterRepository.findByTenantIdAndEntityTypeOrderByDisplayOrderAsc(
-                    tenantId, entityType);
+                    normalizedTenantId, normalizedEntityType);
         }
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -75,21 +76,38 @@ public class QuickFilterController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 创建快捷筛选
-     */
     @PostMapping("/quick")
-    public ResponseEntity<QuickFilter> createQuickFilter(
+    public ResponseEntity<?> createQuickFilter(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody CreateQuickFilterRequest request) {
 
+        String normalizedTenantId = normalizeRequired(tenantId);
+        if (normalizedTenantId == null) {
+            return badRequest("tenantId");
+        }
+
+        if (request == null) {
+            return badRequest("name");
+        }
+
+        String normalizedName = normalizeRequired(request.name);
+        if (normalizedName == null) {
+            return badRequest("name");
+        }
+
+        String normalizedEntityType = normalizeRequired(request.entityType);
+        if (normalizedEntityType == null) {
+            return badRequest("entityType");
+        }
+
         QuickFilter filter = new QuickFilter();
         filter.setId(UUID.randomUUID().toString());
-        filter.setTenantId(tenantId);
-        filter.setOwner(request.owner != null ? request.owner : "");
-        filter.setName(request.name);
+        filter.setTenantId(normalizedTenantId);
+        String normalizedOwner = normalizeOptional(request.owner);
+        filter.setOwner(normalizedOwner != null ? normalizedOwner : "");
+        filter.setName(normalizedName);
         filter.setIcon(request.icon);
-        filter.setEntityType(request.entityType);
+        filter.setEntityType(normalizedEntityType);
         filter.setFilterConfig(request.filterConfig);
         filter.setDisplayOrder(request.displayOrder != null ? request.displayOrder : 0);
         filter.setIsDefault(request.isDefault != null && request.isDefault);
@@ -97,27 +115,53 @@ public class QuickFilterController {
         filter.setUpdatedAt(LocalDateTime.now());
 
         quickFilterRepository.save(filter);
-
         return ResponseEntity.ok(filter);
     }
 
-    /**
-     * 更新快捷筛选
-     */
     @PutMapping("/quick/{id}")
     public ResponseEntity<?> updateQuickFilter(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody UpdateQuickFilterRequest request) {
 
-        Optional<QuickFilter> filterOpt = quickFilterRepository.findById(id);
+        String normalizedTenantId = normalizeRequired(tenantId);
+        if (normalizedTenantId == null) {
+            return badRequest("tenantId");
+        }
+
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return badRequest("id");
+        }
+
+        if (request == null) {
+            return badRequest("name");
+        }
+
+        Optional<QuickFilter> filterOpt = quickFilterRepository.findByTenantIdAndId(normalizedTenantId, normalizedId);
         if (!filterOpt.isPresent()) {
             return ResponseEntity.notFound().build();
         }
 
         QuickFilter filter = filterOpt.get();
-
-        if (request.name != null) filter.setName(request.name);
+        if (request.name != null) {
+            String normalizedName = normalizeRequired(request.name);
+            if (normalizedName == null) {
+                return badRequest("name");
+            }
+            filter.setName(normalizedName);
+        }
+        if (request.owner != null) {
+            String normalizedOwner = normalizeOptional(request.owner);
+            filter.setOwner(normalizedOwner != null ? normalizedOwner : "");
+        }
+        if (request.entityType != null) {
+            String normalizedEntityType = normalizeRequired(request.entityType);
+            if (normalizedEntityType == null) {
+                return badRequest("entityType");
+            }
+            filter.setEntityType(normalizedEntityType);
+        }
         if (request.icon != null) filter.setIcon(request.icon);
         if (request.filterConfig != null) filter.setFilterConfig(request.filterConfig);
         if (request.displayOrder != null) filter.setDisplayOrder(request.displayOrder);
@@ -125,39 +169,37 @@ public class QuickFilterController {
         filter.setUpdatedAt(LocalDateTime.now());
 
         quickFilterRepository.save(filter);
-
         return ResponseEntity.ok(filter);
     }
 
-    /**
-     * 删除快捷筛选
-     */
     @DeleteMapping("/quick/{id}")
     public ResponseEntity<?> deleteQuickFilter(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
 
-        Optional<QuickFilter> filterOpt = quickFilterRepository.findById(id);
-        if (!filterOpt.isPresent()) {
-            return ResponseEntity.notFound().build();
+        String normalizedTenantId = normalizeRequired(tenantId);
+        if (normalizedTenantId == null) {
+            return badRequest("tenantId");
         }
 
-        quickFilterRepository.deleteById(id);
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        return ResponseEntity.ok(result);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return badRequest("id");
+        }
+
+        int deleted = quickFilterRepository.deleteByTenantIdAndId(normalizedTenantId, normalizedId);
+        if (deleted == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.noContent().build();
     }
 
-    /**
-     * 解析筛选配置JSON
-     */
     private Map<String, Object> parseFilterConfig(String filterConfig) {
         if (filterConfig == null || filterConfig.trim().isEmpty()) {
             return new HashMap<>();
         }
 
         try {
-            // 简单的JSON解析，实际项目中建议使用Jackson
             Map<String, Object> config = new HashMap<>();
             String content = filterConfig.trim();
             if (content.startsWith("{") && content.endsWith("}")) {
@@ -178,9 +220,6 @@ public class QuickFilterController {
         }
     }
 
-    /**
-     * 创建请求
-     */
     public static class CreateQuickFilterRequest {
         public String owner;
         public String name;
@@ -191,14 +230,35 @@ public class QuickFilterController {
         public Boolean isDefault;
     }
 
-    /**
-     * 更新请求
-     */
     public static class UpdateQuickFilterRequest {
         public String name;
+        public String owner;
+        public String entityType;
         public String icon;
         public String filterConfig;
         public Integer displayOrder;
         public Boolean isDefault;
+    }
+
+    private String normalizeRequired(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String normalizeOptional(String value) {
+        return normalizeRequired(value);
+    }
+
+    private ResponseEntity<Map<String, Object>> badRequest(String field) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("code", "bad_request");
+        response.put("message", "invalid request payload");
+        Map<String, Object> details = new HashMap<>();
+        details.put("field", field);
+        response.put("details", details);
+        return ResponseEntity.badRequest().body(response);
     }
 }

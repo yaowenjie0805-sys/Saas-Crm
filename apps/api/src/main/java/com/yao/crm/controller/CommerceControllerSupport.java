@@ -7,6 +7,7 @@ import com.yao.crm.service.I18nService;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -147,6 +148,12 @@ class CommerceControllerSupport extends BaseApiController {
         out.put("notes", row.getNotes());
         out.put("tenantId", row.getTenantId());
         out.put("updatedAt", row.getUpdatedAt());
+        // 扩展字段
+        out.put("settlementCurrency", row.getSettlementCurrency());
+        out.put("exchangeRateSnapshot", row.getExchangeRateSnapshot());
+        out.put("invoiceStatus", row.getInvoiceStatus());
+        out.put("taxDisplayMode", row.getTaxDisplayMode());
+        out.put("complianceTag", row.getComplianceTag());
         return out;
     }
 }

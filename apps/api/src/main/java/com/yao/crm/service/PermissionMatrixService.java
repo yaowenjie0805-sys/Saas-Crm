@@ -10,36 +10,36 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class PermissionMatrixService {
 
-    private static final List<String> OPERATIONS = List.of(
-            "opViewDashboard",
-            "opViewReports",
-            "opManageCustomers",
-            "opDeleteCustomers",
-            "opManageTasks",
-            "opManageFollowUps",
-            "opCreateOpportunity",
-            "opEditOpportunityAmount"
-    );
+    private static final List<String> OPERATIONS = new ArrayList<String>() { {
+        add("opViewDashboard");
+        add("opViewReports");
+        add("opManageCustomers");
+        add("opDeleteCustomers");
+        add("opManageTasks");
+        add("opManageFollowUps");
+        add("opCreateOpportunity");
+        add("opEditOpportunityAmount");
+    } };
     
-    private static final List<String> SALES_OPERATIONS = List.of(
-            "opViewDashboard",
-            "opManageCustomers",
-            "opManageTasks",
-            "opManageFollowUps",
-            "opCreateOpportunity"
-    );
+    private static final List<String> SALES_OPERATIONS = new ArrayList<String>() { {
+        add("opViewDashboard");
+        add("opManageCustomers");
+        add("opManageTasks");
+        add("opManageFollowUps");
+        add("opCreateOpportunity");
+    } };
     
-    private static final List<String> ANALYST_OPERATIONS = List.of(
-            "opViewDashboard",
-            "opViewReports"
-    );
+    private static final List<String> ANALYST_OPERATIONS = new ArrayList<String>() { {
+        add("opViewDashboard");
+        add("opViewReports");
+    } };
     
-    private static final List<String> ROLES = List.of(
-            UserRole.ADMIN.name(),
-            UserRole.MANAGER.name(),
-            UserRole.SALES.name(),
-            UserRole.ANALYST.name()
-    );
+    private static final List<String> ROLES = new ArrayList<String>() { {
+        add(UserRole.ADMIN.name());
+        add(UserRole.MANAGER.name());
+        add(UserRole.SALES.name());
+        add(UserRole.ANALYST.name());
+    } };
 
     private final Map<String, Set<String>> byRole = new ConcurrentHashMap<>();
     private final Map<String, Deque<Set<String>>> history = new ConcurrentHashMap<>();

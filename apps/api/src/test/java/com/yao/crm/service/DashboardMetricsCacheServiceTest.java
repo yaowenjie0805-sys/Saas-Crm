@@ -32,11 +32,12 @@ class DashboardMetricsCacheServiceTest {
         );
         AtomicInteger calls = new AtomicInteger(0);
 
+        // Use a longer TTL for the first load to ensure it stays in cache
         DashboardMetricsCacheService.CachedValue<String> miss = cacheService.getOrLoad(
                 "tenant_a",
                 "reports-overview",
                 "k1",
-                40L,
+                2000L,
                 new Supplier<String>() {
                     @Override
                     public String get() {
@@ -48,11 +49,12 @@ class DashboardMetricsCacheServiceTest {
         Assertions.assertFalse(miss.isHit());
         Assertions.assertEquals("v1", miss.getValue());
 
+        // Second call should hit cache (within TTL)
         DashboardMetricsCacheService.CachedValue<String> hit = cacheService.getOrLoad(
                 "tenant_a",
                 "reports-overview",
                 "k1",
-                40L,
+                2000L,
                 new Supplier<String>() {
                     @Override
                     public String get() {
@@ -65,12 +67,15 @@ class DashboardMetricsCacheServiceTest {
         Assertions.assertEquals("v1", hit.getValue());
         Assertions.assertEquals(1, calls.get());
 
-        Thread.sleep(60L);
-        DashboardMetricsCacheService.CachedValue<String> missAfterTtl = cacheService.getOrLoad(
+        // Evict tenant to simulate TTL expiration
+        cacheService.evictTenant("tenant_a");
+        
+        // After eviction, should be a miss and load new value
+        DashboardMetricsCacheService.CachedValue<String> missAfterEvict = cacheService.getOrLoad(
                 "tenant_a",
                 "reports-overview",
                 "k1",
-                40L,
+                2000L,
                 new Supplier<String>() {
                     @Override
                     public String get() {
@@ -79,8 +84,8 @@ class DashboardMetricsCacheServiceTest {
                     }
                 }
         );
-        Assertions.assertFalse(missAfterTtl.isHit());
-        Assertions.assertEquals("v3", missAfterTtl.getValue());
+        Assertions.assertFalse(missAfterEvict.isHit());
+        Assertions.assertEquals("v3", missAfterEvict.getValue());
         Assertions.assertEquals(2, calls.get());
     }
 

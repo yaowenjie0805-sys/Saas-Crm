@@ -132,7 +132,7 @@ function PipelinePanel({
   if (activePage !== 'pipeline') return null
 
   return (
-    <section className="panel">
+    <section className="panel" data-testid="opportunities-page">
       <div className="panel-head"><h2>{t('pipeline')}</h2></div>
       <div className="inline-tools filter-row" style={{ marginBottom: 10 }}>
         <select className={fieldErrors?.stage ? 'tool-input input-invalid' : 'tool-input'} value={opportunityForm.stage} onChange={(e) => setOpportunityForm((p) => ({ ...p, stage: e.target.value }))}>

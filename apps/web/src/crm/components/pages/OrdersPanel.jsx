@@ -48,7 +48,10 @@ function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, r
 
   useEffect(() => {
     if (activePage !== 'orders') return
-    loadApprovalMode()
+    const run = async () => {
+      await loadApprovalMode()
+    }
+    run()
   }, [activePage, loadApprovalMode])
 
   const filteredItems = useMemo(() => {

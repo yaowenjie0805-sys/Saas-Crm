@@ -72,10 +72,14 @@ public class V1AuthController extends BaseApiController {
 
     @PostMapping("/invitations/accept")
     public ResponseEntity<?> acceptInvitation(HttpServletRequest request, @Valid @RequestBody V1AcceptInvitationRequest payload) {
+        String invitationToken = normalizeRequiredValue(payload.getToken());
+        if (invitationToken == null) {
+            return validationError(request, "token");
+        }
         if (!payload.getPassword().equals(payload.getConfirmPassword())) {
             return ResponseEntity.badRequest().body(errorBody(request, "password_not_match", msg(request, "password_not_match"), null));
         }
-        Optional<UserInvitation> optional = userInvitationRepository.findByTokenAndUsedFalse(payload.getToken().trim());
+        Optional<UserInvitation> optional = userInvitationRepository.findByTokenAndUsedFalse(invitationToken);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "invitation_not_found", msg(request, "invitation_not_found"), null));
         }
@@ -115,8 +119,14 @@ public class V1AuthController extends BaseApiController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(HttpServletRequest request, @Valid @RequestBody V1AuthLoginRequest payload) {
-        String tenantId = payload.getTenantId().trim();
-        String username = payload.getUsername().trim();
+        String tenantId = normalizeRequiredValue(payload.getTenantId());
+        if (tenantId == null) {
+            return validationError(request, "tenantId");
+        }
+        String username = normalizeRequiredValue(payload.getUsername());
+        if (username == null) {
+            return validationError(request, "username");
+        }
         String ip = request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
 
         if (loginRiskService.isLocked(username, ip)) {
@@ -169,10 +179,18 @@ public class V1AuthController extends BaseApiController {
 
     @PostMapping("/mfa/verify")
     public ResponseEntity<?> verifyMfa(HttpServletRequest request, @Valid @RequestBody V1MfaVerifyRequest payload) {
-        if (!mfaService.verify(payload.getCode())) {
+        String challengeId = normalizeRequiredValue(payload.getChallengeId());
+        if (challengeId == null) {
+            return validationError(request, "challengeId");
+        }
+        String code = normalizeRequiredValue(payload.getCode());
+        if (code == null) {
+            return validationError(request, "code");
+        }
+        if (!mfaService.verify(code)) {
             return ResponseEntity.status(401).body(errorBody(request, "mfa_invalid", msg(request, "mfa_invalid"), null));
         }
-        MfaChallengeService.Challenge challenge = mfaChallengeService.consume(payload.getChallengeId());
+        MfaChallengeService.Challenge challenge = mfaChallengeService.consume(challengeId);
         if (challenge == null) {
             return ResponseEntity.status(400).body(errorBody(request, "mfa_challenge_invalid", msg(request, "mfa_challenge_invalid"), null));
         }
@@ -197,7 +215,7 @@ public class V1AuthController extends BaseApiController {
             return ResponseEntity.status(401).body(errorBody(request, "sso_oidc_exchange_failed", msg(request, "sso_oidc_exchange_failed"), null));
         }
 
-        String tenantId = isBlank(payload.getTenantId()) ? "tenant_default" : payload.getTenantId().trim();
+        String tenantId = normalizeOptionalValue(payload.getTenantId(), "tenant_default");
         if (!tenantRepository.findById(tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
         }
@@ -290,10 +308,24 @@ public class V1AuthController extends BaseApiController {
         return isBlank(user.getOwnerScope()) ? user.getUsername() : user.getOwnerScope();
     }
 
+    private String normalizeRequiredValue(String value) {
+        return isBlank(value) ? null : value.trim();
+    }
+
+    private String normalizeOptionalValue(String value, String fallback) {
+        String normalized = normalizeRequiredValue(value);
+        return normalized == null ? fallback : normalized;
+    }
+
+    private ResponseEntity<?> validationError(HttpServletRequest request, String field) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("field", field);
+        return ResponseEntity.badRequest().body(errorBody(request, "validation_error", msg(request, "validation_error"), details));
+    }
+
     private String generateSecureRandomPassword() {
         // Generate a strong random password that meets common password policy requirements
         // Format: UUID-based + suffix with uppercase, lowercase, digit, and special char
         return UUID.randomUUID().toString().replace("-", "") + "!Aa1";
     }
 }
-

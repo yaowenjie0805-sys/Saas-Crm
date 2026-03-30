@@ -119,6 +119,20 @@ class WorkflowServiceTest {
     }
 
     @Test
+    @DisplayName("shouldNormalizeNodeTypeAndSubtype_whenAddNode")
+    void shouldNormalizeNodeTypeAndSubtype_whenAddNode() {
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId("wf-1");
+        when(workflowRepository.findByIdAndTenantId("wf-1", "tenant-1")).thenReturn(Optional.of(workflow));
+        when(nodeRepository.save(any(WorkflowNode.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkflowNode result = service.addNode("tenant-1", "wf-1", " trigger ", " manual ", "Start", 0, 0, "{}");
+
+        assertEquals("TRIGGER", result.getNodeType());
+        assertEquals("MANUAL", result.getNodeSubtype());
+    }
+
+    @Test
     @DisplayName("shouldThrowException_whenAddNodeToNonExistentWorkflow")
     void shouldThrowException_whenAddNodeToNonExistentWorkflow() {
         when(workflowRepository.findByIdAndTenantId("wf-1", "tenant-1")).thenReturn(Optional.empty());
@@ -141,6 +155,21 @@ class WorkflowServiceTest {
         assertNotNull(result);
         assertEquals("node-1", result.getSourceNodeId());
         assertEquals("node-2", result.getTargetNodeId());
+    }
+
+    @Test
+    @DisplayName("shouldNormalizeConnectionTypeAndFallbackToDefault_whenAddConnection")
+    void shouldNormalizeConnectionTypeAndFallbackToDefault_whenAddConnection() {
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId("wf-1");
+        when(workflowRepository.findByIdAndTenantId("wf-1", "tenant-1")).thenReturn(Optional.of(workflow));
+        when(connectionRepository.save(any(WorkflowConnection.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkflowConnection normalized = service.addConnection("tenant-1", "wf-1", "node-1", "node-2", " branch ", "Label");
+        WorkflowConnection defaulted = service.addConnection("tenant-1", "wf-1", "node-1", "node-2", "   ", "Label");
+
+        assertEquals("BRANCH", normalized.getConnectionType());
+        assertEquals("DEFAULT", defaulted.getConnectionType());
     }
 
     @Test
@@ -183,6 +212,33 @@ class WorkflowServiceTest {
         endNode.setNodeType("END");
         endNode.setConfigValidation("VALID");
         
+        when(nodeRepository.findByWorkflowIdOrderByPositionXAscPositionYAsc("wf-1")).thenReturn(Arrays.asList(triggerNode, endNode));
+        when(connectionRepository.findByWorkflowId("wf-1")).thenReturn(new ArrayList<>());
+
+        Map<String, Object> result = service.validateWorkflow("tenant-1", "wf-1");
+
+        assertTrue((Boolean) result.get("valid"));
+    }
+
+    @Test
+    @DisplayName("shouldTreatNodeTypeCaseInsensitively_whenValidateWorkflow")
+    void shouldTreatNodeTypeCaseInsensitively_whenValidateWorkflow() {
+        WorkflowDefinition workflow = new WorkflowDefinition();
+        workflow.setId("wf-1");
+        when(workflowRepository.findByIdAndTenantId("wf-1", "tenant-1")).thenReturn(Optional.of(workflow));
+
+        WorkflowNode triggerNode = new WorkflowNode();
+        triggerNode.setId("node-1");
+        triggerNode.setName("Trigger");
+        triggerNode.setNodeType("trigger");
+        triggerNode.setConfigValidation("valid");
+
+        WorkflowNode endNode = new WorkflowNode();
+        endNode.setId("node-2");
+        endNode.setName("End");
+        endNode.setNodeType("end");
+        endNode.setConfigValidation("VALID");
+
         when(nodeRepository.findByWorkflowIdOrderByPositionXAscPositionYAsc("wf-1")).thenReturn(Arrays.asList(triggerNode, endNode));
         when(connectionRepository.findByWorkflowId("wf-1")).thenReturn(new ArrayList<>());
 

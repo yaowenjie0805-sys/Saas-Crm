@@ -1,6 +1,7 @@
 package com.yao.crm.controller;
 
 import com.yao.crm.dto.request.WebhookRequest;
+import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.IntegrationWebhookService;
 import com.yao.crm.service.I18nService;
@@ -9,9 +10,11 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/integrations/webhooks")
@@ -19,13 +22,16 @@ public class V1IntegrationController extends BaseApiController {
 
     private final AuditLogService auditLogService;
     private final IntegrationWebhookService integrationWebhookService;
+    private final TenantRepository tenantRepository;
 
     public V1IntegrationController(AuditLogService auditLogService,
                                    IntegrationWebhookService integrationWebhookService,
+                                   TenantRepository tenantRepository,
                                    I18nService i18nService) {
         super(i18nService);
         this.auditLogService = auditLogService;
         this.integrationWebhookService = integrationWebhookService;
+        this.tenantRepository = tenantRepository;
     }
 
     @PostMapping("/wecom")
@@ -47,20 +53,49 @@ public class V1IntegrationController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        WebhookRequest safePayload = payload == null ? new WebhookRequest() : payload;
-        auditLogService.record(currentUser(request), currentRole(request), "WEBHOOK", provider, null, String.valueOf(safePayload), tenantId);
+        WebhookRequest safePayload = payload;
+        if (safePayload == null) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+
+        String providerCode = normalizeProvider(provider);
+        if (isBlank(providerCode)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+
+        String authTenantId = normalize(readAttr(request, "authTenantId"));
+        String headerTenantId = normalize(request.getHeader("X-Tenant-Id"));
+        if (!isBlank(authTenantId) && !isBlank(headerTenantId) && !authTenantId.equals(headerTenantId)) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("authTenantId", authTenantId);
+            details.put("headerTenantId", headerTenantId);
+            return ResponseEntity.status(409).body(errorBody(request, "tenant_conflict", msg(request, "tenant_conflict"), details));
+        }
+
+        String tenantId = normalize(currentTenant(request));
+        if (isBlank(tenantId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        Optional<?> tenant = tenantRepository.findById(tenantId);
+        if (!tenant.isPresent()) {
+            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+        }
+
+        String normalizedUser = normalizeUser(currentUser(request));
+        String title = resolveTitle(providerCode, safePayload);
+        String content = resolveContent(safePayload);
+        auditLogService.record(normalizedUser, currentRole(request), "WEBHOOK", providerCode, null, String.valueOf(safePayload), tenantId);
         boolean dispatched = integrationWebhookService.sendMessage(
-                provider,
+                providerCode,
                 tenantId,
-                resolveTitle(provider, safePayload),
-                resolveContent(safePayload),
-                currentUser(request)
+                title,
+                content,
+                normalizedUser
         );
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("accepted", true);
         body.put("dispatched", dispatched);
-        body.put("provider", provider);
+        body.put("provider", providerCode);
         body.put("tenantId", tenantId);
         return ResponseEntity.accepted().body(successWithFields(request, "webhook_accepted", body));
     }
@@ -78,7 +113,7 @@ public class V1IntegrationController extends BaseApiController {
         if (!isBlank(content)) {
             return content;
         }
-        return String.valueOf(payload);
+        return "{}";
     }
 
     private String readText(String... values) {
@@ -96,5 +131,23 @@ public class V1IntegrationController extends BaseApiController {
         }
         return "";
     }
-}
 
+    private String normalizeProvider(String value) {
+        String normalized = normalize(value).toUpperCase(Locale.ROOT);
+        return normalized;
+    }
+
+    private String normalizeUser(String value) {
+        String normalized = normalize(value);
+        return isBlank(normalized) ? "unknown" : normalized;
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String readAttr(HttpServletRequest request, String key) {
+        Object value = request.getAttribute(key);
+        return value == null ? "" : String.valueOf(value);
+    }
+}

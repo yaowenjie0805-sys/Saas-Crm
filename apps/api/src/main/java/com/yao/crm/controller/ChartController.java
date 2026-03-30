@@ -7,7 +7,10 @@ import com.yao.crm.dto.request.ChartTemplateUpdateRequest;
 import com.yao.crm.entity.ChartTemplate;
 import com.yao.crm.service.ChartService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -15,8 +18,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * 图表控制器
- * 提供图表数据、模板管理API
+ * 鍥捐〃鎺у埗鍣? * 鎻愪緵鍥捐〃鏁版嵁銆佹ā鏉跨鐞咥PI
  */
 @Tag(name = "Charts", description = "Chart data and templates")
 @RestController
@@ -30,7 +32,7 @@ public class ChartController {
     }
 
     /**
-     * 获取图表数据
+     * 鑾峰彇鍥捐〃鏁版嵁
      */
     @GetMapping("/data")
     public ResponseEntity<?> getChartData(
@@ -40,6 +42,8 @@ public class ChartController {
             @RequestParam(required = false) String toDate,
             @RequestParam(required = false) String owner,
             @RequestParam(required = false) String chartType) {
+
+        tenantId = requireTenantId(tenantId);
 
         Map<String, Object> filters = new HashMap<>();
         if (fromDate != null) filters.put("fromDate", fromDate);
@@ -57,12 +61,14 @@ public class ChartController {
     }
 
     /**
-     * 预览图表数据
+     * 棰勮鍥捐〃鏁版嵁
      */
     @PostMapping("/preview")
     public ResponseEntity<?> previewChartData(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @Valid @RequestBody ChartPreviewRequest request) {
+
+        tenantId = requireTenantId(tenantId);
 
         Map<String, Object> filters = new HashMap<>();
         if (request.getFromDate() != null) filters.put("fromDate", request.getFromDate());
@@ -78,7 +84,7 @@ public class ChartController {
     }
 
     /**
-     * 获取图表模板列表
+     * 鑾峰彇鍥捐〃妯℃澘鍒楄〃
      */
     @GetMapping("/templates")
     public ResponseEntity<List<ChartTemplate>> getTemplates(
@@ -86,10 +92,12 @@ public class ChartController {
             @RequestParam(required = false) String chartType,
             @RequestParam(required = false, defaultValue = "false") boolean includeSystem) {
 
+        tenantId = requireTenantId(tenantId);
+
         List<ChartTemplate> templates;
 
         if (includeSystem) {
-            templates = chartService.getSystemTemplates(tenantId);
+            templates = new ArrayList<>(chartService.getSystemTemplates(tenantId));
             templates.addAll(chartService.getTemplates(tenantId, chartType));
         } else {
             templates = chartService.getTemplates(tenantId, chartType);
@@ -99,29 +107,32 @@ public class ChartController {
     }
 
     /**
-     * 获取图表模板详情
+     * 鑾峰彇鍥捐〃妯℃澘璇︽儏
      */
     @GetMapping("/templates/{id}")
     public ResponseEntity<?> getTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
 
-        // 简单实现，实际应从数据库查询
+        // 绠€鍗曞疄鐜帮紝瀹為檯搴斾粠鏁版嵁搴撴煡璇?        tenantId = requireTenantId(tenantId);
+        id = requirePathId(id);
         Map<String, Object> result = new HashMap<>();
         result.put("id", id);
-        result.put("name", "示例模板");
+        result.put("name", "绀轰緥妯℃澘");
         result.put("chartType", "BAR");
         result.put("datasetType", "CUSTOMERS");
         return ResponseEntity.ok(result);
     }
 
     /**
-     * 创建图表模板
+     * 鍒涘缓鍥捐〃妯℃澘
      */
     @PostMapping("/templates")
     public ResponseEntity<ChartTemplate> createTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @Valid @RequestBody ChartTemplateCreateRequest request) {
+
+        tenantId = requireTenantId(tenantId);
 
         ChartTemplate template = new ChartTemplate();
         template.setId(UUID.randomUUID().toString());
@@ -146,7 +157,7 @@ public class ChartController {
     }
 
     /**
-     * 更新图表模板
+     * 鏇存柊鍥捐〃妯℃澘
      */
     @PutMapping("/templates/{id}")
     public ResponseEntity<?> updateTemplate(
@@ -154,6 +165,8 @@ public class ChartController {
             @PathVariable String id,
             @Valid @RequestBody ChartTemplateUpdateRequest request) {
 
+        tenantId = requireTenantId(tenantId);
+        id = requirePathId(id);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("id", id);
@@ -162,28 +175,30 @@ public class ChartController {
     }
 
     /**
-     * 删除图表模板
+     * 鍒犻櫎鍥捐〃妯℃澘
      */
     @DeleteMapping("/templates/{id}")
     public ResponseEntity<?> deleteTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        result.put("id", id);
-        result.put("message", "Template deleted");
-        return ResponseEntity.ok(result);
+        requireTenantId(tenantId);
+        requirePathId(id);
+
+        return ResponseEntity.noContent().build();
     }
 
     /**
-     * 克隆图表模板
+     * 鍏嬮殕鍥捐〃妯℃澘
      */
     @PostMapping("/templates/{id}/clone")
     public ResponseEntity<?> cloneTemplate(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @Valid @RequestBody ChartTemplateCloneRequest request) {
+
+        tenantId = requireTenantId(tenantId);
+        id = requirePathId(id);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -194,37 +209,36 @@ public class ChartController {
     }
 
     /**
-     * 获取支持的图表类型
-     */
+     * 鑾峰彇鏀寔鐨勫浘琛ㄧ被鍨?     */
     @GetMapping("/types")
     public ResponseEntity<?> getChartTypes() {
         List<Map<String, String>> types = new ArrayList<>();
-        types.add(createChartType("BAR", "柱状图", "📊"));
-        types.add(createChartType("LINE", "折线图", "📈"));
-        types.add(createChartType("PIE", "饼图", "🥧"));
-        types.add(createChartType("DOUGHNUT", "环形图", "🍩"));
-        types.add(createChartType("FUNNEL", "漏斗图", "🔻"));
-        types.add(createChartType("RADAR", "雷达图", "🕸️"));
-        types.add(createChartType("GAUGE", "仪表盘", "⚙️"));
+        types.add(createChartType("BAR", "Bar Chart", "bar"));
+        types.add(createChartType("LINE", "Line Chart", "line"));
+        types.add(createChartType("PIE", "Pie Chart", "pie"));
+        types.add(createChartType("DOUGHNUT", "Doughnut Chart", "doughnut"));
+        types.add(createChartType("FUNNEL", "Funnel Chart", "funnel"));
+        types.add(createChartType("RADAR", "Radar Chart", "radar"));
+        types.add(createChartType("GAUGE", "Gauge Chart", "gauge"));
         Map<String, Object> result = new HashMap<>();
         result.put("types", types);
         return ResponseEntity.ok(result);
     }
 
     /**
-     * 获取支持的数据集类型
+     * 鑾峰彇鏀寔鐨勬暟鎹泦绫诲瀷
      */
     @GetMapping("/datasets")
     public ResponseEntity<?> getDatasetTypes() {
         List<Map<String, String>> datasets = new ArrayList<>();
-        datasets.add(createDatasetType("CUSTOMERS", "客户数据"));
-        datasets.add(createDatasetType("OPPORTUNITIES", "商机数据"));
-        datasets.add(createDatasetType("REVENUE", "营收数据"));
-        datasets.add(createDatasetType("QUOTES", "报价数据"));
-        datasets.add(createDatasetType("ORDERS", "订单数据"));
-        datasets.add(createDatasetType("TASKS", "任务数据"));
-        datasets.add(createDatasetType("LEADS", "线索数据"));
-        datasets.add(createDatasetType("FUNNEL", "销售漏斗"));
+        datasets.add(createDatasetType("CUSTOMERS", "Customers"));
+        datasets.add(createDatasetType("OPPORTUNITIES", "Opportunities"));
+        datasets.add(createDatasetType("REVENUE", "Revenue"));
+        datasets.add(createDatasetType("QUOTES", "Quotes"));
+        datasets.add(createDatasetType("ORDERS", "Orders"));
+        datasets.add(createDatasetType("TASKS", "Tasks"));
+        datasets.add(createDatasetType("LEADS", "Leads"));
+        datasets.add(createDatasetType("FUNNEL", "Sales Funnel"));
         Map<String, Object> result = new HashMap<>();
         result.put("datasets", datasets);
         return ResponseEntity.ok(result);
@@ -244,4 +258,22 @@ public class ChartController {
         type.put("label", label);
         return type;
     }
+
+    private String requireTenantId(String tenantId) {
+        String normalizedTenantId = StringUtils.trimWhitespace(tenantId);
+        if (!StringUtils.hasText(normalizedTenantId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Tenant-Id must not be blank");
+        }
+        return normalizedTenantId;
+    }
+
+    private String requirePathId(String id) {
+        String normalizedId = StringUtils.trimWhitespace(id);
+        if (!StringUtils.hasText(normalizedId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Path id must not be blank");
+        }
+        return normalizedId;
+    }
 }
+
+

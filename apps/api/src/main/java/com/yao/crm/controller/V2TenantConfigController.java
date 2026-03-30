@@ -4,6 +4,7 @@ import com.yao.crm.dto.request.TenantConfigPatchRequest;
 import com.yao.crm.entity.Tenant;
 import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -12,8 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.validation.Valid;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,8 +26,9 @@ import java.util.Set;
 @RequestMapping("/api/v2")
 public class V2TenantConfigController extends BaseApiController {
 
-    private static final Set<String> MARKET_PROFILES = Set.of("CN", "GLOBAL");
-    private static final Set<String> APPROVAL_MODES = Set.of("STRICT", "STAGE_GATE");
+    private static final Set<String> MARKET_PROFILES = CollectionsUtil.setOf("CN", "GLOBAL");
+    private static final Set<String> APPROVAL_MODES = CollectionsUtil.setOf("STRICT", "STAGE_GATE");
+
     private final TenantRepository tenantRepository;
 
     public V2TenantConfigController(TenantRepository tenantRepository, I18nService i18nService) {
@@ -37,30 +38,47 @@ public class V2TenantConfigController extends BaseApiController {
 
     @GetMapping("/tenant-config")
     public ResponseEntity<?> getTenantConfig(HttpServletRequest request) {
-        String tenantId = currentTenant(request);
+        String tenantId = resolveTenantId(request);
+        if (isBlank(tenantId)) {
+            return badRequest(
+                    request,
+                    "bad_request",
+                    badRequestDetails("tenantId")
+            );
+        }
         Optional<Tenant> optional = tenantRepository.findById(tenantId);
         if (!optional.isPresent()) {
-            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+            return notFound(request, "tenant_not_found");
         }
         return ResponseEntity.ok(successWithFields(request, "tenant_config_loaded", toView(optional.get())));
     }
 
     @PatchMapping("/tenant-config")
-    public ResponseEntity<?> patchTenantConfig(HttpServletRequest request, @Valid @RequestBody TenantConfigPatchRequest payload) {
+    public ResponseEntity<?> patchTenantConfig(HttpServletRequest request, @RequestBody TenantConfigPatchRequest payload) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
-            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+            return forbidden(request);
         }
-        String tenantId = currentTenant(request);
+        if (payload == null) {
+            return badRequest(request, "bad_request", null);
+        }
+        String tenantId = resolveTenantId(request);
+        if (isBlank(tenantId)) {
+            return badRequest(
+                    request,
+                    "bad_request",
+                    badRequestDetails("tenantId")
+            );
+        }
         Optional<Tenant> optional = tenantRepository.findById(tenantId);
         if (!optional.isPresent()) {
-            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+            return notFound(request, "tenant_not_found");
         }
         Tenant tenant = optional.get();
 
         String marketProfile = upper(payload.getMarketProfile());
         if (!isBlank(marketProfile)) {
             if (!MARKET_PROFILES.contains(marketProfile)) {
-                return ResponseEntity.badRequest().body(errorBody(request, "tenant_market_profile_invalid", msg(request, "tenant_market_profile_invalid"), null));
+                return badRequest(request, "tenant_market_profile_invalid", null);
             }
             tenant.setMarketProfile(marketProfile);
         }
@@ -71,7 +89,7 @@ public class V2TenantConfigController extends BaseApiController {
         String approvalMode = upper(payload.getApprovalMode());
         if (!isBlank(approvalMode)) {
             if (!APPROVAL_MODES.contains(approvalMode)) {
-                return ResponseEntity.badRequest().body(errorBody(request, "tenant_approval_mode_invalid", msg(request, "tenant_approval_mode_invalid"), null));
+                return badRequest(request, "tenant_approval_mode_invalid", null);
             }
             tenant.setApprovalMode(approvalMode);
         }
@@ -117,12 +135,41 @@ public class V2TenantConfigController extends BaseApiController {
         return out;
     }
 
-    private String str(Object value) {
-        return value == null ? "" : String.valueOf(value);
-    }
-
     private String upper(String value) {
         if (isBlank(value)) return "";
         return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String resolveTenantId(HttpServletRequest request) {
+        Object tenant = request.getAttribute("authTenantId");
+        if (tenant != null && !isBlank(String.valueOf(tenant))) {
+            return String.valueOf(tenant).trim();
+        }
+        String headerTenant = request.getHeader("X-Tenant-Id");
+        if (!isBlank(headerTenant)) {
+            return headerTenant.trim();
+        }
+        return "";
+    }
+
+    private Map<String, Object> badRequestDetails(String field) {
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("field", field);
+        return details;
+    }
+
+    private ResponseEntity<?> forbidden(HttpServletRequest request) {
+        String code = normalizeCode("forbidden", "forbidden");
+        return ResponseEntity.status(403).body(errorBody(request, code, msg(request, code), null));
+    }
+
+    private ResponseEntity<?> badRequest(HttpServletRequest request, String msgKey, Map<String, Object> details) {
+        String code = normalizeCode(msgKey, "bad_request");
+        return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), details));
+    }
+
+    private ResponseEntity<?> notFound(HttpServletRequest request, String msgKey) {
+        String code = normalizeCode(msgKey, "not_found");
+        return ResponseEntity.status(404).body(errorBody(request, code, msg(request, code), null));
     }
 }

@@ -17,7 +17,7 @@
 | 报价与版本 | `QuotesPanel.jsx` | `/api/v1/quotes*` | `quotes`, `quote_items`, `quote_versions` | 报价提交、接受、转订单 |
 | 订单/合同/回款 | `OrdersPanel.jsx`, `ContractsPanel.jsx`, `PaymentsPanel.jsx` | `/api/v1/orders*`, `/api/contracts*`, `/api/payments*` | `order_records`, `contract_records`, `payment_records` | 履约与回款闭环 |
 
-## 2. 增强模块（V13-V17）
+## 2. 增强模块（V13-V20）
 
 | 模块 | 主要前端页面/组件 | 主要后端接口 | 主要实体/表 | 备注 |
 |---|---|---|---|---|

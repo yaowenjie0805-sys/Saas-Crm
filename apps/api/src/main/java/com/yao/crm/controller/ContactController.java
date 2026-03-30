@@ -8,6 +8,7 @@ import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -58,18 +59,19 @@ public class ContactController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<>(Set.of("customerId", "name", "title", "phone", "email", "owner", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("customerId", "name", "title", "phone", "email", "owner", "createdAt", "updatedAt"),
                 "updatedAt"
         );
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
         final String tenantId = currentTenant(request);
+        final String normalizedCustomerId = isBlank(customerId) ? "" : customerId.trim();
         Specification<Contact> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
-            if (!isBlank(customerId)) {
-                predicates.add(cb.equal(root.get("customerId"), customerId));
+            if (!isBlank(normalizedCustomerId)) {
+                predicates.add(cb.equal(root.get("customerId"), normalizedCustomerId));
             }
             if (!isBlank(q)) {
                 String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
@@ -85,7 +87,8 @@ public class ContactController extends BaseApiController {
                 Predicate scopeOwner = cb.equal(root.get("owner"), ownerScope);
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<Contact> result = contactRepository.findAll(spec, pageable);
@@ -105,7 +108,11 @@ public class ContactController extends BaseApiController {
         }
 
         String tenantId = currentTenant(request);
-        Optional<Customer> customer = customerRepository.findByIdAndTenantId(payload.getCustomerId(), tenantId);
+        String normalizedCustomerId = payload.getCustomerId() == null ? null : payload.getCustomerId().trim();
+        if (isBlank(normalizedCustomerId)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        Optional<Customer> customer = customerRepository.findByIdAndTenantId(normalizedCustomerId, tenantId);
         if (!customer.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -116,7 +123,7 @@ public class ContactController extends BaseApiController {
         Contact contact = new Contact();
         contact.setId(newId("ct"));
         contact.setTenantId(tenantId);
-        contact.setCustomerId(payload.getCustomerId());
+        contact.setCustomerId(normalizedCustomerId);
         contact.setName(payload.getName());
         contact.setTitle(payload.getTitle());
         contact.setPhone(payload.getPhone());
@@ -134,12 +141,16 @@ public class ContactController extends BaseApiController {
 
     @PatchMapping("/contacts/{id}")
     public ResponseEntity<?> updateContact(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody UpdateContactRequest patch) {
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
+        String normalizedId = id.trim();
         String tenantId = currentTenant(request);
-        Optional<Contact> optional = contactRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Contact> optional = contactRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contact_not_found", "NOT_FOUND", null));
         }
@@ -149,14 +160,18 @@ public class ContactController extends BaseApiController {
         }
 
         if (patch.getCustomerId() != null) {
-            Optional<Customer> customer = customerRepository.findByIdAndTenantId(patch.getCustomerId(), tenantId);
+            String normalizedCustomerId = patch.getCustomerId().trim();
+            if (isBlank(normalizedCustomerId)) {
+                return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+            }
+            Optional<Customer> customer = customerRepository.findByIdAndTenantId(normalizedCustomerId, tenantId);
             if (!customer.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
             if (isSalesScoped(request) && !ownerMatchesScope(request, customer.get().getOwner())) {
                 return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
             }
-            contact.setCustomerId(patch.getCustomerId());
+            contact.setCustomerId(normalizedCustomerId);
             if (isSalesScoped(request)) {
                 contact.setOwner(currentOwnerScope(request));
             }
@@ -175,21 +190,30 @@ public class ContactController extends BaseApiController {
 
     @DeleteMapping("/contacts/{id}")
     public ResponseEntity<?> deleteContact(HttpServletRequest request, @PathVariable String id) {
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
 
+        String normalizedId = id.trim();
         String tenantId = currentTenant(request);
-        Optional<Contact> optional = contactRepository.findByIdAndTenantId(id, tenantId);
-        if (!optional.isPresent()) {
+        if (isSalesScoped(request)) {
+            Optional<Contact> optional = contactRepository.findByIdAndTenantId(normalizedId, tenantId);
+            if (!optional.isPresent()) {
+                return ResponseEntity.status(404).body(legacyErrorByKey(request, "contact_not_found", "NOT_FOUND", null));
+            }
+            if (!ownerMatchesScope(request, optional.get().getOwner())) {
+                return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
+            }
+        }
+        long deleted = contactRepository.deleteByIdAndTenantId(normalizedId, tenantId);
+        if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contact_not_found", "NOT_FOUND", null));
         }
-        if (isSalesScoped(request) && !ownerMatchesScope(request, optional.get().getOwner())) {
-            return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
-        }
 
-        contactRepository.deleteById(id);
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTACT", id, "Deleted contact");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTACT", normalizedId, "Deleted contact");
         return ResponseEntity.noContent().build();
     }
 
@@ -197,5 +221,3 @@ public class ContactController extends BaseApiController {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
 }
-
-

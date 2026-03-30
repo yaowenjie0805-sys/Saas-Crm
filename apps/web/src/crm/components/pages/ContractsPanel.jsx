@@ -122,7 +122,7 @@ function ContractsPanel({
   if (activePage !== 'contracts') return null
 
   return (
-    <section className="panel">
+    <section className="panel" data-testid="contracts-page">
       <div className="panel-head"><h2>{t('contracts')}</h2></div>
       <div className="inline-tools" style={{ marginBottom: 10 }}>
         <input className={fieldErrors?.customerId ? 'tool-input input-invalid' : 'tool-input'} placeholder={t('customerId')} value={contractForm.customerId} onChange={(e) => setContractForm((p) => ({ ...p, customerId: e.target.value }))} />

@@ -123,9 +123,9 @@ class ReportAggregationServiceTest {
         // Assert
         assertNotNull(result);
         Map<String, Object> summary = (Map<String, Object>) result.get("summary");
-        assertEquals(0, summary.get("customers"));
-        assertEquals(0, summary.get("revenue"));
-        assertEquals(0, summary.get("opportunities"));
+        assertEquals(0L, summary.get("customers"));
+        assertEquals(0L, summary.get("revenue"));
+        assertEquals(0L, summary.get("opportunities"));
     }
 
     @Test
@@ -196,9 +196,9 @@ class ReportAggregationServiceTest {
         // Assert
         assertNotNull(result);
         Map<String, Object> summary = (Map<String, Object>) result.get("summary");
-        assertEquals(0, summary.get("customers"));
+        assertEquals(0L, summary.get("customers"));
         assertEquals(0L, summary.get("revenue"));
-        assertEquals(0, summary.get("opportunities"));
+        assertEquals(0L, summary.get("opportunities"));
         assertEquals(0.0, summary.get("winRate"));
         assertEquals(0.0, summary.get("taskDoneRate"));
         assertEquals(0.0, summary.get("quoteApproveRate"));
@@ -274,9 +274,9 @@ class ReportAggregationServiceTest {
         assertTrue(result.containsKey("taskStatus"));
 
         Map<String, Object> summary = (Map<String, Object>) result.get("summary");
-        assertEquals(0, summary.get("customers"));
-        assertEquals(0, summary.get("revenue"));
-        assertEquals(0, summary.get("opportunities"));
+        assertEquals(0L, summary.get("customers"));
+        assertEquals(0L, summary.get("revenue"));
+        assertEquals(0L, summary.get("opportunities"));
         assertEquals(0.0, summary.get("winRate"));
         assertEquals(0.0, summary.get("taskDoneRate"));
         assertEquals(0L, summary.get("orderPaymentReceived"));

@@ -197,7 +197,7 @@ public class DataExportService {
             log.info("Export file generated: {}", filePath);
 
         } catch (Exception e) {
-            log.error("Export job failed: " + jobId, e);
+            log.error("Export job failed: jobId={}", jobId, e);
             context.setStatus(ExportJobStatus.FAILED);
             context.setErrorMessage(e.getMessage());
         }

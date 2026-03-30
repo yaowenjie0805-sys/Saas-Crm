@@ -15,7 +15,7 @@ Browser (React/Vite)
   -> Spring Controller
   -> Service (business orchestration)
   -> Repository (JPA)
-  -> MySQL tables (Flyway V1~V17)
+  -> MySQL tables (Flyway V1~V20)
 ```
 
 补充：

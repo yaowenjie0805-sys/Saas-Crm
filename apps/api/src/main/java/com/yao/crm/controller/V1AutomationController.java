@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -98,10 +99,17 @@ public class V1AutomationController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        if (payload == null) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         String tenantId = currentTenant(request);
         AutomationRule row = null;
         for (AutomationRule candidate : ruleRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)) {
-            if (id.equals(candidate.getId())) {
+            if (normalizedId.equals(candidate.getId())) {
                 row = candidate;
                 break;
             }
@@ -124,8 +132,18 @@ public class V1AutomationController extends BaseApiController {
             }
             row.setActionType(actionType);
         }
-        if (payload.getTriggerExpr() != null) row.setTriggerExpr(payload.getTriggerExpr().trim());
-        if (payload.getActionPayload() != null) row.setActionPayload(payload.getActionPayload().trim());
+        if (payload.getTriggerExpr() != null) {
+            if (isBlank(payload.getTriggerExpr())) {
+                return ResponseEntity.badRequest().body(errorBody(request, "automation_trigger_required", msg(request, "automation_trigger_required"), null));
+            }
+            row.setTriggerExpr(payload.getTriggerExpr().trim());
+        }
+        if (payload.getActionPayload() != null) {
+            if (isBlank(payload.getActionPayload())) {
+                return ResponseEntity.badRequest().body(errorBody(request, "automation_action_required", msg(request, "automation_action_required"), null));
+            }
+            row.setActionPayload(payload.getActionPayload().trim());
+        }
         if (payload.getEnabled() != null) row.setEnabled(payload.getEnabled());
         row = ruleRepository.save(row);
 
@@ -149,7 +167,11 @@ public class V1AutomationController extends BaseApiController {
     }
 
     private String normalize(String value) {
-        return value == null ? "" : value.trim().toUpperCase();
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeId(String value) {
+        return isBlank(value) ? "" : value.trim();
     }
 }
 

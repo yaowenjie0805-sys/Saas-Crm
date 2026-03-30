@@ -20,6 +20,7 @@ import com.yao.crm.service.LeadAutomationService;
 import com.yao.crm.service.LeadImportFailedRowsExportJobService;
 import com.yao.crm.service.LeadImportService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.data.domain.Page;
@@ -39,8 +40,8 @@ import java.util.*;
 @RequestMapping("/api/v1/leads")
 public class V1LeadController extends BaseApiController {
 
-    private static final Set<String> LEAD_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
-    private static final Set<String> CONVERT_ALLOWED_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING");
+    private static final Set<String> LEAD_STATUSES = CollectionsUtil.setOf("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
+    private static final Set<String> CONVERT_ALLOWED_STATUSES = CollectionsUtil.setOf("NEW", "QUALIFIED", "NURTURING");
     private static final Set<String> IMPORT_CANCEL_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("PENDING", "RUNNING"));
     private static final Set<String> IMPORT_RETRY_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("FAILED", "CANCELED"));
 
@@ -93,7 +94,9 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
+        String normalizedQ = normalize(q);
+        String normalizedStatus = normalizeStatusValue(status);
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(100, size));
         Pageable pageable = buildPageable(
@@ -101,7 +104,7 @@ public class V1LeadController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<>(Set.of("name", "company", "owner", "status", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("name", "company", "owner", "status", "createdAt", "updatedAt"),
                 "updatedAt"
         );
         final boolean salesScoped = isSalesScoped(request);
@@ -109,8 +112,8 @@ public class V1LeadController extends BaseApiController {
         Specification<Lead> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
-            if (!isBlank(q)) {
-                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
+            if (!isBlank(normalizedQ)) {
+                String pattern = "%" + escapeLike(normalizedQ.toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("name")), pattern, '\\'),
                         cb.like(cb.lower(root.get("company")), pattern, '\\'),
@@ -118,13 +121,14 @@ public class V1LeadController extends BaseApiController {
                         cb.like(cb.lower(root.get("phone")), pattern, '\\')
                 ));
             }
-            if (!isBlank(status)) {
-                predicates.add(cb.equal(cb.upper(root.get("status")), status.trim().toUpperCase(Locale.ROOT)));
+            if (!isBlank(normalizedStatus)) {
+                predicates.add(cb.equal(cb.upper(root.get("status")), normalizedStatus));
             }
             if (salesScoped) {
                 predicates.add(cb.equal(cb.lower(root.get("owner")), ownerScope.toLowerCase(Locale.ROOT)));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
         Page<Lead> result = leadRepository.findAll(spec, pageable);
         Map<String, Object> body = new LinkedHashMap<>();
@@ -141,7 +145,10 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        if (payload == null) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
         Lead lead = new Lead();
         lead.setId(newId("ld"));
         try {
@@ -176,8 +183,15 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<Lead> optional = leadRepository.findByIdAndTenantId(id, tenantId);
+        if (payload == null) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String leadId = normalize(id);
+        if (isBlank(leadId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<Lead> optional = leadRepository.findByIdAndTenantId(leadId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_not_found", msg(request, "lead_not_found"), null));
         }
@@ -213,8 +227,12 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<Lead> optional = leadRepository.findByIdAndTenantId(id, tenantId);
+        String leadId = normalize(id);
+        if (isBlank(leadId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<Lead> optional = leadRepository.findByIdAndTenantId(leadId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_not_found", msg(request, "lead_not_found"), null));
         }
@@ -280,14 +298,18 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<Lead> optional = leadRepository.findByIdAndTenantId(id, tenantId);
+        String leadId = normalize(id);
+        if (isBlank(leadId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<Lead> optional = leadRepository.findByIdAndTenantId(leadId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_not_found", msg(request, "lead_not_found"), null));
         }
         Lead lead = optional.get();
         String before = lead.getOwner();
-        String requestedOwner = payload == null ? "" : payload.getOwner();
+        String requestedOwner = payload == null ? "" : normalize(payload.getOwner());
         boolean useRule = payload == null || payload.getUseRule() == null || payload.getUseRule();
         String assigned = leadAssignmentService.assignLeadOwner(tenantId, currentUser(request), lead, requestedOwner, useRule);
         if (!Objects.equals(before, assigned)) {
@@ -330,7 +352,7 @@ public class V1LeadController extends BaseApiController {
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("action", "create");
             details.put("tenantId", tenantId);
-            details.put("allowedConcurrentStatuses", List.of("PENDING", "RUNNING"));
+            details.put("allowedConcurrentStatuses", new ArrayList<String>() { { add("PENDING"); add("RUNNING"); } });
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -343,8 +365,11 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Map<String, Object> body = leadImportService.listJobs(tenantId, status, page, size);
+        String tenantId = normalize(currentTenant(request));
+        String normalizedStatus = normalizeToUpper(status, "ALL");
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, size);
+        Map<String, Object> body = leadImportService.listJobs(tenantId, normalizedStatus, safePage, safeSize);
         return ResponseEntity.ok(successWithFields(request, "lead_import_jobs_listed", body));
     }
 
@@ -353,8 +378,12 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<LeadImportJob> optional = leadImportJobRepository.findByIdAndTenantId(jobId, tenantId);
+        String normalizedJobId = normalize(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<LeadImportJob> optional = leadImportJobRepository.findByIdAndTenantId(normalizedJobId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_import_job_not_found", msg(request, "lead_import_job_not_found"), null));
         }
@@ -366,16 +395,20 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String normalizedJobId = normalize(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
         try {
-            LeadImportJob job = leadImportService.cancelJob(tenantId, jobId, currentUser(request), traceId(request));
+            LeadImportJob job = leadImportService.cancelJob(tenantId, normalizedJobId, currentUser(request), traceId(request));
             if (job == null) {
                 return ResponseEntity.status(404).body(errorBody(request, "lead_import_job_not_found", msg(request, "lead_import_job_not_found"), null));
             }
             return ResponseEntity.ok(successWithFields(request, "lead_import_job_canceled", leadImportService.toView(job)));
         } catch (IllegalStateException ex) {
             String code = isBlank(ex.getMessage()) ? "lead_import_status_transition_invalid" : ex.getMessage().trim();
-            Map<String, Object> details = buildImportConflictDetails(tenantId, jobId, "cancel", code);
+            Map<String, Object> details = buildImportConflictDetails(tenantId, normalizedJobId, "cancel", code);
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -385,16 +418,20 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String normalizedJobId = normalize(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
         try {
-            LeadImportJob job = leadImportService.retryJob(tenantId, jobId, currentUser(request), traceId(request));
+            LeadImportJob job = leadImportService.retryJob(tenantId, normalizedJobId, currentUser(request), traceId(request));
             if (job == null) {
                 return ResponseEntity.status(404).body(errorBody(request, "lead_import_job_not_found", msg(request, "lead_import_job_not_found"), null));
             }
             return ResponseEntity.ok(successWithFields(request, "lead_import_job_retried", leadImportService.toView(job)));
         } catch (IllegalStateException ex) {
             String code = isBlank(ex.getMessage()) ? "lead_import_status_transition_invalid" : ex.getMessage().trim();
-            Map<String, Object> details = buildImportConflictDetails(tenantId, jobId, "retry", code);
+            Map<String, Object> details = buildImportConflictDetails(tenantId, normalizedJobId, "retry", code);
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -407,13 +444,17 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<LeadImportJob> optional = leadImportJobRepository.findByIdAndTenantId(jobId, tenantId);
+        String normalizedJobId = normalize(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<LeadImportJob> optional = leadImportJobRepository.findByIdAndTenantId(normalizedJobId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_import_job_not_found", msg(request, "lead_import_job_not_found"), null));
         }
-        Map<String, Object> body = leadImportService.listFailedRows(tenantId, jobId, page, size);
-        body.put("jobId", jobId);
+        Map<String, Object> body = leadImportService.listFailedRows(tenantId, normalizedJobId, Math.max(1, page), Math.max(1, size));
+        body.put("jobId", normalizedJobId);
         return ResponseEntity.ok(successWithFields(request, "lead_import_failed_rows_loaded", body));
     }
 
@@ -426,10 +467,17 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        LocalDate fromDate = parseLocalDate(request, from);
-        LocalDate toDate = parseLocalDate(request, to);
-        if ((fromDate == null && !isBlank(from)) || (toDate == null && !isBlank(to))) {
+        String normalizedJobId = normalize(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        String normalizedErrorCode = normalize(errorCode);
+        String normalizedFrom = normalize(from);
+        String normalizedTo = normalize(to);
+        LocalDate fromDate = parseLocalDate(request, normalizedFrom);
+        LocalDate toDate = parseLocalDate(request, normalizedTo);
+        if ((fromDate == null && !isBlank(normalizedFrom)) || (toDate == null && !isBlank(normalizedTo))) {
             return ResponseEntity.badRequest().body(errorBody(request, "invalid_date_format", msg(request, "invalid_date_format"), null));
         }
         if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
@@ -438,13 +486,13 @@ public class V1LeadController extends BaseApiController {
         try {
             Map<String, Object> job = leadImportFailedRowsExportJobService.submitByTenant(
                     tenantId,
-                    jobId,
+                    normalizedJobId,
                     currentUser(request),
                     currentRole(request),
                     hasAnyRole(request, "ADMIN", "MANAGER"),
                     traceId(request),
                     request.getHeader("Accept-Language"),
-                    errorCode,
+                    normalizedErrorCode,
                     fromDate,
                     toDate
             );
@@ -473,20 +521,25 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        if (!leadImportJobRepository.findByIdAndTenantId(jobId, tenantId).isPresent()) {
+        String normalizedJobId = normalize(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        if (!leadImportJobRepository.findByIdAndTenantId(normalizedJobId, tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_import_job_not_found", msg(request, "lead_import_job_not_found"), null));
         }
+        String normalizedStatus = normalizeToUpper(status, "ALL");
         Map<String, Object> body = leadImportFailedRowsExportJobService.listByTenant(
                 tenantId,
-                jobId,
+                normalizedJobId,
                 currentUser(request),
                 hasAnyRole(request, "ADMIN", "MANAGER"),
-                page,
-                size,
-                status
+                Math.max(1, page),
+                Math.max(1, size),
+                normalizedStatus
         );
-        body.put("jobId", jobId);
+        body.put("jobId", normalizedJobId);
         return ResponseEntity.ok(successWithFields(request, "lead_import_export_jobs_listed", body));
     }
 
@@ -497,18 +550,23 @@ public class V1LeadController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedJobId = normalize(jobId);
+        String normalizedExportJobId = normalize(exportJobId);
+        if (isBlank(normalizedJobId) || isBlank(normalizedExportJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         try {
             String csv = leadImportFailedRowsExportJobService.downloadByTenant(
-                    currentTenant(request),
-                    jobId,
-                    exportJobId,
+                    normalize(currentTenant(request)),
+                    normalizedJobId,
+                    normalizedExportJobId,
                     currentUser(request),
                     currentRole(request),
                     hasAnyRole(request, "ADMIN", "MANAGER"),
                     traceId(request)
             );
             boolean zh = request.getHeader("Accept-Language") != null && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
-            String filename = (zh ? "\u7ebf\u7d22\u5bfc\u5165\u5931\u8d25\u660e\u7ec6-" : "lead-import-failed-rows-") + exportJobId + ".csv";
+            String filename = (zh ? "\u7ebf\u7d22\u5bfc\u5165\u5931\u8d25\u660e\u7ec6-" : "lead-import-failed-rows-") + normalizedExportJobId + ".csv";
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
@@ -613,6 +671,18 @@ public class V1LeadController extends BaseApiController {
 
     private String normalizeStatusValue(String value) {
         return isBlank(value) ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeToUpper(String value, String fallback) {
+        String normalized = normalize(value);
+        if (normalized.isEmpty()) {
+            normalized = normalize(fallback);
+        }
+        return normalized.toUpperCase(Locale.ROOT);
     }
 
     private Map<String, Object> toLeadView(Lead lead) {

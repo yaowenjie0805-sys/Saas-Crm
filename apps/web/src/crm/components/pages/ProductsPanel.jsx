@@ -136,7 +136,7 @@ function ProductsPanel({ activePage, t, canWrite, apiContext, refreshPage, comme
   if (activePage !== 'products') return null
 
   return (
-    <section className="panel">
+    <section className="panel" data-testid="products-page">
       <div className="panel-head">
         <h2>{t('products')}</h2>
         <div className="inline-tools">

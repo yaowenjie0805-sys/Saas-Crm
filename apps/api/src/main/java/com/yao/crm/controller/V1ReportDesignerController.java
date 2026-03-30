@@ -9,6 +9,7 @@ import com.yao.crm.entity.*;
 import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,8 +21,8 @@ import java.util.*;
 @RequestMapping("/api/v1/reports/designer")
 public class V1ReportDesignerController extends BaseApiController {
 
-    private static final Set<String> DATASETS = Set.of("CUSTOMERS", "OPPORTUNITIES", "CONTRACTS", "PAYMENTS", "LEADS");
-    private static final Set<String> VISIBILITY = Set.of("PRIVATE", "DEPARTMENT", "TENANT");
+    private static final Set<String> DATASETS = CollectionsUtil.setOf("CUSTOMERS", "OPPORTUNITIES", "CONTRACTS", "PAYMENTS", "LEADS");
+    private static final Set<String> VISIBILITY = CollectionsUtil.setOf("PRIVATE", "DEPARTMENT", "TENANT");
 
     private final ReportDesignerTemplateRepository templateRepository;
     private final CustomerRepository customerRepository;
@@ -119,8 +120,12 @@ public class V1ReportDesignerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String templateId = normalizeTemplateId(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<ReportDesignerTemplate> optional = templateRepository.findByIdAndTenantId(id, tenantId);
+        Optional<ReportDesignerTemplate> optional = templateRepository.findByIdAndTenantId(templateId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "report_template_not_found", msg(request, "report_template_not_found"), null));
         }
@@ -136,8 +141,12 @@ public class V1ReportDesignerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String templateId = normalizeTemplateId(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<ReportDesignerTemplate> optional = templateRepository.findByIdAndTenantId(id, tenantId);
+        Optional<ReportDesignerTemplate> optional = templateRepository.findByIdAndTenantId(templateId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "report_template_not_found", msg(request, "report_template_not_found"), null));
         }
@@ -176,8 +185,12 @@ public class V1ReportDesignerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String templateId = normalizeTemplateId(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<ReportDesignerTemplate> optional = templateRepository.findByIdAndTenantId(id, tenantId);
+        Optional<ReportDesignerTemplate> optional = templateRepository.findByIdAndTenantId(templateId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "report_template_not_found", msg(request, "report_template_not_found"), null));
         }
@@ -186,6 +199,9 @@ public class V1ReportDesignerController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         String dataset = normalizeDataset(isBlank(payload == null ? null : payload.getDataset()) ? template.getDataset() : payload.getDataset());
+        if (!DATASETS.contains(dataset)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "report_dataset_invalid", msg(request, "report_dataset_invalid"), null));
+        }
         JsonNode config = payload == null || payload.getConfig() == null ? readConfig(template.getConfigJson()) : payload.getConfig();
         Map<String, Object> result = buildDatasetResult(tenantId, dataset, config);
         result.put("templateId", template.getId());
@@ -287,5 +303,9 @@ public class V1ReportDesignerController extends BaseApiController {
 
     private String newId(String prefix) {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
+    }
+
+    private String normalizeTemplateId(String value) {
+        return isBlank(value) ? "" : value.trim();
     }
 }

@@ -7,6 +7,7 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.CollectionsUtil;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,7 +46,7 @@ public class CustomerController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                new HashSet<>(Set.of("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("name", "owner", "tag", "value", "status", "createdAt", "updatedAt"),
                 "updatedAt");
         Page<Customer> result = customerRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
@@ -78,7 +79,7 @@ public class CustomerController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<>(Set.of("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("name", "owner", "tag", "value", "status", "createdAt", "updatedAt"),
                 "updatedAt"
         );
 
@@ -103,7 +104,8 @@ public class CustomerController extends BaseApiController {
             if (salesScoped) {
                 predicates.add(cb.equal(root.get("owner"), ownerScope));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<Customer> result = customerRepository.findAll(spec, pageable);
@@ -148,8 +150,12 @@ public class CustomerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        String normalizedId = id.trim();
         String tenantId = currentTenant(request);
-        Optional<Customer> optional = customerRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Customer> optional = customerRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "customer_not_found", "NOT_FOUND", null));
         }
@@ -179,11 +185,19 @@ public class CustomerController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        return deleteCustomerInTenant(request, id.trim());
+    }
+
+    private ResponseEntity<?> deleteCustomerInTenant(HttpServletRequest request, String id) {
+        // Fast path: delete directly in the current tenant to avoid a read-before-delete round trip.
         String tenantId = currentTenant(request);
-        if (!customerRepository.existsByIdAndTenantId(id, tenantId)) {
+        long deleted = customerRepository.deleteByIdAndTenantId(id, tenantId);
+        if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "customer_not_found", "NOT_FOUND", null));
         }
-        customerRepository.deleteById(id);
         auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CUSTOMER", id, "Deleted customer");
         return ResponseEntity.noContent().build();
     }
@@ -192,5 +206,3 @@ public class CustomerController extends BaseApiController {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
 }
-
-

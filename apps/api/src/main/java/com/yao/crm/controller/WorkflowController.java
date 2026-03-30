@@ -28,12 +28,20 @@ public class WorkflowController {
      * 获取工作流列表
      */
     @GetMapping
-    public ResponseEntity<List<WorkflowDefinition>> getWorkflows(
+    public ResponseEntity<?> getWorkflows(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String category) {
 
-        List<WorkflowDefinition> workflows = workflowService.getWorkflows(tenantId, status, category);
+        String normalizedTenantId = normalizeRequired(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        List<WorkflowDefinition> workflows = workflowService.getWorkflows(
+                normalizedTenantId,
+                normalizeOptional(status),
+                normalizeOptional(category));
         return ResponseEntity.ok(workflows);
     }
 
@@ -44,7 +52,15 @@ public class WorkflowController {
     public ResponseEntity<?> getWorkflowDetail(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
-        Map<String, Object> detail = workflowService.getWorkflowDetail(tenantId, id);
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Map<String, Object> detail = workflowService.getWorkflowDetail(normalizedTenantId, normalizedId);
         if (detail == null) {
             return ResponseEntity.notFound().build();
         }
@@ -55,12 +71,16 @@ public class WorkflowController {
      * 创建工作流
      */
     @PostMapping
-    public ResponseEntity<WorkflowDefinition> createWorkflow(
+    public ResponseEntity<?> createWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody CreateWorkflowRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         WorkflowDefinition workflow = workflowService.createWorkflow(
-                tenantId,
+                normalizedTenantId,
                 request.name,
                 request.description,
                 request.category,
@@ -77,10 +97,14 @@ public class WorkflowController {
     public ResponseEntity<?> updateWorkflow(
             @PathVariable String id,
             @RequestBody UpdateWorkflowRequest request) {
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
-        result.put("id", id);
+        result.put("id", normalizedId);
         result.put("message", "Workflow updated");
         return ResponseEntity.ok(result);
     }
@@ -92,11 +116,21 @@ public class WorkflowController {
     public ResponseEntity<?> deleteWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null || normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
-            workflowService.deleteWorkflow(tenantId, id);
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            return ResponseEntity.ok(result);
+            workflowService.deleteWorkflow(normalizedTenantId, normalizedId);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            if ("Workflow not found".equals(e.getMessage())) {
+                return ResponseEntity.notFound().build();
+            }
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("error", e.getMessage());
@@ -112,9 +146,17 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody ActivateRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         try {
-            WorkflowDefinition workflow = workflowService.activateWorkflow(tenantId, id, request.activatedBy);
+            WorkflowDefinition workflow = workflowService.activateWorkflow(normalizedTenantId, normalizedId, request.activatedBy);
             return ResponseEntity.ok(workflow);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
@@ -130,8 +172,16 @@ public class WorkflowController {
     public ResponseEntity<?> deactivateWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
-            WorkflowDefinition workflow = workflowService.deactivateWorkflow(tenantId, id);
+            WorkflowDefinition workflow = workflowService.deactivateWorkflow(normalizedTenantId, normalizedId);
             return ResponseEntity.ok(workflow);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
@@ -147,7 +197,15 @@ public class WorkflowController {
     public ResponseEntity<?> validateWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
-        Map<String, Object> validation = workflowService.validateWorkflow(tenantId, id);
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Map<String, Object> validation = workflowService.validateWorkflow(normalizedTenantId, normalizedId);
         return ResponseEntity.ok(validation);
     }
 
@@ -158,7 +216,15 @@ public class WorkflowController {
     public ResponseEntity<?> getWorkflowStats(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
-        Map<String, Object> stats = workflowService.getWorkflowStats(tenantId, id);
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Map<String, Object> stats = workflowService.getWorkflowStats(normalizedTenantId, normalizedId);
         if (stats == null) {
             return ResponseEntity.notFound().build();
         }
@@ -169,14 +235,19 @@ public class WorkflowController {
      * 添加节点
      */
     @PostMapping("/{id}/nodes")
-    public ResponseEntity<WorkflowNode> addNode(
+    public ResponseEntity<?> addNode(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody AddNodeRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null || normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         WorkflowNode node = workflowService.addNode(
-                tenantId,
-                id,
+                normalizedTenantId,
+                normalizedId,
                 request.nodeType,
                 request.nodeSubtype,
                 request.name,
@@ -196,10 +267,15 @@ public class WorkflowController {
             @PathVariable String workflowId,
             @PathVariable String nodeId,
             @RequestBody UpdateNodeRequest request) {
+        String normalizedWorkflowId = normalizeRequired(workflowId);
+        String normalizedNodeId = normalizeRequired(nodeId);
+        if (normalizedWorkflowId == null || normalizedNodeId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
-        result.put("nodeId", nodeId);
+        result.put("nodeId", normalizedNodeId);
         return ResponseEntity.ok(result);
     }
 
@@ -210,23 +286,31 @@ public class WorkflowController {
     public ResponseEntity<?> deleteNode(
             @PathVariable String workflowId,
             @PathVariable String nodeId) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        return ResponseEntity.ok(result);
+        String normalizedWorkflowId = normalizeRequired(workflowId);
+        String normalizedNodeId = normalizeRequired(nodeId);
+        if (normalizedWorkflowId == null || normalizedNodeId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.noContent().build();
     }
 
     /**
      * 添加连接
      */
     @PostMapping("/{id}/connections")
-    public ResponseEntity<WorkflowConnection> addConnection(
+    public ResponseEntity<?> addConnection(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody AddConnectionRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null || normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         WorkflowConnection connection = workflowService.addConnection(
-                tenantId,
-                id,
+                normalizedTenantId,
+                normalizedId,
                 request.sourceNodeId,
                 request.targetNodeId,
                 request.connectionType,
@@ -243,9 +327,12 @@ public class WorkflowController {
     public ResponseEntity<?> deleteConnection(
             @PathVariable String workflowId,
             @PathVariable String connectionId) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        return ResponseEntity.ok(result);
+        String normalizedWorkflowId = normalizeRequired(workflowId);
+        String normalizedConnectionId = normalizeRequired(connectionId);
+        if (normalizedWorkflowId == null || normalizedConnectionId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -265,8 +352,13 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody TestWorkflowRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null || normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        workflowService.getWorkflowDetail(tenantId, id);
+        workflowService.getWorkflowDetail(normalizedTenantId, normalizedId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -330,11 +422,16 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody ExecuteWorkflowRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null || normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         try {
             WorkflowExecution execution = executionService.startExecution(
-                    tenantId,
-                    id,
+                    normalizedTenantId,
+                    normalizedId,
                     request.triggerType != null ? request.triggerType : "MANUAL",
                     request.triggerSource,
                     request.payload != null ? new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(request.payload) : null,
@@ -360,8 +457,13 @@ public class WorkflowController {
     public ResponseEntity<?> getExecutionDetail(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedExecutionId = normalizeRequired(executionId);
+        if (normalizedTenantId == null || normalizedExecutionId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
-            Map<String, Object> detail = executionService.getExecutionDetail(tenantId, executionId);
+            Map<String, Object> detail = executionService.getExecutionDetail(normalizedTenantId, normalizedExecutionId);
             if (detail == null) {
                 return ResponseEntity.notFound().build();
             }
@@ -377,14 +479,24 @@ public class WorkflowController {
      * 获取工作流执行历史
      */
     @GetMapping("/{id}/executions")
-    public ResponseEntity<List<WorkflowExecution>> getExecutionHistory(
+    public ResponseEntity<?> getExecutionHistory(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedId = normalizeRequired(id);
+        if (normalizedTenantId == null || normalizedId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        List<WorkflowExecution> executions = executionService.getExecutionHistory(tenantId, id, status, page, size);
+        List<WorkflowExecution> executions = executionService.getExecutionHistory(
+                normalizedTenantId,
+                normalizedId,
+                normalizeOptional(status),
+                page,
+                size);
         return ResponseEntity.ok(executions);
     }
 
@@ -396,9 +508,14 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId,
             @RequestBody CancelExecutionRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedExecutionId = normalizeRequired(executionId);
+        if (normalizedTenantId == null || normalizedExecutionId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         try {
-            executionService.cancelExecution(tenantId, executionId, request.cancelledBy);
+            executionService.cancelExecution(normalizedTenantId, normalizedExecutionId, request.cancelledBy);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("message", "Execution cancelled");
@@ -417,8 +534,13 @@ public class WorkflowController {
     public ResponseEntity<?> retryExecution(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedExecutionId = normalizeRequired(executionId);
+        if (normalizedTenantId == null || normalizedExecutionId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
-            WorkflowExecution execution = executionService.retryExecution(tenantId, executionId);
+            WorkflowExecution execution = executionService.retryExecution(normalizedTenantId, normalizedExecutionId);
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("newExecutionId", execution.getId());
@@ -439,11 +561,16 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId,
             @RequestBody ApprovalCallbackRequest request) {
+        String normalizedTenantId = normalizeRequired(tenantId);
+        String normalizedExecutionId = normalizeRequired(executionId);
+        if (normalizedTenantId == null || normalizedExecutionId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         try {
             executionService.handleApprovalCallback(
-                    tenantId,
-                    executionId,
+                    normalizedTenantId,
+                    normalizedExecutionId,
                     request.nodeId,
                     request.action,
                     request.approverId,
@@ -476,5 +603,18 @@ public class WorkflowController {
         public String action; // APPROVE or REJECT
         public String approverId;
         public String comments;
+    }
+
+    private String normalizeRequired(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String normalizeOptional(String value) {
+        String normalized = normalizeRequired(value);
+        return normalized == null ? null : normalized;
     }
 }

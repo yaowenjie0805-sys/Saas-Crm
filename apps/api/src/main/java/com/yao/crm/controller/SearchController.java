@@ -35,6 +35,10 @@ public class SearchController {
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String type) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         if (q == null || q.trim().isEmpty()) {
             Map<String, Object> error = new HashMap<>();
             error.put("error", "search_query_required");
@@ -42,7 +46,7 @@ public class SearchController {
         }
 
         int safeLimit = clampLimit(limit, 20, MAX_SEARCH_LIMIT);
-        GlobalSearchService.SearchResult result = globalSearchService.search(tenantId, q.trim(), safeLimit);
+        GlobalSearchService.SearchResult result = globalSearchService.search(normalizedTenantId, q.trim(), safeLimit);
 
         Map<String, Object> response = new HashMap<>();
         if (type != null && !type.isEmpty()) {
@@ -66,13 +70,37 @@ public class SearchController {
             @RequestParam String q,
             @RequestParam(defaultValue = "5") int limit) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         int safeLimit = clampLimit(limit, 5, MAX_SUGGESTION_LIMIT);
         if (q == null || q.trim().isEmpty() || safeLimit <= 0) {
             return ResponseEntity.ok(Collections.emptyList());
         }
 
-        // TODO: implement suggestion logic; keep existing behavior for now.
-        return ResponseEntity.ok(Collections.emptyList());
+        String query = q.trim();
+        PageRequest pageRequest = PageRequest.of(0, safeLimit);
+        List<String> prefixMatches = savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                normalizedTenantId,
+                query,
+                pageRequest);
+
+        LinkedHashSet<String> deduped = new LinkedHashSet<>(prefixMatches);
+        if (prefixMatches.size() < safeLimit) {
+            List<String> containsMatches = savedSearchRepository.findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                    normalizedTenantId,
+                    query,
+                    pageRequest);
+            deduped.addAll(containsMatches);
+        }
+
+        List<String> results = new ArrayList<>(deduped);
+        if (results.size() > safeLimit) {
+            results = results.subList(0, safeLimit);
+        }
+
+        return ResponseEntity.ok(results);
     }
 
     @GetMapping("/history")
@@ -82,13 +110,17 @@ public class SearchController {
             @RequestParam(required = false) String owner,
             @RequestParam(defaultValue = "10") int limit) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String currentUser = resolveCurrentUser(httpRequest, owner);
         if (currentUser == null) {
             return ResponseEntity.badRequest().build();
         }
         int safeLimit = clampLimit(limit, 10, MAX_HISTORY_LIMIT);
         List<SavedSearch> history = savedSearchRepository.findByTenantIdAndOwnerOrderByLastUsedAtDesc(
-                tenantId, currentUser, PageRequest.of(0, safeLimit));
+                normalizedTenantId, currentUser, PageRequest.of(0, safeLimit));
         return ResponseEntity.ok(history);
     }
 
@@ -98,6 +130,10 @@ public class SearchController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody SaveSearchRequest request) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String currentUser = resolveCurrentUser(httpRequest, request.owner);
         if (currentUser == null) {
             return ResponseEntity.badRequest().build();
@@ -105,7 +141,7 @@ public class SearchController {
 
         SavedSearch saved = new SavedSearch();
         saved.setId(UUID.randomUUID().toString());
-        saved.setTenantId(tenantId);
+        saved.setTenantId(normalizedTenantId);
         saved.setOwner(currentUser);
         saved.setName(request.name);
         saved.setSearchType(request.searchType != null ? request.searchType : "GLOBAL");
@@ -126,11 +162,15 @@ public class SearchController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam(required = false) String owner) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String currentUser = resolveCurrentUser(httpRequest, owner);
         if (currentUser == null) {
             return ResponseEntity.badRequest().build();
         }
-        List<SavedSearch> saved = savedSearchRepository.findByTenantIdAndOwner(tenantId, currentUser);
+        List<SavedSearch> saved = savedSearchRepository.findByTenantIdAndOwner(normalizedTenantId, currentUser);
         return ResponseEntity.ok(saved);
     }
 
@@ -141,17 +181,22 @@ public class SearchController {
             @RequestParam(required = false) String owner,
             @PathVariable String id) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String currentUser = resolveCurrentUser(httpRequest, owner);
         if (currentUser == null) {
             return ResponseEntity.badRequest().build();
         }
-        long deletedCount = savedSearchRepository.deleteByIdAndTenantIdAndOwner(id, tenantId, currentUser);
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().build();
+        }
+        long deletedCount = savedSearchRepository.deleteByIdAndTenantIdAndOwner(id, normalizedTenantId, currentUser);
         if (deletedCount == 0) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/saved/{id}/use")
@@ -161,12 +206,19 @@ public class SearchController {
             @RequestParam(required = false) String owner,
             @PathVariable String id) {
 
+        String normalizedTenantId = normalizeTenant(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String currentUser = resolveCurrentUser(httpRequest, owner);
         if (currentUser == null) {
             return ResponseEntity.badRequest().build();
         }
-        Optional<SavedSearch> savedOpt = savedSearchRepository.findByIdAndTenantIdAndOwner(id, tenantId, currentUser);
-        if (savedOpt.isEmpty()) {
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().build();
+        }
+        Optional<SavedSearch> savedOpt = savedSearchRepository.findByIdAndTenantIdAndOwner(id, normalizedTenantId, currentUser);
+        if (!savedOpt.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
@@ -192,6 +244,18 @@ public class SearchController {
     private static int clampLimit(int raw, int fallback, int max) {
         if (raw <= 0) return fallback;
         return Math.min(raw, max);
+    }
+
+    private String normalizeTenant(String tenantId) {
+        if (tenantId == null) {
+            return null;
+        }
+        String normalized = tenantId.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private String resolveCurrentUser(HttpServletRequest request, String legacyUserId) {

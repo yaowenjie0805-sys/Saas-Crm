@@ -33,7 +33,7 @@
 ## 3. Flyway 与数据库迁移热点
 
 - 迁移目录：`apps/api/src/main/resources/db/migration/`
-- 当前重点版本：`V11` ~ `V17`
+- 当前重点版本：`V11` ~ `V20`
 - 一键修复脚本：
   - Windows: `scripts/flyway-repair-dev.ps1`
   - Linux/macOS: `scripts/flyway-repair-dev.sh`

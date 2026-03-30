@@ -75,11 +75,11 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchCustomers(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = payload.getStatus();
-        String ownerValue = payload.getOwner();
+        String statusValue = normalizeText(payload.getStatus());
+        String ownerValue = normalizeText(payload.getOwner());
         Map<String, Customer> rowsById = new LinkedHashMap<String, Customer>();
         for (Customer row : customerRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -113,7 +113,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "invalid_customer_status"), traceId(request));
                     continue;
                 }
-                row.setStatus(statusValue.trim());
+                row.setStatus(statusValue);
                 customerRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CUSTOMER", row.getId(), "Batch update customer status", tenantId);
                 summary.succeeded++;
@@ -132,13 +132,13 @@ public class V1BatchActionController extends BaseApiController {
                     summary.forbidden(id, msg(request, "scope_forbidden"), traceId(request));
                     continue;
                 }
-                row.setOwner(ownerValue.trim());
+                row.setOwner(ownerValue);
                 customerRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CUSTOMER", row.getId(), "Batch assign customer owner", tenantId);
                 summary.succeeded++;
                 continue;
             }
-            summary.skipped(id, msg(request, "bad_request"), traceId(request));
+            summary.skipped(id, msg(request, "batch_action_not_supported"), traceId(request));
         }
         return ResponseEntity.ok(successWithFields(request, "batch_action_completed", summary.toBody()));
     }
@@ -147,12 +147,12 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchOpportunities(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String stageValue = payload.getStatus();
-        if (isBlank(stageValue)) stageValue = payload.getStage();
-        String ownerValue = payload.getOwner();
+        String stageValue = normalizeText(payload.getStatus());
+        if (isBlank(stageValue)) stageValue = normalizeText(payload.getStage());
+        String ownerValue = normalizeText(payload.getOwner());
         Map<String, Opportunity> rowsById = new LinkedHashMap<String, Opportunity>();
         for (Opportunity row : opportunityRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -186,7 +186,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "invalid_opportunity_stage"), traceId(request));
                     continue;
                 }
-                row.setStage(stageValue.trim());
+                row.setStage(stageValue);
                 opportunityRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "OPPORTUNITY", row.getId(), "Batch update opportunity stage", tenantId);
                 summary.succeeded++;
@@ -205,13 +205,13 @@ public class V1BatchActionController extends BaseApiController {
                     summary.forbidden(id, msg(request, "scope_forbidden"), traceId(request));
                     continue;
                 }
-                row.setOwner(ownerValue.trim());
+                row.setOwner(ownerValue);
                 opportunityRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "OPPORTUNITY", row.getId(), "Batch assign opportunity owner", tenantId);
                 summary.succeeded++;
                 continue;
             }
-            summary.skipped(id, msg(request, "bad_request"), traceId(request));
+            summary.skipped(id, msg(request, "batch_action_not_supported"), traceId(request));
         }
         return ResponseEntity.ok(successWithFields(request, "batch_action_completed", summary.toBody()));
     }
@@ -220,10 +220,10 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchProducts(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = payload.getStatus();
+        String statusValue = normalizeText(payload.getStatus());
         Map<String, Product> rowsById = new LinkedHashMap<String, Product>();
         for (Product row : productRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -253,7 +253,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "product_status_invalid"), traceId(request));
                     continue;
                 }
-                row.setStatus(statusValue.trim().toUpperCase(Locale.ROOT));
+                row.setStatus(statusValue.toUpperCase(Locale.ROOT));
                 productRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PRODUCT", row.getId(), "Batch update product status", tenantId);
                 summary.succeeded++;
@@ -268,11 +268,11 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchQuotes(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = payload.getStatus();
-        String ownerValue = payload.getOwner();
+        String statusValue = normalizeText(payload.getStatus());
+        String ownerValue = normalizeText(payload.getOwner());
         Map<String, Quote> rowsById = new LinkedHashMap<String, Quote>();
         for (Quote row : quoteRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -306,7 +306,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "quote_status_invalid"), traceId(request));
                     continue;
                 }
-                row.setStatus(statusValue.trim().toUpperCase(Locale.ROOT));
+                row.setStatus(statusValue.toUpperCase(Locale.ROOT));
                 quoteRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "QUOTE", row.getId(), "Batch update quote status", tenantId);
                 summary.succeeded++;
@@ -325,13 +325,13 @@ public class V1BatchActionController extends BaseApiController {
                     summary.forbidden(id, msg(request, "scope_forbidden"), traceId(request));
                     continue;
                 }
-                row.setOwner(ownerValue.trim());
+                row.setOwner(ownerValue);
                 quoteRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "QUOTE", row.getId(), "Batch assign quote owner", tenantId);
                 summary.succeeded++;
                 continue;
             }
-            summary.skipped(id, msg(request, "bad_request"), traceId(request));
+            summary.skipped(id, msg(request, "batch_action_not_supported"), traceId(request));
         }
         return ResponseEntity.ok(successWithFields(request, "batch_action_completed", summary.toBody()));
     }
@@ -340,11 +340,11 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchOrders(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = payload.getStatus();
-        String ownerValue = payload.getOwner();
+        String statusValue = normalizeText(payload.getStatus());
+        String ownerValue = normalizeText(payload.getOwner());
         Map<String, OrderRecord> rowsById = new LinkedHashMap<String, OrderRecord>();
         for (OrderRecord row : orderRecordRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -378,7 +378,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "order_status_invalid"), traceId(request));
                     continue;
                 }
-                row.setStatus(statusValue.trim().toUpperCase(Locale.ROOT));
+                row.setStatus(statusValue.toUpperCase(Locale.ROOT));
                 orderRecordRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "ORDER", row.getId(), "Batch update order status", tenantId);
                 summary.succeeded++;
@@ -397,13 +397,13 @@ public class V1BatchActionController extends BaseApiController {
                     summary.forbidden(id, msg(request, "scope_forbidden"), traceId(request));
                     continue;
                 }
-                row.setOwner(ownerValue.trim());
+                row.setOwner(ownerValue);
                 orderRecordRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "ORDER", row.getId(), "Batch assign order owner", tenantId);
                 summary.succeeded++;
                 continue;
             }
-            summary.skipped(id, msg(request, "bad_request"), traceId(request));
+            summary.skipped(id, msg(request, "batch_action_not_supported"), traceId(request));
         }
         return ResponseEntity.ok(successWithFields(request, "batch_action_completed", summary.toBody()));
     }
@@ -412,11 +412,11 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchContracts(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = payload.getStatus();
-        String ownerValue = payload.getOwner();
+        String statusValue = normalizeText(payload.getStatus());
+        String ownerValue = normalizeText(payload.getOwner());
         Map<String, ContractRecord> rowsById = new LinkedHashMap<String, ContractRecord>();
         for (ContractRecord row : contractRecordRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -450,7 +450,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "invalid_contract_status"), traceId(request));
                     continue;
                 }
-                row.setStatus(statusValue.trim());
+                row.setStatus(statusValue);
                 contractRecordRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTRACT", row.getId(), "Batch update contract status", tenantId);
                 summary.succeeded++;
@@ -469,13 +469,13 @@ public class V1BatchActionController extends BaseApiController {
                     summary.forbidden(id, msg(request, "scope_forbidden"), traceId(request));
                     continue;
                 }
-                row.setOwner(ownerValue.trim());
+                row.setOwner(ownerValue);
                 contractRecordRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTRACT", row.getId(), "Batch assign contract owner", tenantId);
                 summary.succeeded++;
                 continue;
             }
-            summary.skipped(id, msg(request, "bad_request"), traceId(request));
+            summary.skipped(id, msg(request, "batch_action_not_supported"), traceId(request));
         }
         return ResponseEntity.ok(successWithFields(request, "batch_action_completed", summary.toBody()));
     }
@@ -484,11 +484,11 @@ public class V1BatchActionController extends BaseApiController {
     public ResponseEntity<?> batchPayments(HttpServletRequest request, @Valid @RequestBody BatchActionRequest payload) {
         String tenantId = currentTenant(request);
         String action = normalizeAction(payload.getAction());
-        List<String> ids = payload.getIds();
+        List<String> ids = parseIds(payload.getIds());
         if (!validateBatchRequest(action, ids)) return validationResponse(request, action, ids);
         MutableSummary summary = new MutableSummary(ids.size());
-        String statusValue = payload.getStatus();
-        String ownerValue = payload.getOwner();
+        String statusValue = normalizeText(payload.getStatus());
+        String ownerValue = normalizeText(payload.getOwner());
         Map<String, PaymentRecord> rowsById = new LinkedHashMap<String, PaymentRecord>();
         for (PaymentRecord row : paymentRecordRepository.findByTenantIdAndIdIn(tenantId, ids)) {
             rowsById.put(row.getId(), row);
@@ -522,7 +522,7 @@ public class V1BatchActionController extends BaseApiController {
                     summary.skipped(id, msg(request, "invalid_payment_status"), traceId(request));
                     continue;
                 }
-                row.setStatus(statusValue.trim());
+                row.setStatus(statusValue);
                 paymentRecordRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PAYMENT", row.getId(), "Batch update payment status", tenantId);
                 summary.succeeded++;
@@ -541,13 +541,13 @@ public class V1BatchActionController extends BaseApiController {
                     summary.forbidden(id, msg(request, "scope_forbidden"), traceId(request));
                     continue;
                 }
-                row.setOwner(ownerValue.trim());
+                row.setOwner(ownerValue);
                 paymentRecordRepository.save(row);
                 auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PAYMENT", row.getId(), "Batch assign payment owner", tenantId);
                 summary.succeeded++;
                 continue;
             }
-            summary.skipped(id, msg(request, "bad_request"), traceId(request));
+            summary.skipped(id, msg(request, "batch_action_not_supported"), traceId(request));
         }
         return ResponseEntity.ok(successWithFields(request, "batch_action_completed", summary.toBody()));
     }
@@ -575,6 +575,10 @@ public class V1BatchActionController extends BaseApiController {
 
     private String normalizeAction(Object value) {
         return str(value).trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeText(Object value) {
+        return str(value).trim();
     }
 
     private List<String> parseIds(Object raw) {

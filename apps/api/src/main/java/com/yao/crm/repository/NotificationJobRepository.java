@@ -12,6 +12,7 @@ import java.util.Optional;
 
 public interface NotificationJobRepository extends JpaRepository<NotificationJob, String> {
     List<NotificationJob> findByStatusInAndNextRetryAtBeforeOrderByCreatedAtAsc(List<String> statuses, LocalDateTime now);
+    Page<NotificationJob> findByStatusInAndNextRetryAtBefore(List<String> statuses, LocalDateTime now, Pageable pageable);
     List<NotificationJob> findByTenantIdOrderByCreatedAtDesc(String tenantId);
     List<NotificationJob> findByTenantIdAndStatusOrderByCreatedAtDesc(String tenantId, String status);
     Page<NotificationJob> findByTenantId(String tenantId, Pageable pageable);

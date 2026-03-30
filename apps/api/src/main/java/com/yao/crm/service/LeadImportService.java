@@ -13,6 +13,7 @@ import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.LeadRepository;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import java.util.HashSet;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
@@ -30,21 +33,33 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class LeadImportService {
 
-    private static final Set<String> LEAD_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
+    private static final Set<String> LEAD_STATUSES;
+
+    static {
+        Set<String> statuses = new HashSet<>();
+        statuses.add("NEW");
+        statuses.add("QUALIFIED");
+        statuses.add("NURTURING");
+        statuses.add("CONVERTED");
+        statuses.add("DISQUALIFIED");
+        LEAD_STATUSES = Collections.unmodifiableSet(statuses);
+    }
     private static final int DEDUPE_BATCH_SIZE = 500;
     private static final int SAVE_BATCH_SIZE = 100;
 
+    private final ConcurrentMap<String, DedupeKeyCache> dedupeKeyCaches = new ConcurrentHashMap<String, DedupeKeyCache>();
     private final LeadRepository leadRepository;
     private final LeadImportJobRepository jobRepository;
     private final LeadImportJobItemRepository itemRepository;
@@ -212,6 +227,17 @@ public class LeadImportService {
             throw new IllegalStateException("lead_import_status_transition_invalid");
         }
         ensureTenantImportCapacity(tenantId);
+
+        List<LeadImportJobChunk> retryableChunks = new ArrayList<LeadImportJobChunk>();
+        for (LeadImportJobChunk chunk : chunkRepository.findByTenantIdAndJobIdOrderByChunkNoAsc(tenantId, jobId)) {
+            if (!"PROCESSED".equalsIgnoreCase(chunk.getStatus())) {
+                retryableChunks.add(chunk);
+            }
+        }
+        if (retryableChunks.isEmpty()) {
+            throw new IllegalStateException("lead_import_retry_no_pending_chunks");
+        }
+
         job.setStatus("RUNNING");
         job.setCancelRequested(false);
         job.setErrorMessage(null);
@@ -219,15 +245,11 @@ public class LeadImportService {
         job = jobRepository.save(job);
 
         int queued = 0;
-        for (LeadImportJobChunk chunk : chunkRepository.findByTenantIdAndJobIdOrderByChunkNoAsc(tenantId, jobId)) {
-            if ("PROCESSED".equalsIgnoreCase(chunk.getStatus())) continue;
+        for (LeadImportJobChunk chunk : retryableChunks) {
             chunk.setStatus("PENDING");
             chunkRepository.save(chunk);
             publishChunkMessage(tenantId, jobId, chunk.getChunkNo(), readChunkRows(chunk.getPayloadJson()), 0, requestId, LeadImportMqConfig.ROUTING_KEY);
             queued++;
-        }
-        if (queued == 0) {
-            throw new IllegalStateException("lead_import_retry_no_pending_chunks");
         }
 
         auditLogService.record(operator, "SYSTEM", "JOB_RETRIED", "LEAD_IMPORT_JOB", jobId, buildAuditDetails("JOB_RETRIED", requestId, "queuedChunks=" + queued), tenantId);
@@ -307,25 +329,18 @@ public class LeadImportService {
         chunk.setStatus("RUNNING");
         chunkRepository.save(chunk);
 
+        String cacheKey = dedupeCacheKey(tenantId, jobId);
+        DedupeKeyCache dedupeKeyCache = getOrCreateDedupeKeyCache(cacheKey);
+        dedupeKeyCache.ensureLoaded(tenantId, leadRepository);
+        List<String> addedKeys = new ArrayList<String>();
+        List<String> pendingKeys = new ArrayList<String>();
+        registerRollbackCleanup(cacheKey, addedKeys);
+
         try {
             List<String> rawRows = message.getRows() == null ? Collections.<String>emptyList() : message.getRows();
             int processed = 0;
             int success = 0;
             int failed = 0;
-            Set<String> existingKeys = new HashSet<String>();
-            int page = 0;
-            Page<Object[]> dedupePage;
-            do {
-                dedupePage = leadRepository.findDedupeKeysByTenantId(tenantId, PageRequest.of(page, DEDUPE_BATCH_SIZE));
-                for (Object[] cols : dedupePage.getContent()) {
-                    String name = cols[0] == null ? "" : cols[0].toString();
-                    String company = cols[1] == null ? "" : cols[1].toString();
-                    String phone = cols[2] == null ? "" : cols[2].toString();
-                    String email = cols[3] == null ? "" : cols[3].toString();
-                    existingKeys.add(keyOf(name, company, phone, email));
-                }
-                page++;
-            } while (dedupePage.hasNext());
             List<Lead> batchToSave = new ArrayList<Lead>(SAVE_BATCH_SIZE);
             for (String wrapped : rawRows) {
                 processed++;
@@ -335,10 +350,11 @@ public class LeadImportService {
                     Row row = parseRow(splitCsvLine(line));
                     validateRow(row);
                     String dedupe = keyOf(row.name, row.company, row.phone, row.email);
-                    if (existingKeys.contains(dedupe)) {
+                    if (!dedupeKeyCache.reserve(dedupe)) {
                         throw new IllegalArgumentException("lead_import_duplicate");
                     }
-                    existingKeys.add(dedupe);
+                    addedKeys.add(dedupe);
+                    pendingKeys.add(dedupe);
                     Lead lead = new Lead();
                     lead.setId(newId("ld"));
                     lead.setTenantId(tenantId);
@@ -357,6 +373,8 @@ public class LeadImportService {
                     batchToSave.add(lead);
                     if (batchToSave.size() >= SAVE_BATCH_SIZE) {
                         List<Lead> saved = leadRepository.saveAll(batchToSave);
+                        dedupeKeyCache.commit(pendingKeys);
+                        pendingKeys.clear();
                         for (Lead savedLead : saved) {
                             leadAutomationService.onLeadEvent(tenantId, "LEAD_CREATED", savedLead, job.getCreatedBy());
                             leadAutomationService.onLeadEvent(tenantId, "LEAD_ASSIGNED", savedLead, job.getCreatedBy());
@@ -371,6 +389,8 @@ public class LeadImportService {
             }
             if (!batchToSave.isEmpty()) {
                 List<Lead> saved = leadRepository.saveAll(batchToSave);
+                dedupeKeyCache.commit(pendingKeys);
+                pendingKeys.clear();
                 for (Lead savedLead : saved) {
                     leadAutomationService.onLeadEvent(tenantId, "LEAD_CREATED", savedLead, job.getCreatedBy());
                     leadAutomationService.onLeadEvent(tenantId, "LEAD_ASSIGNED", savedLead, job.getCreatedBy());
@@ -384,6 +404,8 @@ public class LeadImportService {
             updateJobProgress(job, processed, success, failed);
             finalizeIfDone(job);
         } catch (Exception ex) {
+            dedupeKeyCache.rollback(pendingKeys);
+            pendingKeys.clear();
             int retry = message.getRetryCount() == null ? 0 : message.getRetryCount();
             retry++;
             chunk.setRetryCount(retry);
@@ -398,6 +420,7 @@ public class LeadImportService {
                 job.setErrorMessage(normalizeError(ex));
                 job.setLastHeartbeatAt(LocalDateTime.now());
                 jobRepository.save(job);
+                cleanupDedupeCache(tenantId, jobId);
                 finalizeIfDone(job);
             }
         }
@@ -475,6 +498,7 @@ public class LeadImportService {
         }
         jobRepository.save(latest);
         auditLogService.record(latest.getCreatedBy(), "SYSTEM", "JOB_FINISHED", "LEAD_IMPORT_JOB", latest.getId(), buildAuditDetails("JOB_FINISHED", "", "status=" + latest.getStatus()), latest.getTenantId());
+        cleanupDedupeCache(latest.getTenantId(), latest.getId());
     }
 
     private void markChunkStatus(String tenantId, String jobId, Integer chunkNo, String status, String error) {
@@ -545,7 +569,8 @@ public class LeadImportService {
         }
         out.add(current.toString().trim());
         while (out.size() < 7) out.add("");
-        return out.toArray(String[]::new);
+        return out.toArray(new String[out.size()]);
+
     }
 
     private Row parseRow(String[] cols) {
@@ -640,8 +665,118 @@ public class LeadImportService {
         return "event=" + event + ";requestId=" + rid + ";detail=" + d;
     }
 
+    private DedupeKeyCache getOrCreateDedupeKeyCache(String cacheKey) {
+        return dedupeKeyCaches.computeIfAbsent(cacheKey, k -> new DedupeKeyCache());
+    }
+
+    private void registerRollbackCleanup(final String cacheKey, final List<String> addedKeys) {
+        if (addedKeys == null || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    DedupeKeyCache cache = dedupeKeyCaches.get(cacheKey);
+                    if (cache != null) {
+                        cache.removeAll(addedKeys);
+                    }
+                }
+            }
+        });
+    }
+
+    private void cleanupDedupeCache(String tenantId, String jobId) {
+        if (isBlank(tenantId) || isBlank(jobId)) {
+            return;
+        }
+        dedupeKeyCaches.remove(dedupeCacheKey(tenantId, jobId));
+    }
+
+    private String dedupeCacheKey(String tenantId, String jobId) {
+        return tenantId + "|" + jobId;
+    }
+
     private String newId(String prefix) {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
+    }
+
+    private static class DedupeKeyCache {
+        private final Set<String> committedKeys = ConcurrentHashMap.newKeySet();
+        private final Set<String> pendingKeys = ConcurrentHashMap.newKeySet();
+        private volatile boolean loaded;
+
+        synchronized void ensureLoaded(String tenantId, LeadRepository leadRepository) {
+            if (loaded) {
+                return;
+            }
+            int page = 0;
+            Page<Object[]> dedupePage;
+            do {
+                dedupePage = leadRepository.findDedupeKeysByTenantId(tenantId, PageRequest.of(page, DEDUPE_BATCH_SIZE));
+                for (Object[] cols : dedupePage.getContent()) {
+                    String name = cols[0] == null ? "" : cols[0].toString();
+                    String company = cols[1] == null ? "" : cols[1].toString();
+                    String phone = cols[2] == null ? "" : cols[2].toString();
+                    String email = cols[3] == null ? "" : cols[3].toString();
+                    committedKeys.add((name + "|" + company + "|" + phone + "|" + email).toLowerCase(Locale.ROOT));
+                }
+                page++;
+            } while (dedupePage.hasNext());
+            loaded = true;
+        }
+
+        synchronized boolean reserve(String key) {
+            if (key == null) {
+                return false;
+            }
+            if (committedKeys.contains(key) || pendingKeys.contains(key)) {
+                return false;
+            }
+            pendingKeys.add(key);
+            return true;
+        }
+
+        synchronized boolean contains(String key) {
+            return key != null && (committedKeys.contains(key) || pendingKeys.contains(key));
+        }
+
+        synchronized void commit(List<String> keys) {
+            if (keys == null || keys.isEmpty()) {
+                return;
+            }
+            for (String key : keys) {
+                if (key == null) {
+                    continue;
+                }
+                pendingKeys.remove(key);
+                committedKeys.add(key);
+            }
+        }
+
+        synchronized void rollback(List<String> keys) {
+            if (keys == null || keys.isEmpty()) {
+                return;
+            }
+            for (String key : keys) {
+                if (key != null) {
+                    pendingKeys.remove(key);
+                }
+            }
+        }
+
+        synchronized void removeAll(List<String> addedKeys) {
+            if (addedKeys == null || addedKeys.isEmpty()) {
+                return;
+            }
+            for (String key : addedKeys) {
+                if (key == null) {
+                    continue;
+                }
+                pendingKeys.remove(key);
+                committedKeys.remove(key);
+            }
+        }
     }
 
     private static class Row {

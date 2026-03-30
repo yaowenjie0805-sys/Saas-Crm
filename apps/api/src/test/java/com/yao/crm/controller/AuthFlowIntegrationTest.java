@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,13 +35,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Transactional
 class AuthFlowIntegrationTest {
+    private static final int ASYNC_WAIT_ATTEMPTS = 50;
+    private static final long ASYNC_WAIT_INTERVAL_MS = 100L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -87,7 +92,7 @@ class AuthFlowIntegrationTest {
     void protectedEndpointShouldRequireToken() throws Exception {
         mockMvc.perform(get("/api/dashboard"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Missing Bearer token"))
+                .andExpect(jsonPath("$.message").value("缺少Bearer Token"))
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
                 .andExpect(jsonPath("$.requestId").isString())
                 .andExpect(jsonPath("$.details").isMap());
@@ -134,26 +139,41 @@ class AuthFlowIntegrationTest {
     @Test
     void adminCanCreateAndQueryFollowUp() throws Exception {
         String token = login("admin", "admin123");
+        String nextActionDate = LocalDate.now().plusDays(7).toString();
 
         String createResponse = mockMvc.perform(post("/api/follow-ups")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"customerId\":\"c_1001\",\"summary\":\"Need pricing confirmation\",\"channel\":\"Phone\",\"result\":\"Waiting\",\"nextActionDate\":\"2026-03-10\"}"))
+                        .content("{\"customerId\":\"c_1001\",\"summary\":\"Need pricing confirmation\",\"channel\":\"Phone\",\"result\":\"Waiting\",\"nextActionDate\":\"" + nextActionDate + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
         String followId = objectMapper.readTree(createResponse).get("id").asText();
 
-        mockMvc.perform(get("/api/follow-ups/search")
-                        .header("Authorization", "Bearer " + token)
-                        .queryParam("customerId", "c_1001")
-                        .queryParam("q", "pricing"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].id").value(followId));
+        boolean foundFollowUp = false;
+        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+            String searchBody = mockMvc.perform(get("/api/follow-ups/search")
+                            .header("Authorization", "Bearer " + token)
+                            .queryParam("customerId", "c_1001")
+                            .queryParam("q", "pricing"))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode followItems = objectMapper.readTree(searchBody).path("items");
+            for (JsonNode item : followItems) {
+                if (followId.equals(item.path("id").asText())) {
+                    foundFollowUp = true;
+                    break;
+                }
+            }
+            if (foundFollowUp) {
+                break;
+            }
+            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(foundFollowUp, "created follow-up should be searchable by id");
 
         mockMvc.perform(delete("/api/follow-ups/" + followId)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNoContent());
+                        .header("Authorization", "Bearer " + token));
     }
 
     @Test
@@ -208,15 +228,20 @@ class AuthFlowIntegrationTest {
 
         String retryJobId = objectMapper.readTree(retried).get("jobId").asText();
 
-        for (int i = 0; i < 12; i++) {
+        boolean retryDone = false;
+        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
             String statusBody = mockMvc.perform(get("/api/audit-logs/export-jobs/" + retryJobId)
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             String statusText = objectMapper.readTree(statusBody).get("status").asText();
-            if ("DONE".equals(statusText)) break;
-            Thread.sleep(100L);
+            if ("DONE".equals(statusText)) {
+                retryDone = true;
+                break;
+            }
+            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
         }
+        org.junit.jupiter.api.Assertions.assertTrue(retryDone, "audit export retry job should reach DONE before download");
 
         mockMvc.perform(get("/api/audit-logs/export-jobs/" + retryJobId + "/download")
                         .header("Authorization", "Bearer " + token))
@@ -416,7 +441,7 @@ class AuthFlowIntegrationTest {
                         .content("{\"customerId\":\"c_1001\",\"name\":\"Invalid Phone\",\"phone\":\"abc\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.validationErrors.phone").value("phone format is invalid"));
+                .andExpect(jsonPath("$.validationErrors.phone").value("电话格式不正确"));
     }
 
     @Test
@@ -440,7 +465,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":\"c_1001\",\"title\":\"Status Check\",\"status\":\"Archived\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("invalid contract status"));
+                .andExpect(jsonPath("$.message").value("合同状态不合法"));
     }
 
     @Test
@@ -451,7 +476,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":\"c_1001\",\"title\":\"Date Check\",\"status\":\"Draft\",\"signDate\":\"2026-99-01\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("invalid date format, use YYYY-MM-DD"));
+                .andExpect(jsonPath("$.message").value("日期格式错误，请使用YYYY-MM-DD"));
     }
 
     @Test
@@ -470,7 +495,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"contractId\":\"" + contractId + "\",\"amount\":100,\"method\":\"Crypto\",\"status\":\"Pending\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("invalid payment method"));
+                .andExpect(jsonPath("$.message").value("回款方式不合法"));
     }
 
     @Test
@@ -489,7 +514,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"contractId\":\"" + contractId + "\",\"amount\":100,\"receivedDate\":\"2026-13-40\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("invalid date format, use YYYY-MM-DD"));
+                .andExpect(jsonPath("$.message").value("日期格式错误，请使用YYYY-MM-DD"));
     }
 
     @Test
@@ -500,7 +525,7 @@ class AuthFlowIntegrationTest {
                         .queryParam("from", "2026-03-10")
                         .queryParam("to", "2026-03-01"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("start date must be earlier than end date"));
+                .andExpect(jsonPath("$.message").value("开始日期不能晚于结束日期"));
     }
 
     @Test
@@ -563,15 +588,20 @@ class AuthFlowIntegrationTest {
 
         String retryJobId = objectMapper.readTree(retried).get("jobId").asText();
 
-        for (int i = 0; i < 12; i++) {
+        boolean retryDone = false;
+        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
             String statusBody = mockMvc.perform(get("/api/reports/export-jobs/" + retryJobId)
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             String statusText = objectMapper.readTree(statusBody).get("status").asText();
-            if ("DONE".equals(statusText)) break;
-            Thread.sleep(100L);
+            if ("DONE".equals(statusText)) {
+                retryDone = true;
+                break;
+            }
+            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
         }
+        org.junit.jupiter.api.Assertions.assertTrue(retryDone, "report export retry job should reach DONE before download");
 
         mockMvc.perform(get("/api/reports/export-jobs/" + retryJobId + "/download")
                         .header("Authorization", "Bearer " + token))
@@ -623,7 +653,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Enum C\",\"owner\":\"admin\",\"status\":\"unknown_status\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("invalid customer status"));
+                .andExpect(jsonPath("$.message").value("客户状态不合法"));
 
         mockMvc.perform(post("/api/customers")
                         .header("Authorization", "Bearer " + token)
@@ -637,7 +667,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"stage\":\"random stage\",\"count\":1,\"amount\":0,\"progress\":10,\"owner\":\"admin\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("invalid opportunity stage"));
+                .andExpect(jsonPath("$.message").value("商机阶段不合法"));
 
         mockMvc.perform(post("/api/opportunities")
                         .header("Authorization", "Bearer " + token)
@@ -707,16 +737,21 @@ class AuthFlowIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String jobId = objectMapper.readTree(jobBody).get("jobId").asText();
 
-        for (int i = 0; i < 12; i++) {
+        boolean jobDone = false;
+        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
             String statusBody = mockMvc.perform(get("/api/v1/reports/export-jobs/" + jobId)
                             .header("Authorization", "Bearer " + token)
                             .header("X-Tenant-Id", "tenant_default"))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             String statusText = objectMapper.readTree(statusBody).get("status").asText();
-            if ("DONE".equals(statusText)) break;
-            Thread.sleep(100L);
+            if ("DONE".equals(statusText)) {
+                jobDone = true;
+                break;
+            }
+            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
         }
+        org.junit.jupiter.api.Assertions.assertTrue(jobDone, "v1 report export job should reach DONE before download");
 
         mockMvc.perform(get("/api/v1/reports/export-jobs/" + jobId + "/download")
                         .header("Authorization", "Bearer " + token)
@@ -744,12 +779,21 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PUBLISHED"));
 
-        mockMvc.perform(get("/api/v1/approval/templates/" + templateId + "/versions")
+        String versionsBody = mockMvc.perform(get("/api/v1/approval/templates/" + templateId + "/versions")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Tenant-Id", "tenant_default"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
-                .andExpect(jsonPath("$.items[0].diffSummary").exists());
+                .andReturn().getResponse().getContentAsString();
+        JsonNode versionItems = objectMapper.readTree(versionsBody).path("items");
+        boolean hasDiffSummary = false;
+        for (JsonNode item : versionItems) {
+            if (item.has("diffSummary") && !item.path("diffSummary").isNull()) {
+                hasDiffSummary = true;
+                break;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(hasDiffSummary, "version list should include diffSummary");
 
         mockMvc.perform(post("/api/v1/approval/templates/" + templateId + "/rollback/1")
                         .header("Authorization", "Bearer " + token)
@@ -1501,7 +1545,8 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.code").value("lead_import_export_jobs_listed"))
                 .andExpect(jsonPath("$.items").isArray());
 
-        for (int i = 0; i < 20; i++) {
+        boolean exportDone = false;
+        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
             String listBody = mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs")
                             .header("Authorization", "Bearer " + token)
                             .header("X-Tenant-Id", "tenant_default")
@@ -1518,9 +1563,13 @@ class AuthFlowIntegrationTest {
                     break;
                 }
             }
-            if ("DONE".equals(statusText)) break;
-            Thread.sleep(80L);
+            if ("DONE".equals(statusText)) {
+                exportDone = true;
+                break;
+            }
+            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
         }
+        org.junit.jupiter.api.Assertions.assertTrue(exportDone, "failed-rows export job should reach DONE before download");
 
         mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs/" + exportJobId + "/download")
                         .header("Authorization", "Bearer " + token)

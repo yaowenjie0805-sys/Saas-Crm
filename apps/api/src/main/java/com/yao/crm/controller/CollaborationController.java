@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 协作控制器 - 提供评论、提及、团队协作等功能
+ * 闁告绻嬬紞鏃堝箳瑜嶉崺妤呭闯?- 闁圭粯鍔掔欢鐢垫嫚閸曨噮鍟堥柕鍡曠劍瑜颁線宕ｆ繛搴撳亾娴ｅ憡绀嬮梻鍐枎瀹曟鎷呭鍛惣闁告梻鍠曢崗?
  */
 @RestController
 @RequestMapping("/api/v2/collaboration")
@@ -30,22 +30,37 @@ public class CollaborationController {
         this.delegationService = delegationService;
     }
 
-    // ========== 评论 API ==========
+    // ========== 閻犲洤瀚?API ==========
 
     /**
-     * 添加评论
+     * 婵烇綀顕ф慨鐐垫嫚閸曨噮鍟?
      */
     @PostMapping("/comments")
     public ResponseEntity<?> addComment(
             HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody AddCommentRequest request) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String normalizedEntityType = normalizeRequiredValue(request.entityType);
+        String normalizedEntityId = normalizeRequiredValue(request.entityId);
+        if (normalizedEntityType == null || normalizedEntityId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, request.authorId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         Comment comment = collaborationService.addComment(
-                tenantId,
-                request.entityType,
-                request.entityId,
-                resolveCurrentUser(httpRequest, request.authorId),
+                normalizedTenantId,
+                normalizedEntityType,
+                normalizedEntityId,
+                currentUser,
                 request.authorName,
                 request.content,
                 request.parentCommentId,
@@ -59,7 +74,7 @@ public class CollaborationController {
     }
 
     /**
-     * 回复评论
+     * 闁搞儳鍋涢ˇ鑼嫚閸曨噮鍟?
      */
     @PostMapping("/comments/{commentId}/reply")
     public ResponseEntity<?> replyToComment(
@@ -67,11 +82,25 @@ public class CollaborationController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String commentId,
             @RequestBody ReplyCommentRequest replyRequest) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String normalizedCommentId = normalizeRequiredValue(commentId);
+        if (normalizedCommentId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, replyRequest.authorId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         Comment reply = collaborationService.replyToComment(
-                tenantId,
-                commentId,
-                resolveCurrentUser(httpRequest, replyRequest.authorId),
+                normalizedTenantId,
+                normalizedCommentId,
+                currentUser,
                 replyRequest.authorName,
                 replyRequest.content
         );
@@ -83,30 +112,46 @@ public class CollaborationController {
     }
 
     /**
-     * 删除评论
+     * 闁告帞濞€濞呭海鎷犻崟顕呭晥
      */
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> deleteComment(
             HttpServletRequest httpRequest,
             @PathVariable String commentId,
             @RequestParam(required = false) String userId) {
+        String normalizedCommentId = normalizeRequiredValue(commentId);
+        if (normalizedCommentId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        boolean deleted = collaborationService.deleteComment(commentId, resolveCurrentUser(httpRequest, userId));
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", deleted);
-        return ResponseEntity.ok(result);
+        String currentUser = resolveCurrentUser(httpRequest, userId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        boolean deleted = collaborationService.deleteComment(normalizedCommentId, currentUser);
+        return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
     /**
-     * 点赞/取消点赞评论
+     * 闁绘劗顢婄粋?闁告瑦鐗楃粔鐑芥倷绾懐顩甸悹鍥у椤?
      */
     @PostMapping("/comments/{commentId}/like")
     public ResponseEntity<?> likeComment(
             HttpServletRequest httpRequest,
             @PathVariable String commentId,
             @RequestParam(required = false) String userId) {
+        String normalizedCommentId = normalizeRequiredValue(commentId);
+        if (normalizedCommentId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        boolean isLiked = collaborationService.likeComment(commentId, resolveCurrentUser(httpRequest, userId));
+        String currentUser = resolveCurrentUser(httpRequest, userId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        boolean isLiked = collaborationService.likeComment(normalizedCommentId, currentUser);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("isLiked", isLiked);
@@ -114,17 +159,26 @@ public class CollaborationController {
     }
 
     /**
-     * 编辑评论
+     * 缂傚倹鐗炵欢顐ゆ嫚閸曨噮鍟?
      */
     @PutMapping("/comments/{commentId}")
     public ResponseEntity<?> editComment(
             HttpServletRequest httpRequest,
             @PathVariable String commentId,
             @RequestBody EditCommentRequest editRequest) {
+        String normalizedCommentId = normalizeRequiredValue(commentId);
+        if (normalizedCommentId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, editRequest.userId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         Comment comment = collaborationService.editComment(
-                commentId,
-                resolveCurrentUser(httpRequest, editRequest.userId),
+                normalizedCommentId,
+                currentUser,
                 editRequest.newContent
         );
 
@@ -135,7 +189,7 @@ public class CollaborationController {
     }
 
     /**
-     * 获取实体的评论列表
+     * 闁兼儳鍢茶ぐ鍥┾偓鍦仒缂嶅鎯冮崟顔炬閻犱礁鎼崹顏嗘偘?
      */
     @GetMapping("/entities/{entityType}/{entityId}/comments")
     public ResponseEntity<?> getComments(
@@ -145,9 +199,19 @@ public class CollaborationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "true") boolean includeReplies) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String normalizedEntityType = normalizeRequiredValue(entityType);
+        String normalizedEntityId = normalizeRequiredValue(entityId);
+        if (normalizedEntityType == null || normalizedEntityId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         CollaborationService.CommentListResult result = collaborationService.getComments(
-                tenantId, entityType, entityId, page, size, includeReplies
+                normalizedTenantId, normalizedEntityType, normalizedEntityId, page, size, includeReplies
         );
 
         Map<String, Object> response = new HashMap<>();
@@ -161,7 +225,7 @@ public class CollaborationController {
     }
 
     /**
-     * 获取@提及我的评论
+     * 闁兼儳鍢茶ぐ鍢嗛柟缁樺姇瀵兘骞嬮幋鐘崇暠閻犲洤瀚?
      */
     @GetMapping("/mentions")
     public ResponseEntity<?> getMentions(
@@ -170,9 +234,18 @@ public class CollaborationController {
             @RequestParam String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, userId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         List<Comment> mentions = collaborationService.getMentions(
-                tenantId, resolveCurrentUser(httpRequest, userId), page, size);
+                normalizedTenantId, currentUser, page, size);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("mentions", mentions);
@@ -180,7 +253,7 @@ public class CollaborationController {
     }
 
     /**
-     * 获取我参与的讨论
+     * 闁兼儳鍢茶ぐ鍥箣閹存繂妫樺☉鎾虫捣濞堟垹鎷嬮妸顭戝晥
      */
     @GetMapping("/discussions")
     public ResponseEntity<?> getMyDiscussions(
@@ -188,10 +261,19 @@ public class CollaborationController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String userId,
             @RequestParam(defaultValue = "20") int limit) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, userId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         List<CollaborationService.DiscussionSummary> discussions =
                 collaborationService.getMyDiscussions(
-                        tenantId, resolveCurrentUser(httpRequest, userId), limit);
+                        normalizedTenantId, currentUser, limit);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -200,7 +282,7 @@ public class CollaborationController {
     }
 
     /**
-     * 搜索评论
+     * 闁瑰吋绮庨崒銊ф嫚閸曨噮鍟?
      */
     @GetMapping("/comments/search")
     public ResponseEntity<?> searchComments(
@@ -208,8 +290,12 @@ public class CollaborationController {
             @RequestParam String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        List<Comment> results = collaborationService.searchComments(tenantId, keyword, page, size);
+        List<Comment> results = collaborationService.searchComments(normalizedTenantId, keyword, page, size);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("results", results);
@@ -217,16 +303,26 @@ public class CollaborationController {
     }
 
     /**
-     * 获取评论统计
+     * 闁兼儳鍢茶ぐ鍥╂嫚閸曨噮鍟堢紓浣哄枙椤?
      */
     @GetMapping("/entities/{entityType}/{entityId}/comments/stats")
     public ResponseEntity<?> getCommentStats(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String entityType,
             @PathVariable String entityId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String normalizedEntityType = normalizeRequiredValue(entityType);
+        String normalizedEntityId = normalizeRequiredValue(entityId);
+        if (normalizedEntityType == null || normalizedEntityId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         CollaborationService.CommentStatistics stats =
-                collaborationService.getStatistics(tenantId, entityType, entityId);
+                collaborationService.getStatistics(normalizedTenantId, normalizedEntityType, normalizedEntityId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -234,22 +330,31 @@ public class CollaborationController {
         return ResponseEntity.ok(result);
     }
 
-    // ========== 团队 API ==========
+    // ========== 闁搞儯鍨藉Σ?API ==========
 
     /**
-     * 创建团队
+     * 闁告帗绋戠紓鎾诲炊閵忋倖袝
      */
     @PostMapping("/teams")
     public ResponseEntity<?> createTeam(
             HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody CreateTeamRequest request) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, request.leaderId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         Team team = collaborationService.createTeam(
-                tenantId,
+                normalizedTenantId,
                 request.name,
                 request.description,
-                resolveCurrentUser(httpRequest, request.leaderId),
+                currentUser,
                 request.memberIds
         );
 
@@ -260,23 +365,26 @@ public class CollaborationController {
     }
 
     /**
-     * 获取团队列表
+     * 闁兼儳鍢茶ぐ鍥炊閵忋倖袝闁告帗顨夐妴?
      */
     @GetMapping("/teams")
     public ResponseEntity<?> getTeams(
             HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam(required = false) String userId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         List<Team> teams;
         String currentUser = resolveCurrentUser(httpRequest, userId);
         if (currentUser != null) {
-            teams = collaborationService.getUserTeams(tenantId, currentUser);
+            teams = collaborationService.getUserTeams(normalizedTenantId, currentUser);
         } else {
-            // 杩斿洖鎵€鏈夊洟闃燂紙闇€瑕佸疄鐜帮級
+            // 返回所有团队（空 userId 时不查询服务）
             teams = new ArrayList<>();
         }
-
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("teams", teams);
@@ -284,57 +392,86 @@ public class CollaborationController {
     }
     @GetMapping("/teams/{teamId}")
     public ResponseEntity<?> getTeam(@PathVariable String teamId) {
-        // 需要实现 TeamRepository.findById
+        String normalizedTeamId = normalizeRequiredValue(teamId);
+        if (normalizedTeamId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 闂傚洠鍋撻悷鏇氱閻ゅ嫰鎮?TeamRepository.findById
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
-        result.put("teamId", teamId);
+        result.put("teamId", normalizedTeamId);
         return ResponseEntity.ok(result);
     }
-
     /**
-     * 添加团队成员
+     * 婵烇綀顕ф慨鐐哄炊閵忋倖袝闁瑰瓨鍔曢幉?
      */
     @PostMapping("/teams/{teamId}/members")
     public ResponseEntity<?> addTeamMember(
             @PathVariable String teamId,
             @RequestBody AddMemberRequest request) {
+        String normalizedTeamId = normalizeRequiredValue(teamId);
+        if (normalizedTeamId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        Team team = collaborationService.addTeamMember(teamId, request.userId, request.role);
+        String normalizedUserId = normalizeRequiredValue(request.userId);
+        if (normalizedUserId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        Team team = collaborationService.addTeamMember(normalizedTeamId, normalizedUserId, request.role);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("team", team);
         return ResponseEntity.ok(result);
     }
-
     /**
-     * 移除团队成员
+     * 缂佸顭峰▍搴ㄥ炊閵忋倖袝闁瑰瓨鍔曢幉?
      */
     @DeleteMapping("/teams/{teamId}/members/{userId}")
     public ResponseEntity<?> removeTeamMember(
             @PathVariable String teamId,
             @PathVariable String userId) {
+        String normalizedTeamId = normalizeRequiredValue(teamId);
+        if (normalizedTeamId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        Team team = collaborationService.removeTeamMember(teamId, userId);
+        String normalizedUserId = normalizeRequiredValue(userId);
+        if (normalizedUserId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        Team team = collaborationService.removeTeamMember(normalizedTeamId, normalizedUserId);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("team", team);
         return ResponseEntity.ok(result);
     }
-
-    // ========== 审批委托 API ==========
+    // ========== 閻庡厜鍓濇竟鎺撴叏閺冣偓婢?API ==========
 
     /**
-     * 委托审批任务
+     * 濠殿喗姊规晶顓犫偓鍏夊墲婢规帗绂掔拠鎻掝潳
      */
     @PostMapping("/approval/tasks/{taskId}/delegate")
     public ResponseEntity<?> delegateTask(
             HttpServletRequest httpRequest,
             @PathVariable String taskId,
             @RequestBody DelegateRequest request) {
+        String normalizedTaskId = normalizeRequiredValue(taskId);
+        if (normalizedTaskId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, request.fromUserId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         ApprovalDelegationService.DelegationResult result = delegationService.delegateTask(
-                taskId,
-                resolveCurrentUser(httpRequest, request.fromUserId),
+                normalizedTaskId,
+                currentUser,
                 request.toUserId,
                 request.reason
         );
@@ -346,17 +483,26 @@ public class CollaborationController {
     }
 
     /**
-     * 加签审批
+     * 闁告梻濮烽椋庘偓鍏夊墲婢?
      */
     @PostMapping("/approval/tasks/{taskId}/add-sign")
     public ResponseEntity<?> addSign(
             HttpServletRequest httpRequest,
             @PathVariable String taskId,
             @RequestBody AddSignRequest request) {
+        String normalizedTaskId = normalizeRequiredValue(taskId);
+        if (normalizedTaskId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, request.approverId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         ApprovalDelegationService.AddSignResult result = delegationService.addSign(
-                taskId,
-                resolveCurrentUser(httpRequest, request.approverId),
+                normalizedTaskId,
+                currentUser,
                 request.addSignUserId,
                 request.reason,
                 request.type
@@ -369,17 +515,26 @@ public class CollaborationController {
     }
 
     /**
-     * 转交审批任务
+     * 閺夌儐鍏涘锔锯偓鍏夊墲婢规帗绂掔拠鎻掝潳
      */
     @PostMapping("/approval/tasks/{taskId}/transfer")
     public ResponseEntity<?> transferTask(
             HttpServletRequest httpRequest,
             @PathVariable String taskId,
             @RequestBody TransferRequest request) {
+        String normalizedTaskId = normalizeRequiredValue(taskId);
+        if (normalizedTaskId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, request.fromUserId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         ApprovalDelegationService.TransferResult result = delegationService.transferTask(
-                taskId,
-                resolveCurrentUser(httpRequest, request.fromUserId),
+                normalizedTaskId,
+                currentUser,
                 request.toUserId,
                 request.reason
         );
@@ -391,12 +546,17 @@ public class CollaborationController {
     }
 
     /**
-     * 获取委托历史
+     * 闁兼儳鍢茶ぐ鍥ㄦ叏閺冣偓婢ь參宕㈤崱妤€钑?
      */
     @GetMapping("/approval/tasks/{taskId}/delegations")
     public ResponseEntity<?> getDelegationHistory(@PathVariable String taskId) {
+        String normalizedTaskId = normalizeRequiredValue(taskId);
+        if (normalizedTaskId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         List<ApprovalDelegationService.DelegationRecord> history =
-                delegationService.getDelegationHistory(taskId);
+                delegationService.getDelegationHistory(normalizedTaskId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -405,12 +565,17 @@ public class CollaborationController {
     }
 
     /**
-     * 获取转交历史
+     * 闁兼儳鍢茶ぐ鍥ㄦ姜椤戞寧鍞夐柛妯烘瑜?
      */
     @GetMapping("/approval/tasks/{taskId}/transfers")
     public ResponseEntity<?> getTransferHistory(@PathVariable String taskId) {
+        String normalizedTaskId = normalizeRequiredValue(taskId);
+        if (normalizedTaskId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         List<ApprovalDelegationService.TransferRecord> history =
-                delegationService.getTransferHistory(taskId);
+                delegationService.getTransferHistory(normalizedTaskId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -419,31 +584,49 @@ public class CollaborationController {
     }
 
     /**
-     * 撤回委托
+     * 闁逛勘鍊曞ú鏍ㄦ叏閺冣偓婢?
      */
     @PostMapping("/approval/delegations/{delegationId}/recall")
     public ResponseEntity<?> recallDelegation(
             HttpServletRequest httpRequest,
             @PathVariable String delegationId,
             @RequestParam String userId) {
+        String normalizedDelegationId = normalizeRequiredValue(delegationId);
+        if (normalizedDelegationId == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
-        boolean recalled = delegationService.recallDelegation(delegationId, resolveCurrentUser(httpRequest, userId));
+        String currentUser = resolveCurrentUser(httpRequest, userId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        boolean recalled = delegationService.recallDelegation(normalizedDelegationId, currentUser);
         Map<String, Object> result = new HashMap<>();
         result.put("success", recalled);
         return ResponseEntity.ok(result);
     }
 
     /**
-     * 获取可委托的用户列表
+     * 闁兼儳鍢茶ぐ鍥矗椤栨凹娼ら柟鍨焽濞堟垿鎮介妸锕€鐓曢柛鎺擃殙閵?
      */
     @GetMapping("/approval/tasks/delegatable-users")
     public ResponseEntity<?> getDelegatableUsers(
             HttpServletRequest httpRequest,
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam String currentUserId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String currentUser = resolveCurrentUser(httpRequest, currentUserId);
+        if (currentUser == null) {
+            return ResponseEntity.badRequest().build();
+        }
 
         List<Map<String, String>> users = delegationService.getDelegatableUsers(
-                tenantId, resolveCurrentUser(httpRequest, currentUserId));
+                normalizedTenantId, currentUser);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("users", users);
@@ -495,7 +678,7 @@ public class CollaborationController {
         public String approverId;
         public String addSignUserId;
         public String reason;
-        public String type = "AFTER"; // BEFORE 或 AFTER
+        public String type = "AFTER"; // BEFORE 闁?AFTER
     }
 
     public static class TransferRequest {
@@ -514,5 +697,14 @@ public class CollaborationController {
         }
         return null;
     }
+
+    private String normalizeRequiredValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
 }
+
 

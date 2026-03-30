@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -29,7 +28,7 @@ public class V1LeadAssignmentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
         Map<String, Object> body = new LinkedHashMap<String, Object>();
         body.put("items", leadAssignmentService.listRules(tenantId));
         return ResponseEntity.ok(successWithFields(request, "lead_assignment_rules_listed", body));
@@ -40,7 +39,7 @@ public class V1LeadAssignmentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
         LeadAssignmentRule row = leadAssignmentService.createRule(tenantId, currentUser(request), payload);
         return ResponseEntity.status(201).body(successWithFields(request, "lead_assignment_rule_created", leadAssignmentService.toView(row)));
     }
@@ -50,11 +49,19 @@ public class V1LeadAssignmentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        LeadAssignmentRule row = leadAssignmentService.patchRule(tenantId, id, currentUser(request), payload);
+        String ruleId = normalize(id);
+        if (isBlank(ruleId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        LeadAssignmentRule row = leadAssignmentService.patchRule(tenantId, ruleId, currentUser(request), payload);
         if (row == null) {
             return ResponseEntity.status(404).body(errorBody(request, "lead_assignment_rule_not_found", msg(request, "lead_assignment_rule_not_found"), null));
         }
         return ResponseEntity.ok(successWithFields(request, "lead_assignment_rule_updated", leadAssignmentService.toView(row)));
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 }

@@ -9,6 +9,7 @@ import com.yao.crm.repository.UserInvitationRepository;
 import com.yao.crm.security.LoginRiskService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,8 +22,8 @@ import java.util.*;
 @RequestMapping("/api/v1/admin/users")
 public class V1AdminUserController extends BaseApiController {
 
-    private static final Set<String> ROLES = Set.of("ADMIN", "MANAGER", "SALES", "ANALYST");
-    private static final Set<String> DATA_SCOPES = Set.of("SELF", "DEPARTMENT", "GLOBAL");
+    private static final Set<String> ROLES = CollectionsUtil.setOf("ADMIN", "MANAGER", "SALES", "ANALYST");
+    private static final Set<String> DATA_SCOPES = CollectionsUtil.setOf("SELF", "DEPARTMENT", "GLOBAL");
 
     private final UserAccountRepository userAccountRepository;
     private final UserInvitationRepository userInvitationRepository;
@@ -64,21 +65,30 @@ public class V1AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return forbidden(request);
         }
+        if (payload == null) {
+            return badRequest(request, "bad_request");
+        }
+        String userId = normalizeId(id);
+        if (isBlank(userId)) {
+            return badRequest(request, "id_required");
+        }
         String tenantId = currentTenant(request);
-        Optional<UserAccount> optional = userAccountRepository.findById(id);
+        Optional<UserAccount> optional = userAccountRepository.findById(userId);
         if (!optional.isPresent() || !tenantId.equals(optional.get().getTenantId())) {
             return notFound(request, "user_not_found");
         }
 
         UserAccount user = optional.get();
         if (payload.getRole() != null) {
-            String role = payload.getRole().trim().toUpperCase(Locale.ROOT);
+            String role = normalizeRole(payload.getRole());
             if (!ROLES.contains(role)) {
                 return badRequest(request, "invalid_role");
             }
             user.setRole(role);
         }
-        if (payload.getOwnerScope() != null) user.setOwnerScope(payload.getOwnerScope().trim());
+        if (payload.getOwnerScope() != null) {
+            user.setOwnerScope(normalizeOptional(payload.getOwnerScope()));
+        }
         if (payload.getEnabled() != null) user.setEnabled(payload.getEnabled());
         user = userAccountRepository.save(user);
         auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "USER", user.getId(), "Updated user by v1 admin API", tenantId);
@@ -90,18 +100,24 @@ public class V1AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return forbidden(request);
         }
+        if (payload == null) {
+            return badRequest(request, "bad_request");
+        }
         String tenantId = currentTenant(request);
-        String role = payload.getRole().trim().toUpperCase(Locale.ROOT);
+        String role = normalizeRole(payload.getRole());
         if (!ROLES.contains(role)) {
             return badRequest(request, "invalid_role");
         }
-        String dataScope = isBlank(payload.getDataScope()) ? "SELF" : payload.getDataScope().trim().toUpperCase(Locale.ROOT);
+        String dataScope = normalizeDataScope(payload.getDataScope());
         if (!DATA_SCOPES.contains(dataScope)) {
             return badRequest(request, "bad_request");
         }
-        String username = payload.getUsername().trim();
+        String username = normalizeUsername(payload.getUsername());
+        if (isBlank(username)) {
+            return badRequest(request, "register_username_required");
+        }
         if (userAccountRepository.findByUsernameAndTenantId(username, tenantId).isPresent()) {
-            return badRequest(request, "username_exists");
+            return conflict(request, "username_exists");
         }
 
         UserInvitation invitation = new UserInvitation();
@@ -110,10 +126,13 @@ public class V1AdminUserController extends BaseApiController {
         invitation.setTenantId(tenantId);
         invitation.setUsername(username);
         invitation.setRole(role);
-        invitation.setOwnerScope(isBlank(payload.getOwnerScope()) ? username : payload.getOwnerScope().trim());
-        invitation.setDepartment(isBlank(payload.getDepartment()) ? "DEFAULT" : payload.getDepartment().trim());
+        String ownerScope = normalizeOptional(payload.getOwnerScope());
+        invitation.setOwnerScope(isBlank(ownerScope) ? username : ownerScope);
+        String department = normalizeOptional(payload.getDepartment());
+        invitation.setDepartment(isBlank(department) ? "DEFAULT" : department);
         invitation.setDataScope(dataScope);
-        invitation.setDisplayName(isBlank(payload.getDisplayName()) ? username : payload.getDisplayName().trim());
+        String displayName = normalizeOptional(payload.getDisplayName());
+        invitation.setDisplayName(isBlank(displayName) ? username : displayName);
         invitation.setInvitedBy(currentUser(request));
         int expiresHours = payload.getExpiresInHours() == null ? 72 : Math.max(1, Math.min(payload.getExpiresInHours(), 168));
         invitation.setExpiresAt(LocalDateTime.now().plusHours(expiresHours));
@@ -135,8 +154,12 @@ public class V1AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return forbidden(request);
         }
+        String userId = normalizeId(id);
+        if (isBlank(userId)) {
+            return badRequest(request, "id_required");
+        }
         String tenantId = currentTenant(request);
-        Optional<UserAccount> optional = userAccountRepository.findById(id);
+        Optional<UserAccount> optional = userAccountRepository.findById(userId);
         if (!optional.isPresent() || !tenantId.equals(optional.get().getTenantId())) {
             return notFound(request, "user_not_found");
         }
@@ -170,9 +193,43 @@ public class V1AdminUserController extends BaseApiController {
         return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
     }
 
+    private ResponseEntity<?> conflict(HttpServletRequest request, String msgKey) {
+        String code = normalizeCode(msgKey, "conflict");
+        return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), null));
+    }
+
     private ResponseEntity<?> notFound(HttpServletRequest request, String msgKey) {
         String code = normalizeCode(msgKey, "not_found");
         return ResponseEntity.status(404).body(errorBody(request, code, msg(request, code), null));
     }
-}
 
+    private String normalizeId(String value) {
+        return normalizeOptional(value);
+    }
+
+    private String normalizeRole(String value) {
+        return isBlank(value) ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeDataScope(String value) {
+        String normalized = normalizeRole(value);
+        if (isBlank(normalized)) {
+            return "SELF";
+        }
+        if ("TEAM".equals(normalized) || "DEPT".equals(normalized)) {
+            return "DEPARTMENT";
+        }
+        if ("ALL".equals(normalized)) {
+            return "GLOBAL";
+        }
+        return normalized;
+    }
+
+    private String normalizeUsername(String value) {
+        return normalizeOptional(value);
+    }
+
+    private String normalizeOptional(String value) {
+        return isBlank(value) ? "" : value.trim();
+    }
+}

@@ -36,7 +36,6 @@ function LoginView({
             <form onSubmit={submitLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="login-form">
               <h1>{t('loginTitle')}</h1>
               <p>{t('loginHint')}</p>
-
               <div>
                 <input
                   data-testid="login-tenant-id"

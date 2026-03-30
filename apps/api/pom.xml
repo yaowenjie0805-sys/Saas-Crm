@@ -17,7 +17,7 @@
     <description>CRM backend with Spring Boot and MySQL</description>
 
     <properties>
-        <java.version>1.8</java.version>
+        <java.version>17</java.version>
         <flyway.version>9.22.3</flyway.version>
     </properties>
 
@@ -79,7 +79,7 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>compile</scope>
         </dependency>
         <!-- springdoc-openapi for API documentation -->
         <dependency>

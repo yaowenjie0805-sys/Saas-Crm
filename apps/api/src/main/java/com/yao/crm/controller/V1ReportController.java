@@ -51,6 +51,11 @@ public class V1ReportController extends BaseApiController {
         if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
             return ResponseEntity.badRequest().body(errorBody(request, "date_range_invalid", msg(request, "date_range_invalid"), null));
         }
+        String normalizedRole = normalizeOptional(role);
+        String normalizedOwner = normalizeOptional(owner);
+        String normalizedDepartment = normalizeOptional(department);
+        String normalizedTimezone = normalizeOptional(timezone);
+        String normalizedCurrency = normalizeOptional(currency);
 
         com.yao.crm.service.DashboardMetricsCacheService.CachedValue<Map<String, Object>> cached =
                 reportService.overviewByTenantCached(
@@ -59,17 +64,17 @@ public class V1ReportController extends BaseApiController {
                         currentRole(request),
                         fromDate,
                         toDate,
-                        role,
-                        owner,
-                        department
+                        normalizedRole,
+                        normalizedOwner,
+                        normalizedDepartment
                 );
         Map<String, Object> data = new HashMap<String, Object>(cached.getValue());
         Map<String, Object> filters = new HashMap<String, Object>();
-        filters.put("timezone", isBlank(timezone) ? "Asia/Shanghai" : timezone);
-        filters.put("currency", isBlank(currency) ? "CNY" : currency.toUpperCase(Locale.ROOT));
-        filters.put("role", role);
-        filters.put("department", department);
-        filters.put("owner", owner);
+        filters.put("timezone", isBlank(normalizedTimezone) ? "Asia/Shanghai" : normalizedTimezone);
+        filters.put("currency", isBlank(normalizedCurrency) ? "CNY" : normalizedCurrency.toUpperCase(Locale.ROOT));
+        filters.put("role", normalizedRole);
+        filters.put("department", normalizedDepartment);
+        filters.put("owner", normalizedOwner);
         filters.put("tenantId", currentTenant(request));
         data.put("filters", filters);
         return ResponseEntity.ok()
@@ -95,13 +100,14 @@ public class V1ReportController extends BaseApiController {
         if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
             return ResponseEntity.badRequest().body(errorBody(request, "date_range_invalid", msg(request, "date_range_invalid"), null));
         }
+        String normalizedOwner = normalizeOptional(owner);
         DashboardMetricsCacheService.CachedValue<Map<String, Object>> cached = reportService.funnelByTenantCached(
                 currentTenant(request),
                 currentUser(request),
                 currentRole(request),
                 fromDate,
                 toDate,
-                owner
+                normalizedOwner
         );
         return ResponseEntity.ok()
                 .header("X-CRM-Cache", cached.isHit() ? "HIT" : "MISS")
@@ -127,17 +133,25 @@ public class V1ReportController extends BaseApiController {
         if ((fromDate == null && !isBlank(from)) || (toDate == null && !isBlank(to))) {
             return ResponseEntity.badRequest().body(errorBody(request, "invalid_date_format", msg(request, "invalid_date_format"), null));
         }
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "date_range_invalid", msg(request, "date_range_invalid"), null));
+        }
+        String normalizedRole = normalizeOptional(role);
+        String normalizedOwner = normalizeOptional(owner);
+        String normalizedDepartment = normalizeOptional(department);
+        String normalizedTimezone = normalizeOptional(timezone);
+        String normalizedCurrency = normalizeOptional(currency);
         @SuppressWarnings("unchecked")
         Map<String, Object> job = (Map<String, Object>) reportExportJobService.submitByTenant(
                 currentUser(request),
                 currentTenant(request),
-                role,
+                normalizedRole,
                 fromDate,
                 toDate,
-                owner,
-                department,
-                timezone,
-                currency,
+                normalizedOwner,
+                normalizedDepartment,
+                normalizedTimezone,
+                normalizedCurrency,
                 request.getHeader("Accept-Language")
         );
         return ResponseEntity.accepted().body(successWithFields(request, "report_export_submitted", job));
@@ -157,13 +171,14 @@ public class V1ReportController extends BaseApiController {
         if (page <= 1 && size == 8 && limit > 0) {
             safeSize = Math.max(1, Math.min(100, limit));
         }
+        String normalizedStatus = normalizeOptional(status);
         Map<String, Object> body = reportExportJobService.listByTenantPaged(
                 currentUser(request),
                 currentTenant(request),
                 hasAnyRole(request, "ADMIN", "MANAGER"),
                 safePage,
                 safeSize,
-                status
+                normalizedStatus
         );
         return ResponseEntity.ok(successWithFields(request, "report_export_jobs_listed", body));
     }
@@ -173,18 +188,21 @@ public class V1ReportController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedJobId = normalizeOptional(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> retried = (Map<String, Object>) reportExportJobService.retryByTenant(
-                    jobId,
+                    normalizedJobId,
                     currentUser(request),
                     currentTenant(request),
                     hasAnyRole(request, "ADMIN", "MANAGER")
             );
             return ResponseEntity.accepted().body(successWithFields(request, "report_export_retried", retried));
         } catch (IllegalArgumentException ex) {
-            String code = normalizeCode(ex.getMessage(), "bad_request");
-            return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
+            return exportJobArgumentError(request, ex);
         }
     }
 
@@ -193,13 +211,16 @@ public class V1ReportController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedJobId = normalizeOptional(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> statusBody = (Map<String, Object>) reportExportJobService.statusByTenant(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            Map<String, Object> statusBody = (Map<String, Object>) reportExportJobService.statusByTenant(normalizedJobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
             return ResponseEntity.ok(successWithFields(request, "report_export_status_loaded", statusBody));
         } catch (IllegalArgumentException ex) {
-            String code = normalizeCode(ex.getMessage(), "bad_request");
-            return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
+            return exportJobArgumentError(request, ex);
         }
     }
 
@@ -208,20 +229,38 @@ public class V1ReportController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedJobId = normalizeOptional(jobId);
+        if (isBlank(normalizedJobId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
         try {
-            String csv = reportExportJobService.downloadByTenant(jobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            String csv = reportExportJobService.downloadByTenant(normalizedJobId, currentUser(request), currentTenant(request), hasAnyRole(request, "ADMIN", "MANAGER"));
             boolean zh = request.getHeader("Accept-Language") != null && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
-            String filename = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + jobId + ".csv";
+            String filename = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + normalizedJobId + ".csv";
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                     .body(csv);
         } catch (IllegalArgumentException ex) {
-            String code = normalizeCode(ex.getMessage(), "bad_request");
-            return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
+            return exportJobArgumentError(request, ex);
         } catch (IllegalStateException ex) {
             String code = normalizeCode(ex.getMessage(), "conflict");
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), null));
         }
+    }
+
+    private String normalizeOptional(String value) {
+        return isBlank(value) ? "" : value.trim();
+    }
+
+    private ResponseEntity<?> exportJobArgumentError(HttpServletRequest request, IllegalArgumentException ex) {
+        String code = normalizeCode(ex.getMessage(), "bad_request");
+        if ("forbidden".equals(code)) {
+            return ResponseEntity.status(403).body(errorBody(request, code, msg(request, code), null));
+        }
+        if ("export_job_not_found".equals(code)) {
+            return ResponseEntity.status(404).body(errorBody(request, code, msg(request, code), null));
+        }
+        return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
     }
 }

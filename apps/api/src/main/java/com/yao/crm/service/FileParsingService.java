@@ -184,7 +184,8 @@ public class FileParsingService {
             current.append(ch);
         }
         out.add(current.toString().trim());
-        return out.toArray(String[]::new);
+        return out.toArray(new String[out.size()]);
+
     }
 
     /**

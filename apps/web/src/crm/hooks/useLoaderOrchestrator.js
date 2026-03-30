@@ -37,11 +37,11 @@ export function useLoaderOrchestrator({
       })
       mark.markDuplicateFetchBlocked(reason)
       if (reason === 'workbench_jump') mark.markWorkbenchJumpDecision(true)
-      return Promise.resolve(false)
+      return undefined
     }
     if (!force && run.isInFlight(pageKey, loader.signature)) {
       mark.markDuplicateFetchBlocked(reason)
-      return Promise.resolve(false)
+      return undefined
     }
     run.markInFlight(pageKey, loader.signature)
     handle.onLoaderLifecycle?.({
@@ -109,7 +109,8 @@ export function useLoaderOrchestrator({
     if (!commonLoader) return
     const reason = state.loaders.loadReasonRef.current
     state.loaders.loadReasonRef.current = 'default'
-    return runRegisteredLoader(currentPage, commonLoader, { delay: commonLoader.delay, reason })
+    const result = runRegisteredLoader(currentPage, commonLoader, { delay: commonLoader.delay, reason })
+    return typeof result === 'function' ? result : undefined
   }, [activeCommonSignature, runRegisteredLoader])
 
   const activeKeySignature = keyPageLoaders[activePage]?.signature || ''
@@ -122,7 +123,8 @@ export function useLoaderOrchestrator({
     if (!keyLoader || !keyLoader.canRun()) return
     const reason = state.loaders.loadReasonRef.current
     state.loaders.loadReasonRef.current = 'default'
-    return runRegisteredLoader(currentPage, keyLoader, { reason })
+    const result = runRegisteredLoader(currentPage, keyLoader, { reason })
+    return typeof result === 'function' ? result : undefined
   }, [activeKeySignature, activeKeyCanRun, runRegisteredLoader])
 
   const refreshPage = useCallback(async (pageKey, reason = 'panel_action') => {

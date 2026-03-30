@@ -240,7 +240,7 @@ public class WorkflowExecutionService {
                     return result;
             }
         } catch (Exception e) {
-            log.error("Node execution failed: " + node.getId(), e);
+            log.error("Node execution failed: nodeId={}", node.getId(), e);
             result.setSuccess(false);
             result.setErrorMessage(e.getMessage());
             result.setErrorDetails(e.toString());

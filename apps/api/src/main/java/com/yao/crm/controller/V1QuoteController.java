@@ -10,6 +10,7 @@ import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,7 +31,7 @@ import java.util.*;
 @Validated
 public class V1QuoteController extends CommerceControllerSupport {
 
-    private static final Set<String> QUOTE_STATUSES = Set.of(
+    private static final Set<String> QUOTE_STATUSES = CollectionsUtil.setOf(
             "DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "ACCEPTED", "EXPIRED", "CANCELED"
     );
 
@@ -97,10 +98,10 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (normalizedStatus == null) {
             return ResponseEntity.badRequest().body(errorBody(request, "quote_status_invalid", msg(request, "quote_status_invalid"), null));
         }
-        String normalizedOpportunityId = str(opportunityId);
+        String normalizedOpportunityId = normalizeId(opportunityId);
         int normalizedSize = commerceFacadeService.normalizePageSize(size);
         Pageable pageable = buildPageable(page, normalizedSize, "updatedAt", "desc",
-                Set.of("createdAt", "updatedAt", "quoteNo", "status", "totalAmount"), "updatedAt");
+                CollectionsUtil.setOf("createdAt", "updatedAt", "quoteNo", "status", "totalAmount"), "updatedAt");
         Collection<String> scopedOwners = null;
         if (isSalesScoped(request)) {
             Set<String> ownerSet = new LinkedHashSet<String>();
@@ -130,7 +131,7 @@ public class V1QuoteController extends CommerceControllerSupport {
         row.setQuoteNo(generateNo("QUO"));
         String validate = applyQuotePayload(request, row, payload, true);
         if (!isBlank(validate)) {
-            return ResponseEntity.badRequest().body(errorBody(request, validate, msg(request, validate), null));
+            return validationError(request, validate);
         }
         Quote saved = quoteRepository.save(row);
         recomputeQuoteAmounts(saved);
@@ -143,12 +144,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String id = payload.getId();
-        if (isBlank(id)) {
+        String normalizedId = normalizeId(payload.getId());
+        if (isBlank(normalizedId)) {
             return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
         }
         String tenantId = currentTenant(request);
-        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -161,7 +162,7 @@ public class V1QuoteController extends CommerceControllerSupport {
         }
         String validate = applyQuotePayload(request, row, payload, false);
         if (!isBlank(validate)) {
-            return ResponseEntity.badRequest().body(errorBody(request, validate, msg(request, validate), null));
+            return validationError(request, validate);
         }
         Quote saved = quoteRepository.save(row);
         recomputeQuoteAmounts(saved);
@@ -174,8 +175,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> quoteOptional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> quoteOptional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!quoteOptional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -183,11 +188,11 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (isSalesScoped(request) && !ownerMatchesScope(request, quote.getOwner())) {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
-        List<QuoteItem> items = quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(tenantId, id);
+        List<QuoteItem> items = quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(tenantId, normalizedId);
         List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
         for (QuoteItem item : items) out.add(toQuoteItemView(item));
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("quoteId", id);
+        body.put("quoteId", normalizedId);
         body.put("items", out);
         body.put("total", out.size());
         return ResponseEntity.ok(successWithFields(request, "quote_items_listed", body));
@@ -198,8 +203,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> quoteOptional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> quoteOptional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!quoteOptional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -210,12 +219,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!"DRAFT".equalsIgnoreCase(quote.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "quote_only_draft_editable", msg(request, "quote_only_draft_editable"), null));
         }
-        quoteItemRepository.deleteByTenantIdAndQuoteId(tenantId, id);
+        quoteItemRepository.deleteByTenantIdAndQuoteId(tenantId, normalizedId);
         List<Map<String, Object>> savedItems = new ArrayList<Map<String, Object>>();
         if (payload != null) {
             Set<String> productIds = new LinkedHashSet<String>();
             for (QuoteItemRequest itemPayload : payload) {
-                String productId = itemPayload.getProductId();
+                String productId = normalizeId(itemPayload.getProductId());
                 if (!isBlank(productId)) {
                     productIds.add(productId);
                 }
@@ -228,14 +237,14 @@ public class V1QuoteController extends CommerceControllerSupport {
             }
             List<QuoteItem> toSave = new ArrayList<QuoteItem>();
             for (QuoteItemRequest itemPayload : payload) {
-                String productId = itemPayload.getProductId();
+                String productId = normalizeId(itemPayload.getProductId());
                 if (isBlank(productId)) continue;
                 Product product = productsById.get(productId);
                 if (product == null) continue;
                 QuoteItem item = new QuoteItem();
                 item.setId(newId("qti"));
                 item.setTenantId(tenantId);
-                item.setQuoteId(id);
+                item.setQuoteId(normalizedId);
                 item.setProductId(productId);
                 item.setProductName(isBlank(itemPayload.getProductName()) ? product.getName() : itemPayload.getProductName().trim());
                 item.setQuantity(itemPayload.getQuantity() != null ? Math.max(1, itemPayload.getQuantity()) : 1);
@@ -255,7 +264,7 @@ public class V1QuoteController extends CommerceControllerSupport {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("quote", toQuoteView(updated, false));
         body.put("items", savedItems);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "QUOTE_ITEM", id, "Replace quote items", tenantId);
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "QUOTE_ITEM", normalizedId, "Replace quote items", tenantId);
         return ResponseEntity.ok(successWithFields(request, "quote_items_saved", body));
     }
 
@@ -264,8 +273,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -316,8 +329,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -365,8 +382,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -375,7 +396,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
-        for (QuoteVersion row : quoteVersionRepository.findByTenantIdAndQuoteIdOrderByVersionNoDesc(tenantId, id)) {
+        for (QuoteVersion row : quoteVersionRepository.findByTenantIdAndQuoteIdOrderByVersionNoDesc(tenantId, normalizedId)) {
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("id", row.getId());
             out.put("quoteId", row.getQuoteId());
@@ -388,7 +409,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             items.add(out);
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("quoteId", id);
+        body.put("quoteId", normalizedId);
         body.put("items", items);
         body.put("total", items.size());
         return ResponseEntity.ok(successWithFields(request, "quote_versions_listed", body));
@@ -401,8 +422,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -410,11 +435,11 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (isSalesScoped(request) && !ownerMatchesScope(request, quote.getOwner())) {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
-        int nextVersion = quoteVersionRepository.findTopByTenantIdAndQuoteIdOrderByVersionNoDesc(tenantId, id)
+        int nextVersion = quoteVersionRepository.findTopByTenantIdAndQuoteIdOrderByVersionNoDesc(tenantId, normalizedId)
                 .map(v -> (v.getVersionNo() == null ? 0 : v.getVersionNo()) + 1)
                 .orElse(1);
         List<Map<String, Object>> lineItems = new ArrayList<Map<String, Object>>();
-        for (QuoteItem item : quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(tenantId, id)) {
+        for (QuoteItem item : quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(tenantId, normalizedId)) {
             lineItems.add(toQuoteItemView(item));
         }
         Map<String, Object> snapshot = new LinkedHashMap<>();
@@ -426,12 +451,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         try {
             snapshotJson = objectMapper.writeValueAsString(snapshot);
         } catch (Exception ex) {
-            snapshotJson = "{\"quoteId\":\"" + id + "\"}";
+            snapshotJson = "{\"quoteId\":\"" + normalizedId + "\"}";
         }
         QuoteVersion row = new QuoteVersion();
         row.setId(newId("qtv"));
         row.setTenantId(tenantId);
-        row.setQuoteId(id);
+        row.setQuoteId(normalizedId);
         row.setVersionNo(nextVersion);
         row.setStatus(quote.getStatus());
         row.setTotalAmount(quote.getTotalAmount() == null ? 0L : quote.getTotalAmount());
@@ -456,8 +481,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
+        String normalizedId = normalizeId(id);
+        if (isBlank(normalizedId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "id_required", msg(request, "id_required"), null));
+        }
         String tenantId = currentTenant(request);
-        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Quote> optional = quoteRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "quote_not_found", msg(request, "quote_not_found"), null));
         }
@@ -515,28 +544,28 @@ public class V1QuoteController extends CommerceControllerSupport {
     }
 
     private String applyQuotePayload(HttpServletRequest request, Quote row, QuoteCreateRequest payload, boolean creating) {
-        String customerId = payload.getCustomerId();
+        String customerId = normalizeId(payload.getCustomerId());
         if (creating && isBlank(customerId)) return "quote_customer_required";
         if (!isBlank(customerId)) {
             if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
             row.setCustomerId(customerId);
         }
-        String opportunityId = payload.getOpportunityId();
+        String opportunityId = normalizeId(payload.getOpportunityId());
         if (!isBlank(opportunityId)) {
             if (!belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) return "opportunity_not_found";
             row.setOpportunityId(opportunityId);
         }
         if (payload.getOwner() != null) {
-            String owner = payload.getOwner();
+            String owner = normalizeId(payload.getOwner());
             if (!isBlank(owner)) {
                 if (isSalesScoped(request) && !ownerMatchesScope(request, owner)) return "scope_forbidden";
-                row.setOwner(owner.trim());
+                row.setOwner(owner);
             }
         } else if (creating) {
             row.setOwner(currentUser(request));
         }
         if (payload.getStatus() != null) {
-            String status = upperOrDefault(payload.getStatus(), row.getStatus());
+            String status = normalizeStatus(payload.getStatus(), row.getStatus());
             if (!QUOTE_STATUSES.contains(status)) return "quote_status_invalid";
             row.setStatus(status);
         }
@@ -545,28 +574,28 @@ public class V1QuoteController extends CommerceControllerSupport {
     }
 
     private String applyQuotePayload(HttpServletRequest request, Quote row, QuotePatchRequest payload, boolean creating) {
-        String customerId = payload.getCustomerId();
+        String customerId = normalizeId(payload.getCustomerId());
         if (creating && isBlank(customerId)) return "quote_customer_required";
         if (!isBlank(customerId)) {
             if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
             row.setCustomerId(customerId);
         }
-        String opportunityId = payload.getOpportunityId();
+        String opportunityId = normalizeId(payload.getOpportunityId());
         if (!isBlank(opportunityId)) {
             if (!belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) return "opportunity_not_found";
             row.setOpportunityId(opportunityId);
         }
         if (payload.getOwner() != null) {
-            String owner = payload.getOwner();
+            String owner = normalizeId(payload.getOwner());
             if (!isBlank(owner)) {
                 if (isSalesScoped(request) && !ownerMatchesScope(request, owner)) return "scope_forbidden";
-                row.setOwner(owner.trim());
+                row.setOwner(owner);
             }
         } else if (creating) {
             row.setOwner(currentUser(request));
         }
         if (payload.getStatus() != null) {
-            String status = upperOrDefault(payload.getStatus(), row.getStatus());
+            String status = normalizeStatus(payload.getStatus(), row.getStatus());
             if (!QUOTE_STATUSES.contains(status)) return "quote_status_invalid";
             row.setStatus(status);
         }
@@ -687,5 +716,26 @@ public class V1QuoteController extends CommerceControllerSupport {
         out.put("taxAmount", row.getTaxAmount());
         out.put("totalAmount", row.getTotalAmount());
         return out;
+    }
+
+    private ResponseEntity<?> validationError(HttpServletRequest request, String code) {
+        String normalizedCode = normalizeCode(code, "bad_request");
+        if ("scope_forbidden".equals(normalizedCode) || "forbidden".equals(normalizedCode)) {
+            return ResponseEntity.status(403).body(errorBody(request, normalizedCode, msg(request, normalizedCode), null));
+        }
+        return ResponseEntity.badRequest().body(errorBody(request, normalizedCode, msg(request, normalizedCode), null));
+    }
+
+    private String normalizeId(String value) {
+        return isBlank(value) ? "" : value.trim();
+    }
+
+    private String normalizeStatus(String value, String fallback) {
+        String normalized = normalizeId(value);
+        if (!normalized.isEmpty()) {
+            return normalized.toUpperCase(Locale.ROOT);
+        }
+        String normalizedFallback = normalizeId(fallback);
+        return normalizedFallback.isEmpty() ? "" : normalizedFallback.toUpperCase(Locale.ROOT);
     }
 }

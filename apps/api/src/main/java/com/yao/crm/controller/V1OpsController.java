@@ -14,6 +14,7 @@ import com.yao.crm.service.NotificationJobScheduler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,9 +27,12 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/ops")
@@ -115,33 +119,51 @@ public class V1OpsController extends BaseApiController {
     }
 
     @GetMapping("/health")
-    public ResponseEntity<?> health(HttpServletRequest request) {
+    public ResponseEntity<?> health(HttpServletRequest request,
+                                    @RequestParam(defaultValue = "") String timezone) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        OpsRequestContext context = resolveContext(request, timezone);
+        if (context.hasError()) {
+            return context.getErrorResponse();
+        }
+        String tenantId = context.getTenantId();
+        ZoneId zoneId = context.getZoneId();
+        List<String> providerList = normalizeWebhookProviders(webhookProviders);
+
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("requestId", traceId(request));
         out.put("tenantId", tenantId);
-        out.put("time", LocalDateTime.now());
+        out.put("time", nowAt(zoneId));
+        out.put("timezone", zoneId.getId());
         out.put("database", databaseHealth());
         out.put("notificationScheduler", schedulerHealth());
-        out.put("webhookProviders", webhookProviders);
-        out.put("webhookConfigured", !webhookProviders.trim().isEmpty());
+        out.put("webhookProviders", String.join(",", providerList));
+        out.put("webhookProviderList", providerList);
+        out.put("webhookConfigured", !providerList.isEmpty());
         out.put("status", "UP");
         return ResponseEntity.ok(successWithFields(request, "ops_health_loaded", out));
     }
 
     @GetMapping("/metrics/summary")
-    public ResponseEntity<?> metricsSummary(HttpServletRequest request) {
+    public ResponseEntity<?> metricsSummary(HttpServletRequest request,
+                                            @RequestParam(defaultValue = "") String timezone) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        OpsRequestContext context = resolveContext(request, timezone);
+        if (context.hasError()) {
+            return context.getErrorResponse();
+        }
+        String tenantId = context.getTenantId();
+        ZoneId zoneId = context.getZoneId();
+
         List<ApprovalTask> tasks = approvalTaskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         List<NotificationJob> jobs = notificationJobRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        LocalDateTime now = nowAt(zoneId);
         long approvalBacklog = tasks.stream().filter(t -> "PENDING".equalsIgnoreCase(t.getStatus()) || "WAITING".equalsIgnoreCase(t.getStatus())).count();
-        long approvalOverdue = tasks.stream().filter(t -> ("PENDING".equalsIgnoreCase(t.getStatus()) || "WAITING".equalsIgnoreCase(t.getStatus())) && t.getDeadlineAt() != null && t.getDeadlineAt().isBefore(LocalDateTime.now())).count();
+        long approvalOverdue = tasks.stream().filter(t -> ("PENDING".equalsIgnoreCase(t.getStatus()) || "WAITING".equalsIgnoreCase(t.getStatus())) && t.getDeadlineAt() != null && t.getDeadlineAt().isBefore(now)).count();
         long notifySuccess = jobs.stream().filter(j -> "SUCCESS".equalsIgnoreCase(j.getStatus())).count();
         long notifyFailed = jobs.stream().filter(j -> "FAILED".equalsIgnoreCase(j.getStatus())).count();
         long notifyRetry = jobs.stream().filter(j -> "RETRY".equalsIgnoreCase(j.getStatus())).count();
@@ -160,17 +182,26 @@ public class V1OpsController extends BaseApiController {
         out.put("notificationRetry", notifyRetry);
         out.put("notificationSuccessRate", successRate);
         out.put("notificationRetryDistribution", retryBuckets);
-        out.put("importMetrics", buildImportMetrics(tenantId));
+        out.put("importMetrics", buildImportMetrics(tenantId, zoneId));
+        out.put("timezone", zoneId.getId());
         out.put("scheduler", schedulerHealth());
         return ResponseEntity.ok(successWithFields(request, "ops_metrics_loaded", out));
     }
 
     @GetMapping("/slo-snapshot")
-    public ResponseEntity<?> sloSnapshot(HttpServletRequest request) {
+    public ResponseEntity<?> sloSnapshot(HttpServletRequest request,
+                                         @RequestParam(defaultValue = "") String timezone) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        OpsRequestContext context = resolveContext(request, timezone);
+        if (context.hasError()) {
+            return context.getErrorResponse();
+        }
+        String tenantId = context.getTenantId();
+        ZoneId zoneId = context.getZoneId();
+        LocalDateTime now = nowAt(zoneId);
+
         Map<String, Object> readiness = healthController.ready();
         Map<String, Object> dependencies = healthController.dependencies();
         Map<String, Object> api = apiRequestMetricsService.snapshot();
@@ -204,12 +235,12 @@ public class V1OpsController extends BaseApiController {
         if (auditFailedRatio > auditFailedRatioMax) legacyAlerts.add("audit_export_failed_ratio_high");
         if (auditRetryRatio > auditRetryRatioMax) legacyAlerts.add("audit_export_retry_ratio_high");
 
-        List<Map<String, Object>> leveledAlerts = buildLeveledAlerts(readinessOk, errorRate, slowRate, auditFailedRatio);
+        List<Map<String, Object>> leveledAlerts = buildLeveledAlerts(readinessOk, errorRate, slowRate, auditFailedRatio, now);
         String highestLevel = detectHighestAlertLevel(leveledAlerts);
         double errorBudgetConsumedDaily = errorRate;
         double errorBudgetConsumedWeekly = Math.min(1.0d, errorRate * 7.0d);
         Map<String, Object> errorBudget = buildErrorBudget(errorBudgetConsumedDaily, errorBudgetConsumedWeekly);
-        Map<String, Object> oncall = buildOncall();
+        Map<String, Object> oncall = buildOncall(now);
 
         Map<String, Object> thresholds = new LinkedHashMap<String, Object>();
         thresholds.put("errorRateMax", sloErrorRateMax);
@@ -244,7 +275,8 @@ public class V1OpsController extends BaseApiController {
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("requestId", traceId(request));
         out.put("tenantId", tenantId);
-        out.put("generatedAt", LocalDateTime.now());
+        out.put("generatedAt", now);
+        out.put("timezone", zoneId.getId());
         out.put("overallStatus", legacyAlerts.isEmpty() ? "PASS" : "FAIL");
         out.put("alerts", legacyAlerts);
         out.put("alertsLevel", highestLevel);
@@ -261,15 +293,8 @@ public class V1OpsController extends BaseApiController {
         return ResponseEntity.ok(successWithFields(request, "ops_slo_snapshot_loaded", out));
     }
 
-    private Map<String, Object> buildImportMetrics(String tenantId) {
-        String timezone = tenantRepository.findById(tenantId).map(t -> t.getTimezone()).orElse("");
-        ZoneId zoneId;
-        try {
-            zoneId = (timezone == null || timezone.trim().isEmpty()) ? ZoneId.systemDefault() : ZoneId.of(timezone.trim());
-        } catch (Exception ex) {
-            zoneId = ZoneId.systemDefault();
-        }
-        LocalDateTime now = LocalDateTime.now();
+    private Map<String, Object> buildImportMetrics(String tenantId, ZoneId zoneId) {
+        LocalDateTime now = nowAt(zoneId);
         ZonedDateTime zoneNow = ZonedDateTime.now(zoneId);
         LocalDateTime from = zoneNow.minusHours(24).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
         List<LeadImportJob> allJobs = leadImportJobRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
@@ -409,20 +434,20 @@ public class V1OpsController extends BaseApiController {
         return asLong(routeValue.get("p99Ms"));
     }
 
-    private List<Map<String, Object>> buildLeveledAlerts(boolean readinessOk, double errorRate, double slowRate, double auditFailedRatio) {
+    private List<Map<String, Object>> buildLeveledAlerts(boolean readinessOk, double errorRate, double slowRate, double auditFailedRatio, LocalDateTime now) {
         List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
         if (!readinessOk) {
-            out.add(alert("P1", "readiness_degraded", "readiness endpoint not healthy"));
+            out.add(alert("P1", "readiness_degraded", "readiness endpoint not healthy", now));
         }
         if (errorRate >= alertP1ErrorRate || slowRate >= alertP1SlowRate) {
-            out.add(alert("P1", "api_critical", "error/slow rate reached p1 threshold"));
+            out.add(alert("P1", "api_critical", "error/slow rate reached p1 threshold", now));
         } else if (errorRate >= alertP2ErrorRate || slowRate >= alertP2SlowRate) {
-            out.add(alert("P2", "api_degraded", "error/slow rate reached p2 threshold"));
+            out.add(alert("P2", "api_degraded", "error/slow rate reached p2 threshold", now));
         } else if (errorRate >= alertP3ErrorRate || slowRate >= alertP3SlowRate) {
-            out.add(alert("P3", "api_warning", "error/slow rate reached p3 threshold"));
+            out.add(alert("P3", "api_warning", "error/slow rate reached p3 threshold", now));
         }
         if (auditFailedRatio > auditFailedRatioMax) {
-            out.add(alert("P2", "audit_export_failed_ratio_high", "audit export failure ratio is high"));
+            out.add(alert("P2", "audit_export_failed_ratio_high", "audit export failure ratio is high", now));
         }
         return out;
     }
@@ -458,20 +483,134 @@ public class V1OpsController extends BaseApiController {
         return out;
     }
 
-    private Map<String, Object> buildOncall() {
+    private Map<String, Object> buildOncall(LocalDateTime now) {
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("primary", oncallPrimary.isEmpty() ? "UNASSIGNED" : oncallPrimary);
         out.put("escalation", oncallEscalation.isEmpty() ? "UNDEFINED" : oncallEscalation);
-        out.put("lastRotationAt", LocalDateTime.now().minusDays(1));
+        out.put("lastRotationAt", now.minusDays(1));
         return out;
     }
 
-    private Map<String, Object> alert(String level, String reason, String message) {
+    private Map<String, Object> alert(String level, String reason, String message, LocalDateTime now) {
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("level", level);
         out.put("reason", reason);
         out.put("message", message);
-        out.put("triggeredAt", LocalDateTime.now());
+        out.put("triggeredAt", now);
         return out;
+    }
+
+    private OpsRequestContext resolveContext(HttpServletRequest request, String timezoneParam) {
+        String authTenantId = normalize(readAttr(request, "authTenantId"));
+        String headerTenantId = normalize(request.getHeader("X-Tenant-Id"));
+        if (!isBlank(authTenantId) && !isBlank(headerTenantId) && !authTenantId.equals(headerTenantId)) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("authTenantId", authTenantId);
+            details.put("headerTenantId", headerTenantId);
+            return OpsRequestContext.error(ResponseEntity.status(409).body(errorBody(request, "tenant_conflict", msg(request, "tenant_conflict"), details)));
+        }
+
+        String tenantId = normalize(currentTenant(request));
+        if (isBlank(tenantId)) {
+            Map<String, Object> details = new LinkedHashMap<String, Object>();
+            details.put("reason", "tenant_required");
+            return OpsRequestContext.error(ResponseEntity.badRequest().body(errorBody(request, "tenant_required", msg(request, "tenant_required"), details)));
+        }
+
+        Optional<com.yao.crm.entity.Tenant> tenantOptional = tenantRepository.findById(tenantId);
+        if (!tenantOptional.isPresent()) {
+            return OpsRequestContext.error(ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null)));
+        }
+
+        String requestedTimezone = normalize(timezoneParam);
+        if (!isBlank(requestedTimezone)) {
+            try {
+                return OpsRequestContext.success(tenantId, ZoneId.of(requestedTimezone));
+            } catch (Exception ex) {
+                Map<String, Object> details = new LinkedHashMap<String, Object>();
+                details.put("reason", "invalid_timezone");
+                details.put("timezone", requestedTimezone);
+                return OpsRequestContext.error(ResponseEntity.badRequest().body(errorBody(request, "invalid_timezone", msg(request, "invalid_timezone"), details)));
+            }
+        }
+
+        ZoneId zoneId = parseZoneOrDefault(tenantOptional.get().getTimezone());
+        return OpsRequestContext.success(tenantId, zoneId);
+    }
+
+    private ZoneId parseZoneOrDefault(String timezone) {
+        String normalized = normalize(timezone);
+        if (isBlank(normalized)) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(normalized);
+        } catch (Exception ex) {
+            return ZoneId.systemDefault();
+        }
+    }
+
+    private LocalDateTime nowAt(ZoneId zoneId) {
+        return ZonedDateTime.now(zoneId).toLocalDateTime();
+    }
+
+    private List<String> normalizeWebhookProviders(String configuredProviders) {
+        if (isBlank(configuredProviders)) {
+            return Collections.emptyList();
+        }
+        String[] segments = configuredProviders.split("[,;\\s]+");
+        LinkedHashSet<String> normalized = new LinkedHashSet<String>();
+        for (String segment : segments) {
+            String token = normalize(segment).toUpperCase(Locale.ROOT);
+            if (!isBlank(token)) {
+                normalized.add(token);
+            }
+        }
+        return new ArrayList<String>(normalized);
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String readAttr(HttpServletRequest request, String key) {
+        Object value = request.getAttribute(key);
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static class OpsRequestContext {
+        private final String tenantId;
+        private final ZoneId zoneId;
+        private final ResponseEntity<?> errorResponse;
+
+        private OpsRequestContext(String tenantId, ZoneId zoneId, ResponseEntity<?> errorResponse) {
+            this.tenantId = tenantId;
+            this.zoneId = zoneId;
+            this.errorResponse = errorResponse;
+        }
+
+        static OpsRequestContext success(String tenantId, ZoneId zoneId) {
+            return new OpsRequestContext(tenantId, zoneId, null);
+        }
+
+        static OpsRequestContext error(ResponseEntity<?> response) {
+            return new OpsRequestContext("", ZoneId.systemDefault(), response);
+        }
+
+        boolean hasError() {
+            return errorResponse != null;
+        }
+
+        String getTenantId() {
+            return tenantId;
+        }
+
+        ZoneId getZoneId() {
+            return zoneId;
+        }
+
+        ResponseEntity<?> getErrorResponse() {
+            return errorResponse;
+        }
     }
 }

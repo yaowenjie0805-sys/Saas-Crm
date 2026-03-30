@@ -6,6 +6,7 @@ import com.yao.crm.entity.TaskItem;
 import com.yao.crm.repository.TaskRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -39,7 +40,7 @@ public class TaskController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                new HashSet<>(Set.of("title", "owner", "done", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("title", "owner", "done", "createdAt", "updatedAt"),
                 "updatedAt");
         org.springframework.data.domain.Page<TaskItem> result = taskRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
@@ -113,7 +114,8 @@ public class TaskController extends BaseApiController {
                 }
                 predicates.add(cb.equal(root.get("done"), doneFilter));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<TaskItem> result = taskRepository.findAll(spec, pageable);

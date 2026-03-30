@@ -5,6 +5,7 @@ import com.yao.crm.repository.AuditLogRepository;
 import com.yao.crm.service.AuditExportJobService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -66,7 +67,7 @@ public class AuditController extends BaseApiController {
         int safeSize = Math.max(1, Math.min(100, size));
         Pageable pageable = buildPageable(
                 safePage, safeSize, sortBy, sortDir,
-                new HashSet<>(Set.of("username", "role", "action", "resource", "createdAt")),
+                CollectionsUtil.setOf("username", "role", "action", "resource", "createdAt"),
                 "createdAt"
         );
 
@@ -289,7 +290,8 @@ public class AuditController extends BaseApiController {
             if (!isBlank(action)) predicates.add(cb.equal(root.get("action"), action));
             if (fromTime != null) predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromTime));
             if (toTime != null) predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), toTime));
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
     }
 }

@@ -13,6 +13,7 @@ import com.yao.crm.repository.PaymentRecordRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -23,6 +24,7 @@ import javax.persistence.criteria.Predicate;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @RestController
@@ -75,30 +77,34 @@ public class PaymentController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<>(Set.of("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt"),
                 "updatedAt"
         );
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
+        final String normalizedCustomerId = normalizeOptional(customerId);
+        final String normalizedContractId = normalizeOptional(contractId);
+        final String normalizedStatus = normalizeOptional(status);
         Specification<PaymentRecord> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
-            if (!isBlank(customerId)) {
-                predicates.add(cb.equal(root.get("customerId"), customerId));
+            if (normalizedCustomerId != null) {
+                predicates.add(cb.equal(root.get("customerId"), normalizedCustomerId));
             }
-            if (!isBlank(contractId)) {
-                predicates.add(cb.equal(root.get("contractId"), contractId));
+            if (normalizedContractId != null) {
+                predicates.add(cb.equal(root.get("contractId"), normalizedContractId));
             }
-            if (!isBlank(status)) {
-                predicates.add(cb.equal(cb.lower(root.get("status")), valueNormalizerService.normalizePaymentStatus(status).toLowerCase(Locale.ROOT)));
+            if (normalizedStatus != null) {
+                predicates.add(cb.equal(cb.lower(root.get("status")), valueNormalizerService.normalizePaymentStatus(normalizedStatus).toLowerCase(Locale.ROOT)));
             }
             if (salesScoped) {
                 Predicate selfOwner = cb.equal(root.get("owner"), currentUser(request));
                 Predicate scopeOwner = cb.equal(root.get("owner"), ownerScope);
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<PaymentRecord> result = paymentRepository.findAll(spec, pageable);
@@ -117,8 +123,12 @@ public class PaymentController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         String tenantId = currentTenant(request);
+        String normalizedContractId = normalizeRequired(payload.getContractId());
+        if (normalizedContractId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
 
-        Optional<ContractRecord> contractOpt = contractRepository.findByIdAndTenantId(payload.getContractId(), tenantId);
+        Optional<ContractRecord> contractOpt = contractRepository.findByIdAndTenantId(normalizedContractId, tenantId);
         if (!contractOpt.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "contract_not_found", "BAD_REQUEST", null));
         }
@@ -136,8 +146,9 @@ public class PaymentController extends BaseApiController {
         payment.setId(newId("pm"));
         payment.setContractId(contract.getId());
         payment.setCustomerId(contract.getCustomerId());
-        if (!isBlank(payload.getOrderId())) {
-            Optional<OrderRecord> orderOpt = orderRecordRepository.findByIdAndTenantId(payload.getOrderId(), tenantId);
+        String normalizedOrderId = normalizeOptional(payload.getOrderId());
+        if (normalizedOrderId != null) {
+            Optional<OrderRecord> orderOpt = orderRecordRepository.findByIdAndTenantId(normalizedOrderId, tenantId);
             if (!orderOpt.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "order_not_found", "BAD_REQUEST", null));
             }
@@ -189,9 +200,13 @@ public class PaymentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
         String tenantId = currentTenant(request);
 
-        Optional<PaymentRecord> optional = paymentRepository.findByIdAndTenantId(id, tenantId);
+        Optional<PaymentRecord> optional = paymentRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "payment_not_found", "NOT_FOUND", null));
         }
@@ -202,7 +217,11 @@ public class PaymentController extends BaseApiController {
         }
 
         if (patch.getContractId() != null) {
-            Optional<ContractRecord> contractOpt = contractRepository.findByIdAndTenantId(patch.getContractId(), tenantId);
+            String normalizedContractId = normalizeRequired(patch.getContractId());
+            if (normalizedContractId == null) {
+                return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+            }
+            Optional<ContractRecord> contractOpt = contractRepository.findByIdAndTenantId(normalizedContractId, tenantId);
             if (!contractOpt.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "contract_not_found", "BAD_REQUEST", null));
             }
@@ -223,10 +242,11 @@ public class PaymentController extends BaseApiController {
             }
         }
         if (patch.getOrderId() != null) {
-            if (isBlank(patch.getOrderId())) {
+            String normalizedOrderId = normalizeOptional(patch.getOrderId());
+            if (normalizedOrderId == null) {
                 payment.setOrderId(null);
             } else {
-                Optional<OrderRecord> orderOpt = orderRecordRepository.findByIdAndTenantId(patch.getOrderId(), tenantId);
+                Optional<OrderRecord> orderOpt = orderRecordRepository.findByIdAndTenantId(normalizedOrderId, tenantId);
                 if (!orderOpt.isPresent()) {
                     return ResponseEntity.badRequest().body(legacyErrorByKey(request, "order_not_found", "BAD_REQUEST", null));
                 }
@@ -270,14 +290,16 @@ public class PaymentController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
         String tenantId = currentTenant(request);
-
-        if (!paymentRepository.existsByIdAndTenantId(id, tenantId)) {
+        long deleted = paymentRepository.deleteByIdAndTenantId(normalizedId, tenantId);
+        if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "payment_not_found", "NOT_FOUND", null));
         }
-
-        paymentRepository.deleteById(id);
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "PAYMENT", id, "Deleted payment");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "PAYMENT", normalizedId, "Deleted payment");
         return ResponseEntity.noContent().build();
     }
 
@@ -286,8 +308,46 @@ public class PaymentController extends BaseApiController {
     }
 
     private LocalDate parseDateOrNull(HttpServletRequest request, String value) {
-        return parseLocalDate(request, value);
+        String normalized = normalizeRequired(value);
+        if (normalized == null) {
+            return null;
+        }
+        LocalDate parsed = parseLocalDate(request, normalized);
+        if (parsed == null) {
+            return null;
+        }
+        if (!isCanonicalDate(request, normalized, parsed)) {
+            return null;
+        }
+        return parsed;
+    }
+
+    private boolean isCanonicalDate(HttpServletRequest request, String rawInput, LocalDate parsed) {
+        Set<String> formats = new LinkedHashSet<String>();
+        formats.add(currentTenantDateFormat(request));
+        formats.addAll(supportedDateFormats());
+        for (String format : formats) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                LocalDate reparsed = LocalDate.parse(rawInput, formatter);
+                if (parsed.equals(reparsed) && rawInput.equals(reparsed.format(formatter))) {
+                    return true;
+                }
+            } catch (Exception ignore) {
+                // continue
+            }
+        }
+        return false;
+    }
+
+    private String normalizeRequired(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeOptional(String value) {
+        return normalizeRequired(value);
     }
 }
-
-

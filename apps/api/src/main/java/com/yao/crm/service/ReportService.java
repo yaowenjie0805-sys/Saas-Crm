@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -132,6 +131,9 @@ public class ReportService {
             return overviewByTenantDateFastPath(tenantId, fromTime, toTime, scopedOwners);
         }
         if (fromDate == null && toDate == null && scopedOwners != null) {
+            if (scopedOwners.isEmpty()) {
+                return emptyOverviewBody();
+            }
             return overviewByTenantScopedFastPath(tenantId, scopedOwners);
         }
 
@@ -193,9 +195,11 @@ public class ReportService {
         summary.put("winRate", winRate);
         summary.put("taskDoneRate", taskDoneRate);
         summary.put("followUps", followUps.size());
-        long quoteApproved = quotes.stream().filter(q -> "APPROVED".equalsIgnoreCase(q.getStatus()) || "ACCEPTED".equalsIgnoreCase(q.getStatus())).count();
-        long quoteAccepted = quotes.stream().filter(q -> "ACCEPTED".equalsIgnoreCase(q.getStatus())).count();
-        long orderCompleted = orders.stream().filter(o -> "COMPLETED".equalsIgnoreCase(o.getStatus())).count();
+        QuoteSummary quoteSummary = summarizeQuotes(quotes);
+        OrderSummary orderSummary = summarizeOrders(orders);
+        long quoteApproved = quoteSummary.approvedCount;
+        long quoteAccepted = quoteSummary.acceptedCount;
+        long orderCompleted = orderSummary.completedCount;
         double quoteApproveRate = quotes.isEmpty() ? 0.0 : Math.round((quoteApproved * 1000.0 / quotes.size())) / 10.0;
         double quoteToOrderRate = quoteAccepted == 0 ? 0.0 : Math.round((orders.size() * 1000.0 / quoteAccepted)) / 10.0;
         double orderCompleteRate = orders.isEmpty() ? 0.0 : Math.round((orderCompleted * 1000.0 / orders.size())) / 10.0;
@@ -204,8 +208,8 @@ public class ReportService {
         summary.put("quoteApproveRate", quoteApproveRate);
         summary.put("quoteToOrderRate", quoteToOrderRate);
         summary.put("orderCompleteRate", orderCompleteRate);
-        Set<String> orderIds = orders.stream().map(OrderRecord::getId).collect(Collectors.toSet());
-        long orderAmountTotal = orders.stream().mapToLong(o -> o.getAmount() == null ? 0L : o.getAmount()).sum();
+        Set<String> orderIds = orderSummary.orderIds;
+        long orderAmountTotal = orderSummary.amountTotal;
         long orderPaymentReceived = payments.stream()
                 .filter(p -> !isBlank(p.getOrderId()) && orderIds.contains(p.getOrderId()) && "RECEIVED".equalsIgnoreCase(p.getStatus()))
                 .mapToLong(p -> p.getAmount() == null ? 0L : p.getAmount())
@@ -226,18 +230,8 @@ public class ReportService {
         taskStatus.put("pending", pendingTasks);
         body.put("taskStatus", taskStatus);
         body.put("followUpByChannel", followUpByChannel);
-        Map<String, Integer> quoteByStatus = new HashMap<String, Integer>();
-        for (Quote quote : quotes) {
-            String key = isBlank(quote.getStatus()) ? "Unknown" : quote.getStatus();
-            quoteByStatus.put(key, quoteByStatus.containsKey(key) ? quoteByStatus.get(key) + 1 : 1);
-        }
-        Map<String, Integer> orderByStatus = new HashMap<String, Integer>();
-        for (OrderRecord order : orders) {
-            String key = isBlank(order.getStatus()) ? "Unknown" : order.getStatus();
-            orderByStatus.put(key, orderByStatus.containsKey(key) ? orderByStatus.get(key) + 1 : 1);
-        }
-        body.put("quoteByStatus", quoteByStatus);
-        body.put("orderByStatus", orderByStatus);
+        body.put("quoteByStatus", quoteSummary.byStatus);
+        body.put("orderByStatus", orderSummary.byStatus);
         return body;
     }
 
@@ -672,6 +666,68 @@ public class ReportService {
 
         private IdentityScopeCacheEntry(Set<String> identities) {
             this.identities = identities;
+        }
+    }
+
+    static QuoteSummary summarizeQuotes(List<Quote> quotes) {
+        Map<String, Integer> quoteByStatus = new HashMap<String, Integer>();
+        long quoteApproved = 0L;
+        long quoteAccepted = 0L;
+        for (Quote quote : quotes) {
+            String status = quote.getStatus();
+            String key = isBlank(status) ? "Unknown" : status;
+            quoteByStatus.put(key, quoteByStatus.containsKey(key) ? quoteByStatus.get(key) + 1 : 1);
+            if ("ACCEPTED".equalsIgnoreCase(status)) {
+                quoteApproved++;
+                quoteAccepted++;
+            } else if ("APPROVED".equalsIgnoreCase(status)) {
+                quoteApproved++;
+            }
+        }
+        return new QuoteSummary(quoteByStatus, quoteApproved, quoteAccepted);
+    }
+
+    static OrderSummary summarizeOrders(List<OrderRecord> orders) {
+        Map<String, Integer> orderByStatus = new HashMap<String, Integer>();
+        Set<String> orderIds = new HashSet<String>();
+        long orderCompleted = 0L;
+        long orderAmountTotal = 0L;
+        for (OrderRecord order : orders) {
+            String status = order.getStatus();
+            String key = isBlank(status) ? "Unknown" : status;
+            orderByStatus.put(key, orderByStatus.containsKey(key) ? orderByStatus.get(key) + 1 : 1);
+            if ("COMPLETED".equalsIgnoreCase(status)) {
+                orderCompleted++;
+            }
+            orderIds.add(order.getId());
+            orderAmountTotal += order.getAmount() == null ? 0L : order.getAmount();
+        }
+        return new OrderSummary(orderByStatus, orderIds, orderCompleted, orderAmountTotal);
+    }
+
+    static final class QuoteSummary {
+        final Map<String, Integer> byStatus;
+        final long approvedCount;
+        final long acceptedCount;
+
+        private QuoteSummary(Map<String, Integer> byStatus, long approvedCount, long acceptedCount) {
+            this.byStatus = byStatus;
+            this.approvedCount = approvedCount;
+            this.acceptedCount = acceptedCount;
+        }
+    }
+
+    static final class OrderSummary {
+        final Map<String, Integer> byStatus;
+        final Set<String> orderIds;
+        final long completedCount;
+        final long amountTotal;
+
+        private OrderSummary(Map<String, Integer> byStatus, Set<String> orderIds, long completedCount, long amountTotal) {
+            this.byStatus = byStatus;
+            this.orderIds = orderIds;
+            this.completedCount = completedCount;
+            this.amountTotal = amountTotal;
         }
     }
 }

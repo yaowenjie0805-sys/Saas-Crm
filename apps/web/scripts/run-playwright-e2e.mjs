@@ -9,6 +9,14 @@ const FRONTEND_PORT = process.env.FRONTEND_PORT || '14173'
 const HOST = '127.0.0.1'
 const BASE_URL = `http://${HOST}:${FRONTEND_PORT}`
 const API_BASE_URL = `http://${HOST}:${API_PORT}/api`
+const CORS_ALLOWED_ORIGINS = [
+  `http://${HOST}:${FRONTEND_PORT}`,
+  `http://localhost:${FRONTEND_PORT}`,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:14173',
+  'http://127.0.0.1:14173',
+].join(',')
 const DB_URL = process.env.DB_URL || `jdbc:mysql://${HOST}:3306/${DB_NAME}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true`
 const IS_WIN = process.platform === 'win32'
 const MAVEN_REPO = process.env.MAVEN_REPO || `${process.cwd()}${IS_WIN ? '\\' : '/'} .m2repo`.replace(' .m2repo', '.m2repo')
@@ -196,6 +204,7 @@ async function main() {
     `-DDB_URL=${DB_URL}`,
     `-DDB_USER=${DB_USER}`,
     `-DDB_PASSWORD=${DB_PASSWORD}`,
+    `-DSECURITY_CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}`,
     '-jar',
     'apps/api/target/crm-backend-1.0.0.jar',
   ])

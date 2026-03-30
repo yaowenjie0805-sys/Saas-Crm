@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 数据导入服务
@@ -37,6 +39,10 @@ public class DataImportService {
 
     // 导入任务缓存
     private final Map<String, ImportJobContext> importJobs = new ConcurrentHashMap<>();
+    private static final long JOB_RETENTION_HOURS = 24L;
+    private static final long CLEANUP_INTERVAL_MS = TimeUnit.MINUTES.toMillis(10);
+    private static final int CLEANUP_TRIGGER_SIZE = 128;
+    private final AtomicLong lastCleanupAt = new AtomicLong(0L);
 
     private final FileParsingService fileParsingService;
     private final DataMappingService dataMappingService;
@@ -66,6 +72,7 @@ public class DataImportService {
     @Transactional
     public ImportJobResult createImportJob(String tenantId, String operator, String entityType,
                                            InputStream inputStream, String fileName, String fileExtension) {
+        cleanupExpiredJobs();
         String jobId = UUID.randomUUID().toString();
 
         try {
@@ -149,11 +156,17 @@ public class DataImportService {
                     context.setStatus(ImportJobStatus.FAILED);
                 }
             }
+            if (isTerminal(context.getStatus())) {
+                markFinished(context);
+                releaseTransientJobData(context);
+            }
 
         } catch (Exception e) {
-            log.error("Import job failed: " + jobId, e);
+            log.error("Import job failed: jobId={}", jobId, e);
             context.setStatus(ImportJobStatus.FAILED);
             context.setErrorMessage(e.getMessage());
+            markFinished(context);
+            releaseTransientJobData(context);
         }
     }
 
@@ -183,6 +196,7 @@ public class DataImportService {
      * 获取导入任务状态
      */
     public ImportJobResult getImportJobStatus(String jobId) {
+        cleanupExpiredJobs();
         ImportJobContext context = importJobs.get(jobId);
         if (context == null) {
             return null;
@@ -203,16 +217,60 @@ public class DataImportService {
      * 取消导入任务
      */
     public void cancelImportJob(String jobId) {
+        cleanupExpiredJobs();
         ImportJobContext context = importJobs.get(jobId);
         if (context != null && (context.getStatus() == ImportJobStatus.PENDING ||
                 context.getStatus() == ImportJobStatus.RUNNING)) {
             context.setStatus(ImportJobStatus.CANCELLED);
+            markFinished(context);
         }
     }
 
-    /**
-     * 导入任务上下文
-     */
+    private void cleanupExpiredJobs() {
+        long now = System.currentTimeMillis();
+        long previous = lastCleanupAt.get();
+        if (importJobs.size() < CLEANUP_TRIGGER_SIZE && now - previous < CLEANUP_INTERVAL_MS) {
+            return;
+        }
+        if (!lastCleanupAt.compareAndSet(previous, now)) {
+            return;
+        }
+        LocalDateTime threshold = LocalDateTime.now().minusHours(JOB_RETENTION_HOURS);
+        for (Map.Entry<String, ImportJobContext> entry : importJobs.entrySet()) {
+            ImportJobContext context = entry.getValue();
+            if (context == null || !isTerminal(context.getStatus())) {
+                continue;
+            }
+            LocalDateTime finishedAt = context.getFinishedAt();
+            if (finishedAt == null) {
+                finishedAt = context.getCreatedAt();
+            }
+            if (finishedAt != null && finishedAt.isBefore(threshold)) {
+                importJobs.remove(entry.getKey(), context);
+            }
+        }
+    }
+
+    private boolean isTerminal(ImportJobStatus status) {
+        return status == ImportJobStatus.COMPLETED
+                || status == ImportJobStatus.FAILED
+                || status == ImportJobStatus.PARTIAL_SUCCESS
+                || status == ImportJobStatus.CANCELLED;
+    }
+
+    private void markFinished(ImportJobContext context) {
+        if (context != null && context.getFinishedAt() == null) {
+            context.setFinishedAt(LocalDateTime.now());
+        }
+    }
+
+    private void releaseTransientJobData(ImportJobContext context) {
+        if (context == null) {
+            return;
+        }
+        context.setHeaders(null);
+        context.setData(null);
+    }
     private static class ImportJobContext {
         private String jobId;
         private String tenantId;
@@ -229,6 +287,7 @@ public class DataImportService {
         private List<Map<String, String>> data;
         private List<ImportError> errors;
         private LocalDateTime createdAt;
+        private LocalDateTime finishedAt;
 
         // Getters and Setters
         public String getJobId() { return jobId; }
@@ -261,6 +320,8 @@ public class DataImportService {
         public void setErrors(List<ImportError> errors) { this.errors = errors; }
         public LocalDateTime getCreatedAt() { return createdAt; }
         public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+        public LocalDateTime getFinishedAt() { return finishedAt; }
+        public void setFinishedAt(LocalDateTime finishedAt) { this.finishedAt = finishedAt; }
     }
 
     /**

@@ -7,6 +7,7 @@ import com.yao.crm.entity.Customer;
 import com.yao.crm.entity.Opportunity;
 import com.yao.crm.entity.OrderRecord;
 import com.yao.crm.entity.Quote;
+import com.yao.crm.enums.OrderStatus;
 import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
@@ -30,12 +31,12 @@ import java.util.*;
 @Validated
 public class V1OrderController extends CommerceControllerSupport {
 
-    private static final Set<String> ORDER_STATUSES = Set.of(
-            "DRAFT", "CONFIRMED", "FULFILLING", "COMPLETED", "CANCELED"
-    );
+    private static final Set<String> ORDER_STATUSES = OrderStatus.getValidValues();
 
     private static final Set<String> CANCELABLE_STATUSES = Set.of(
-            "DRAFT", "CONFIRMED", "FULFILLING"
+            OrderStatus.DRAFT.getValue(),
+            OrderStatus.CONFIRMED.getValue(),
+            OrderStatus.FULFILLING.getValue()
     );
 
     private final OrderRecordRepository orderRecordRepository;
@@ -149,17 +150,17 @@ public class V1OrderController extends CommerceControllerSupport {
 
     @PostMapping("/orders/{id}/confirm")
     public ResponseEntity<?> confirmOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
-        return transitionOrder(request, id, "DRAFT", "CONFIRMED", "order_confirmed");
+        return transitionOrder(request, id, OrderStatus.DRAFT, OrderStatus.CONFIRMED, "order_confirmed");
     }
 
     @PostMapping("/orders/{id}/fulfill")
     public ResponseEntity<?> fulfillOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
-        return transitionOrder(request, id, "CONFIRMED", "FULFILLING", "order_fulfilling");
+        return transitionOrder(request, id, OrderStatus.CONFIRMED, OrderStatus.FULFILLING, "order_fulfilling");
     }
 
     @PostMapping("/orders/{id}/complete")
     public ResponseEntity<?> completeOrder(HttpServletRequest request, @PathVariable @NotBlank String id) {
-        return transitionOrder(request, id, "FULFILLING", "COMPLETED", "order_completed");
+        return transitionOrder(request, id, OrderStatus.FULFILLING, OrderStatus.COMPLETED, "order_completed");
     }
 
     @PostMapping("/orders/{id}/cancel")
@@ -176,10 +177,10 @@ public class V1OrderController extends CommerceControllerSupport {
         if (isSalesScoped(request) && !ownerMatchesScope(request, row.getOwner())) {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
-        if (!CANCELABLE_STATUSES.contains(row.getStatus().toUpperCase(Locale.ROOT))) {
+        if (!OrderStatus.isCancelable(row.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "order_status_transition_invalid", msg(request, "order_status_transition_invalid"), null));
         }
-        row.setStatus("CANCELED");
+        row.setStatus(OrderStatus.CANCELED.getValue());
         row = orderRecordRepository.save(row);
         auditLogService.record(currentUser(request), currentRole(request), "STATUS", "ORDER", row.getId(), "Order CANCELED", tenantId);
         return ResponseEntity.ok(successWithFields(request, "order_canceled", toOrderView(row)));
@@ -200,15 +201,15 @@ public class V1OrderController extends CommerceControllerSupport {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
         String approvalMode = commerceFacadeService.resolveOrderApprovalMode(order, tenantId);
-        if ("STAGE_GATE".equals(approvalMode) && !"FULFILLING".equalsIgnoreCase(order.getStatus())) {
+        if ("STAGE_GATE".equals(approvalMode) && !OrderStatus.FULFILLING.getValue().equalsIgnoreCase(order.getStatus())) {
             Map<String, Object> details = new LinkedHashMap<>();
-            details.put("requiredStatus", "FULFILLING");
+            details.put("requiredStatus", OrderStatus.FULFILLING.getValue());
             details.put("currentStatus", order.getStatus());
             details.put("approvalMode", approvalMode);
             auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order to-contract blocked by stage gate", tenantId);
             return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_fulfilling", msg(request, "order_stage_gate_requires_fulfilling"), details));
         }
-        if (!"STAGE_GATE".equals(approvalMode) && !"CONFIRMED".equalsIgnoreCase(order.getStatus()) && !"FULFILLING".equalsIgnoreCase(order.getStatus())) {
+        if (!"STAGE_GATE".equals(approvalMode) && !OrderStatus.canTransitionToContract(order.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "order_not_confirmed", msg(request, "order_not_confirmed"), null));
         }
         ContractRecord contract = new ContractRecord();
@@ -244,6 +245,12 @@ public class V1OrderController extends CommerceControllerSupport {
         String owner;
         String status;
         Long totalAmount;
+        // 扩展字段
+        String settlementCurrency = null;
+        String exchangeRateSnapshot = null;
+        String invoiceStatus = null;
+        String taxDisplayMode = null;
+        String complianceTag = null;
 
         if (payload instanceof OrderCreateRequest) {
             OrderCreateRequest createPayload = (OrderCreateRequest) payload;
@@ -253,6 +260,12 @@ public class V1OrderController extends CommerceControllerSupport {
             owner = createPayload.getOwner();
             status = createPayload.getStatus();
             totalAmount = createPayload.getTotalAmount();
+            // 扩展字段
+            settlementCurrency = createPayload.getSettlementCurrency();
+            exchangeRateSnapshot = createPayload.getExchangeRateSnapshot();
+            invoiceStatus = createPayload.getInvoiceStatus();
+            taxDisplayMode = createPayload.getTaxDisplayMode();
+            complianceTag = createPayload.getComplianceTag();
         } else if (payload instanceof OrderPatchRequest) {
             OrderPatchRequest patchPayload = (OrderPatchRequest) payload;
             customerId = patchPayload.getCustomerId();
@@ -303,10 +316,19 @@ public class V1OrderController extends CommerceControllerSupport {
         // 金额验证
         if (totalAmount != null) row.setAmount(Math.max(0L, totalAmount));
 
+        // 扩展字段设置（仅创建时有效）
+        if (creating) {
+            if (!isBlank(settlementCurrency)) row.setSettlementCurrency(settlementCurrency.trim());
+            if (!isBlank(exchangeRateSnapshot)) row.setExchangeRateSnapshot(exchangeRateSnapshot.trim());
+            if (!isBlank(invoiceStatus)) row.setInvoiceStatus(invoiceStatus.trim());
+            if (!isBlank(taxDisplayMode)) row.setTaxDisplayMode(taxDisplayMode.trim());
+            if (!isBlank(complianceTag)) row.setComplianceTag(complianceTag.trim());
+        }
+
         return "";
     }
 
-    private ResponseEntity<?> transitionOrder(HttpServletRequest request, String id, String from, String to, String successCode) {
+    private ResponseEntity<?> transitionOrder(HttpServletRequest request, String id, OrderStatus from, OrderStatus to, String successCode) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
@@ -317,18 +339,18 @@ public class V1OrderController extends CommerceControllerSupport {
         }
         OrderRecord row = optional.get();
         String approvalMode = commerceFacadeService.resolveOrderApprovalMode(row, tenantId);
-        if ("STAGE_GATE".equals(approvalMode) && "order_confirmed".equals(successCode)) {
+        if ("STAGE_GATE".equals(approvalMode) && OrderStatus.DRAFT.equals(from)) {
             ResponseEntity<?> guard = ensureOrderConfirmStageGate(request, row, tenantId, approvalMode);
             if (guard != null) {
                 return guard;
             }
         }
-        if (!from.equalsIgnoreCase(row.getStatus())) {
+        if (!from.getValue().equalsIgnoreCase(row.getStatus())) {
             return ResponseEntity.status(409).body(errorBody(request, "order_status_transition_invalid", msg(request, "order_status_transition_invalid"), null));
         }
-        row.setStatus(to);
+        row.setStatus(to.getValue());
         OrderRecord saved = orderRecordRepository.save(row);
-        auditLogService.record(currentUser(request), currentRole(request), "STATUS", "ORDER", saved.getId(), "Order " + to, tenantId);
+        auditLogService.record(currentUser(request), currentRole(request), "STATUS", "ORDER", saved.getId(), "Order " + to.getValue(), tenantId);
         Map<String, Object> body = toOrderView(saved);
         body.put("approvalMode", approvalMode);
         return ResponseEntity.ok(successWithFields(request, successCode, body));

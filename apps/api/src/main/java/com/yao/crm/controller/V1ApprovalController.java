@@ -75,7 +75,7 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         try {
-            String tenantId = currentTenant(request);
+            String tenantId = normalize(currentTenant(request));
             ApprovalTemplate t = new ApprovalTemplate();
             t.setId(newId("apt"));
             t.setTenantId(tenantId);
@@ -107,7 +107,7 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
         int finalLimit = Math.max(1, Math.min(limit, 200));
         List<ApprovalTemplate> rows;
         if (isBlank(bizType)) {
@@ -130,8 +130,12 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<ApprovalTemplate> optional = templateRepository.findByIdAndTenantId(id, tenantId);
+        String templateId = normalize(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalTemplate> optional = templateRepository.findByIdAndTenantId(templateId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_template_not_found", msg(request, "approval_template_not_found"), null));
         }
@@ -164,8 +168,12 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<ApprovalTemplate> optional = templateRepository.findByIdAndTenantId(id, tenantId);
+        String templateId = normalize(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalTemplate> optional = templateRepository.findByIdAndTenantId(templateId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_template_not_found", msg(request, "approval_template_not_found"), null));
         }
@@ -178,8 +186,12 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        return ResponseEntity.ok(successWithFields(request, "approval_template_versions_loaded", Collections.<String, Object>singletonMap("items", templateVersionService.listVersions(tenantId, id))));
+        String templateId = normalize(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        return ResponseEntity.ok(successWithFields(request, "approval_template_versions_loaded", Collections.<String, Object>singletonMap("items", templateVersionService.listVersions(tenantId, templateId))));
     }
 
     @PostMapping("/templates/{id}/rollback/{version}")
@@ -187,8 +199,12 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<ApprovalTemplate> optional = templateRepository.findByIdAndTenantId(id, tenantId);
+        String templateId = normalize(id);
+        if (isBlank(templateId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalTemplate> optional = templateRepository.findByIdAndTenantId(templateId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_template_not_found", msg(request, "approval_template_not_found"), null));
         }
@@ -210,14 +226,21 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
 
-        String tenantId = currentTenant(request);
-        String bizTypeUpper = bizType.trim().toUpperCase(Locale.ROOT);
-        Long amount = payload.getAmount() == null ? resolveAmount(tenantId, bizTypeUpper, bizId) : payload.getAmount();
-        String role = isBlank(payload.getRole()) ? currentRole(request) : payload.getRole().trim().toUpperCase(Locale.ROOT);
-        String department = isBlank(payload.getDepartment()) ? "DEFAULT" : payload.getDepartment().trim();
+        String tenantId = normalize(currentTenant(request));
+        String bizTypeUpper = normalizeUpper(bizType);
+        if (isBlank(bizTypeUpper)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "approval_biz_type_required", msg(request, "approval_biz_type_required"), null));
+        }
+        String bizIdNormalized = normalize(bizId);
+        if (isBlank(bizIdNormalized)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "approval_biz_id_required", msg(request, "approval_biz_id_required"), null));
+        }
+        Long amount = payload.getAmount() == null ? resolveAmount(tenantId, bizTypeUpper, bizIdNormalized) : payload.getAmount();
+        String role = isBlank(payload.getRole()) ? normalizeUpper(currentRole(request)) : normalizeUpper(payload.getRole());
+        String department = isBlank(payload.getDepartment()) ? "DEFAULT" : normalize(payload.getDepartment());
 
         Optional<ApprovalInstance> activeInstanceOpt = instanceRepository.findTopByTenantIdAndBizTypeAndBizIdAndStatusInOrderByCreatedAtDesc(
-                tenantId, bizTypeUpper, bizId, Arrays.asList("PENDING", "WAITING"));
+                tenantId, bizTypeUpper, bizIdNormalized, Arrays.asList("PENDING", "WAITING"));
         if (activeInstanceOpt.isPresent()) {
             ApprovalInstance active = activeInstanceOpt.get();
             Map<String, Object> details = new LinkedHashMap<>();
@@ -242,7 +265,7 @@ public class V1ApprovalController extends BaseApiController {
         instance.setTenantId(tenantId);
         instance.setTemplateId(selected.getId());
         instance.setBizType(bizTypeUpper);
-        instance.setBizId(bizId);
+        instance.setBizId(bizIdNormalized);
         instance.setSubmitter(currentUser(request));
         instance.setComment(payload.getComment());
         instance.setStatus("PENDING");
@@ -293,13 +316,17 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(taskId, tenantId);
+        String normalizedTaskId = normalize(taskId);
+        if (isBlank(normalizedTaskId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(normalizedTaskId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
         ApprovalTask task = optional.get();
-        String transferTo = payload == null ? "" : payload.getTransferTo();
+        String transferTo = normalize(payload == null ? "" : payload.getTransferTo());
         if (isBlank(transferTo)) {
             return ResponseEntity.badRequest().body(errorBody(request, "approval_transfer_required", msg(request, "approval_transfer_required"), null));
         }
@@ -319,7 +346,7 @@ public class V1ApprovalController extends BaseApiController {
         next.setTenantId(task.getTenantId());
         next.setInstanceId(task.getInstanceId());
         next.setApproverRole(task.getApproverRole());
-        next.setApproverUser(transferTo.trim());
+        next.setApproverUser(transferTo);
         next.setSeq(task.getSeq());
         next.setNodeKey(task.getNodeKey());
         next.setSlaMinutes(task.getSlaMinutes());
@@ -329,7 +356,7 @@ public class V1ApprovalController extends BaseApiController {
         next.setDeadlineAt(LocalDateTime.now().plusMinutes(task.getSlaMinutes() == null ? 60 : Math.max(1, task.getSlaMinutes())));
         taskRepository.save(next);
         recordEvent(tenantId, task.getInstanceId(), task.getId(), "TRANSFERRED", currentUser(request), "transferTo=" + transferTo, traceId(request));
-        recordEvent(tenantId, task.getInstanceId(), next.getId(), "PENDING", transferTo.trim(), "transfer accepted", traceId(request));
+        recordEvent(tenantId, task.getInstanceId(), next.getId(), "PENDING", transferTo, "transfer accepted", traceId(request));
         auditLogService.record(currentUser(request), currentRole(request), "TRANSFER", "APPROVAL_TASK", task.getId(), "Transferred approval task", tenantId);
         Optional<ApprovalInstance> instanceOptional = instanceRepository.findByIdAndTenantId(task.getInstanceId(), tenantId);
         Map<String, Object> body = toTaskView(next);
@@ -348,8 +375,12 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(taskId, tenantId);
+        String normalizedTaskId = normalize(taskId);
+        if (isBlank(normalizedTaskId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(normalizedTaskId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
@@ -414,7 +445,7 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
         List<ApprovalTask> rows = isBlank(status)
                 ? taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)
                 : taskRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status.trim().toUpperCase(Locale.ROOT));
@@ -438,7 +469,7 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
         List<ApprovalInstance> rows = instanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         int finalLimit = Math.max(1, Math.min(limit, 100));
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
@@ -464,7 +495,7 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
+        String tenantId = normalize(currentTenant(request));
         List<ApprovalInstance> instances = instanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         List<ApprovalTask> tasks = taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
 
@@ -523,10 +554,14 @@ public class V1ApprovalController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<ApprovalInstance> optional = instanceRepository.findByIdAndTenantId(id, tenantId);
+        String instanceId = normalize(id);
+        if (isBlank(instanceId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalInstance> optional = instanceRepository.findByIdAndTenantId(instanceId, tenantId);
         if (!optional.isPresent()) {
-            return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
+            return ResponseEntity.status(404).body(errorBody(request, "approval_instance_not_found", msg(request, "approval_instance_not_found"), null));
         }
         ApprovalInstance row = optional.get();
         Map<String, Object> body = new LinkedHashMap<>();
@@ -541,11 +576,11 @@ public class V1ApprovalController extends BaseApiController {
         body.put("templateVersion", row.getTemplateVersion());
         body.put("createdAt", row.getCreatedAt());
         body.put("updatedAt", row.getUpdatedAt());
-        List<ApprovalTask> tasks = taskRepository.findByInstanceIdAndTenantIdOrderBySeqAsc(id, tenantId);
+        List<ApprovalTask> tasks = taskRepository.findByInstanceIdAndTenantIdOrderBySeqAsc(instanceId, tenantId);
         List<Map<String, Object>> taskItems = new ArrayList<Map<String, Object>>();
         for (ApprovalTask task : tasks) taskItems.add(toTaskView(task));
         body.put("tasks", taskItems);
-        List<ApprovalEvent> events = eventRepository.findByInstanceIdAndTenantIdOrderByCreatedAtAsc(id, tenantId);
+        List<ApprovalEvent> events = eventRepository.findByInstanceIdAndTenantIdOrderByCreatedAtAsc(instanceId, tenantId);
         List<Map<String, Object>> timeline = new ArrayList<Map<String, Object>>();
         for (ApprovalEvent event : events) {
             Map<String, Object> item = new LinkedHashMap<>();
@@ -575,8 +610,12 @@ public class V1ApprovalController extends BaseApiController {
     }
 
     private ResponseEntity<?> handleTaskAction(HttpServletRequest request, String taskId, String actionStatus, V1ApprovalTaskActionRequest payload) {
-        String tenantId = currentTenant(request);
-        Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(taskId, tenantId);
+        String normalizedTaskId = normalize(taskId);
+        if (isBlank(normalizedTaskId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        String tenantId = normalize(currentTenant(request));
+        Optional<ApprovalTask> optional = taskRepository.findByIdAndTenantId(normalizedTaskId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "approval_task_not_found", msg(request, "approval_task_not_found"), null));
         }
@@ -873,6 +912,14 @@ public class V1ApprovalController extends BaseApiController {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
 
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeUpper(String value) {
+        return normalize(value).toUpperCase(Locale.ROOT);
+    }
+
     private static class CompiledFlow {
         private final String json;
         private final String flatRoles;
@@ -971,4 +1018,3 @@ public class V1ApprovalController extends BaseApiController {
         return 0L;
     }
 }
-

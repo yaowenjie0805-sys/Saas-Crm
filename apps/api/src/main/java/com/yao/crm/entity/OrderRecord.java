@@ -6,6 +6,7 @@ import javax.persistence.Id;
 import javax.persistence.PrePersist;
 import javax.persistence.PreUpdate;
 import javax.persistence.Table;
+import javax.persistence.Version;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 

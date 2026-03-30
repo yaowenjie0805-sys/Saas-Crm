@@ -19,6 +19,7 @@ public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, St
     java.util.List<PaymentRecord> findByTenantIdAndOwnerInAndCreatedAtBetween(String tenantId, Collection<String> owners, LocalDateTime from, LocalDateTime to);
     java.util.Optional<PaymentRecord> findByIdAndTenantId(String id, String tenantId);
     boolean existsByIdAndTenantId(String id, String tenantId);
+    long deleteByIdAndTenantId(String id, String tenantId);
     long countByTenantId(String tenantId);
 
     @Query("select coalesce(sum(p.amount), 0) from PaymentRecord p where p.tenantId = :tenantId and upper(p.status) in :statuses")

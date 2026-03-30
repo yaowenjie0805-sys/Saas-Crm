@@ -8,4 +8,5 @@ public interface ContactRepository extends JpaRepository<Contact, String>, JpaSp
     java.util.List<Contact> findByTenantId(String tenantId);
     java.util.Optional<Contact> findByIdAndTenantId(String id, String tenantId);
     boolean existsByIdAndTenantId(String id, String tenantId);
+    long deleteByIdAndTenantId(String id, String tenantId);
 }

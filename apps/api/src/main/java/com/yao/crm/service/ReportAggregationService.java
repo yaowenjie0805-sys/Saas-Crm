@@ -343,20 +343,20 @@ public class ReportAggregationService {
      */
     public Map<String, Object> emptyOverviewBody() {
         Map<String, Object> summary = new HashMap<String, Object>();
-        summary.put("customers", 0);
-        summary.put("revenue", 0);
-        summary.put("opportunities", 0);
-        summary.put("weightedAmount", 0);
+        summary.put("customers", 0L);
+        summary.put("revenue", 0L);
+        summary.put("opportunities", 0L);
+        summary.put("weightedAmount", 0L);
         summary.put("winRate", 0.0);
         summary.put("taskDoneRate", 0.0);
-        summary.put("followUps", 0);
-        summary.put("quotes", 0);
-        summary.put("orders", 0);
+        summary.put("followUps", 0L);
+        summary.put("quotes", 0L);
+        summary.put("orders", 0L);
         summary.put("quoteApproveRate", 0.0);
         summary.put("quoteToOrderRate", 0.0);
         summary.put("orderCompleteRate", 0.0);
-        summary.put("orderPaymentReceived", 0);
-        summary.put("orderPaymentOutstanding", 0);
+        summary.put("orderPaymentReceived", 0L);
+        summary.put("orderPaymentOutstanding", 0L);
         summary.put("orderCollectionRate", 0.0);
 
         Map<String, Integer> taskStatus = new HashMap<String, Integer>();

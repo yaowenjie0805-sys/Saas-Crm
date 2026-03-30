@@ -113,7 +113,7 @@ function LeadsPanel({
   if (activePage !== 'leads') return null
 
   return (
-    <section className="panel">
+    <section className="panel" data-testid="leads-page">
       <div className="panel-head">
         <h2>{t('leads')}</h2>
         <div className="inline-tools">

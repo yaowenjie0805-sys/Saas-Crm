@@ -154,6 +154,6 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
      * 原子递减父评论的回复计数
      */
     @Modifying
-    @Query("UPDATE Comment c SET c.replyCount = CASE WHEN c.replyCount > 0 THEN c.replyCount - 1 ELSE 0 END WHERE c.id = :parentId")
+    @Query("UPDATE Comment c SET c.replyCount = c.replyCount - 1 WHERE c.id = :parentId AND c.replyCount > 0")
     void decrementReplyCount(@Param("parentId") String parentId);
 }

@@ -9,6 +9,7 @@ import com.yao.crm.repository.FollowUpRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -19,6 +20,7 @@ import javax.persistence.criteria.Predicate;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @RestController
@@ -63,21 +65,23 @@ public class FollowUpController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                new HashSet<>(Set.of("customerId", "author", "summary", "channel", "result", "nextActionDate", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("customerId", "author", "summary", "channel", "result", "nextActionDate", "createdAt", "updatedAt"),
                 "updatedAt"
         );
 
         final boolean salesScoped = isSalesScoped(request);
         final String ownerScope = currentOwnerScope(request);
         final String tenantId = currentTenant(request);
+        final String normalizedCustomerId = normalizeOptional(customerId);
+        final String normalizedQuery = normalizeOptional(q);
         Specification<FollowUp> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
-            if (!isBlank(customerId)) {
-                predicates.add(cb.equal(root.get("customerId"), customerId));
+            if (normalizedCustomerId != null) {
+                predicates.add(cb.equal(root.get("customerId"), normalizedCustomerId));
             }
-            if (!isBlank(q)) {
-                String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
+            if (normalizedQuery != null) {
+                String pattern = "%" + escapeLike(normalizedQuery.toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("summary")), pattern, '\\'),
                         cb.like(cb.lower(root.get("result")), pattern, '\\'),
@@ -89,7 +93,8 @@ public class FollowUpController extends BaseApiController {
                 Predicate scopeAuthor = cb.equal(root.get("author"), ownerScope);
                 predicates.add(cb.or(selfAuthor, scopeAuthor));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<FollowUp> result = followUpRepository.findAll(spec, pageable);
@@ -108,7 +113,11 @@ public class FollowUpController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         String tenantId = currentTenant(request);
-        Optional<Customer> customerOpt = customerRepository.findByIdAndTenantId(payload.getCustomerId(), tenantId);
+        String normalizedCustomerId = normalizeRequired(payload.getCustomerId());
+        if (normalizedCustomerId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        Optional<Customer> customerOpt = customerRepository.findByIdAndTenantId(normalizedCustomerId, tenantId);
         if (!customerOpt.isPresent()) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
         }
@@ -119,13 +128,16 @@ public class FollowUpController extends BaseApiController {
         FollowUp followUp = new FollowUp();
         followUp.setId(newId("f"));
         followUp.setTenantId(tenantId);
-        followUp.setCustomerId(payload.getCustomerId());
-        followUp.setAuthor(isSalesScoped(request) ? currentUser(request) : (isBlank(payload.getAuthor()) ? currentUser(request) : payload.getAuthor()));
-        followUp.setSummary(payload.getSummary());
+        followUp.setCustomerId(normalizedCustomerId);
+        followUp.setAuthor(isSalesScoped(request) ? currentUser(request) : (isBlank(payload.getAuthor()) ? currentUser(request) : payload.getAuthor().trim()));
+        followUp.setSummary(payload.getSummary().trim());
         followUp.setChannel(isBlank(payload.getChannel()) ? "Phone" : valueNormalizerService.normalizeFollowUpChannel(payload.getChannel()));
-        followUp.setResult(isBlank(payload.getResult()) ? "Pending" : payload.getResult());
+        followUp.setResult(isBlank(payload.getResult()) ? "Pending" : payload.getResult().trim());
         if (!isBlank(payload.getNextActionDate())) {
-            LocalDate nextDate = parseLocalDate(request, payload.getNextActionDate());
+            LocalDate nextDate = parseNextActionDateOrNull(request, payload.getNextActionDate());
+            if (nextDate == null) {
+                return ResponseEntity.badRequest().body(legacyErrorByKey(request, "next_action_date_format", "BAD_REQUEST", null));
+            }
             followUp.setNextActionDate(nextDate);
         }
 
@@ -136,11 +148,15 @@ public class FollowUpController extends BaseApiController {
 
     @PatchMapping("/follow-ups/{id}")
     public ResponseEntity<?> updateFollowUp(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody UpdateFollowUpRequest patch) {
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         String tenantId = currentTenant(request);
-        Optional<FollowUp> optional = followUpRepository.findByIdAndTenantId(id, tenantId);
+        Optional<FollowUp> optional = followUpRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "follow_up_not_found", "NOT_FOUND", null));
         }
@@ -150,24 +166,28 @@ public class FollowUpController extends BaseApiController {
         }
 
         if (patch.getCustomerId() != null) {
-            Optional<Customer> customer = customerRepository.findByIdAndTenantId(patch.getCustomerId(), tenantId);
+            String normalizedCustomerId = normalizeRequired(patch.getCustomerId());
+            if (normalizedCustomerId == null) {
+                return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+            }
+            Optional<Customer> customer = customerRepository.findByIdAndTenantId(normalizedCustomerId, tenantId);
             if (!customer.isPresent()) {
                 return ResponseEntity.badRequest().body(legacyErrorByKey(request, "customer_not_found", "BAD_REQUEST", null));
             }
             if (isSalesScoped(request) && !ownerMatchesScope(request, customer.get().getOwner())) {
                 return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
             }
-            followUp.setCustomerId(patch.getCustomerId());
+            followUp.setCustomerId(normalizedCustomerId);
         }
-        if (patch.getAuthor() != null && !isSalesScoped(request)) followUp.setAuthor(patch.getAuthor());
-        if (patch.getSummary() != null) followUp.setSummary(patch.getSummary());
-        if (patch.getChannel() != null) followUp.setChannel(valueNormalizerService.normalizeFollowUpChannel(patch.getChannel()));
-        if (patch.getResult() != null) followUp.setResult(patch.getResult());
+        if (patch.getAuthor() != null && !isSalesScoped(request)) followUp.setAuthor(patch.getAuthor().trim());
+        if (patch.getSummary() != null) followUp.setSummary(patch.getSummary().trim());
+        if (patch.getChannel() != null) followUp.setChannel(valueNormalizerService.normalizeFollowUpChannel(patch.getChannel().trim()));
+        if (patch.getResult() != null) followUp.setResult(patch.getResult().trim());
         if (patch.getNextActionDate() != null) {
             if (isBlank(patch.getNextActionDate())) {
                 followUp.setNextActionDate(null);
             } else {
-                LocalDate nextDate = parseLocalDate(request, patch.getNextActionDate());
+                LocalDate nextDate = parseNextActionDateOrNull(request, patch.getNextActionDate());
                 if (nextDate == null) {
                     return ResponseEntity.badRequest().body(legacyErrorByKey(request, "next_action_date_format", "BAD_REQUEST", null));
                 }
@@ -182,19 +202,28 @@ public class FollowUpController extends BaseApiController {
 
     @DeleteMapping("/follow-ups/{id}")
     public ResponseEntity<?> deleteFollowUp(HttpServletRequest request, @PathVariable String id) {
+        String normalizedId = normalizeRequired(id);
+        if (normalizedId == null) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         String tenantId = currentTenant(request);
-        Optional<FollowUp> followUp = followUpRepository.findByIdAndTenantId(id, tenantId);
-        if (!followUp.isPresent()) {
+        if (isSalesScoped(request)) {
+            Optional<FollowUp> optional = followUpRepository.findByIdAndTenantId(normalizedId, tenantId);
+            if (!optional.isPresent()) {
+                return ResponseEntity.status(404).body(legacyErrorByKey(request, "follow_up_not_found", "NOT_FOUND", null));
+            }
+            if (!ownerMatchesScopeByCustomerId(request, optional.get().getCustomerId())) {
+                return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
+            }
+        }
+        long deleted = followUpRepository.deleteByIdAndTenantId(normalizedId, tenantId);
+        if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "follow_up_not_found", "NOT_FOUND", null));
         }
-        if (isSalesScoped(request) && !ownerMatchesScopeByCustomerId(request, followUp.get().getCustomerId())) {
-            return ResponseEntity.status(403).body(legacyErrorByKey(request, "scope_forbidden", "FORBIDDEN", null));
-        }
-        followUpRepository.deleteById(id);
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "FOLLOW_UP", id, "Deleted follow-up");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "FOLLOW_UP", normalizedId, "Deleted follow-up");
         return ResponseEntity.noContent().build();
     }
 
@@ -206,6 +235,48 @@ public class FollowUpController extends BaseApiController {
     private String newId(String prefix) {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
+
+    private LocalDate parseNextActionDateOrNull(HttpServletRequest request, String value) {
+        String normalized = normalizeRequired(value);
+        if (normalized == null) {
+            return null;
+        }
+        LocalDate parsed = parseLocalDate(request, normalized);
+        if (parsed == null) {
+            return null;
+        }
+        if (!isCanonicalDate(request, normalized, parsed)) {
+            return null;
+        }
+        return parsed;
+    }
+
+    private boolean isCanonicalDate(HttpServletRequest request, String rawInput, LocalDate parsed) {
+        Set<String> formats = new LinkedHashSet<String>();
+        formats.add(currentTenantDateFormat(request));
+        formats.addAll(supportedDateFormats());
+        for (String format : formats) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                LocalDate reparsed = LocalDate.parse(rawInput, formatter);
+                if (parsed.equals(reparsed) && rawInput.equals(reparsed.format(formatter))) {
+                    return true;
+                }
+            } catch (Exception ignore) {
+                // continue
+            }
+        }
+        return false;
+    }
+
+    private String normalizeRequired(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeOptional(String value) {
+        return normalizeRequired(value);
+    }
 }
-
-

@@ -18,6 +18,7 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, String>, Jpa
     java.util.List<FollowUp> findByTenantIdAndAuthorInAndCreatedAtBetween(String tenantId, Collection<String> authors, LocalDateTime from, LocalDateTime to);
     java.util.Optional<FollowUp> findByIdAndTenantId(String id, String tenantId);
     boolean existsByIdAndTenantId(String id, String tenantId);
+    long deleteByIdAndTenantId(String id, String tenantId);
 
     @Query("select f.channel, count(f) from FollowUp f where f.tenantId = :tenantId group by f.channel")
     List<Object[]> countByChannelGrouped(@Param("tenantId") String tenantId);

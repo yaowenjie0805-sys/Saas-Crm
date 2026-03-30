@@ -89,20 +89,32 @@ public class V1SalesInsightController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        String ownerFilter = isBlank(owner) ? "" : owner.trim();
+        String tenantId = normalizeOptional(currentTenant(request));
+        String normalizedFrom = normalizeOptional(from);
+        String normalizedTo = normalizeOptional(to);
+        String ownerFilter = normalizeOptional(owner);
+        String normalizedDepartment = normalizeOptional(department);
+        String normalizedTimezone = normalizeOptional(timezone);
+        LocalDate fromDate = parseLocalDate(request, normalizedFrom);
+        LocalDate toDate = parseLocalDate(request, normalizedTo);
+        if ((fromDate == null && !isBlank(normalizedFrom)) || (toDate == null && !isBlank(normalizedTo))) {
+            return ResponseEntity.badRequest().body(errorBody(request, "invalid_date_format", msg(request, "invalid_date_format"), null));
+        }
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "date_range_invalid", msg(request, "date_range_invalid"), null));
+        }
         String cacheKey = String.valueOf(currentUser(request))
                 + "|" + String.valueOf(currentRole(request))
-                + "|" + String.valueOf(from == null ? "" : from.trim())
-                + "|" + String.valueOf(to == null ? "" : to.trim())
+                + "|" + normalizedFrom
+                + "|" + normalizedTo
                 + "|" + ownerFilter.toLowerCase(Locale.ROOT)
-                + "|" + String.valueOf(department == null ? "" : department.trim()).toLowerCase(Locale.ROOT)
-                + "|" + String.valueOf(timezone == null ? "" : timezone.trim());
+                + "|" + normalizedDepartment.toLowerCase(Locale.ROOT)
+                + "|" + normalizedTimezone;
         DashboardMetricsCacheService.CachedValue<Map<String, Object>> cached = dashboardMetricsCacheService.getOrLoad(
                 tenantId,
                 "workbench-today",
                 cacheKey,
-                () -> buildWorkbenchTodayBody(request, tenantId, from, to, owner, department, timezone)
+                () -> buildWorkbenchTodayBody(request, tenantId, normalizedFrom, normalizedTo, ownerFilter, normalizedDepartment, normalizedTimezone)
         );
         return ResponseEntity.ok()
                 .header("X-CRM-Cache", cached.isHit() ? "HIT" : "MISS")
@@ -116,24 +128,28 @@ public class V1SalesInsightController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<com.yao.crm.entity.Customer> customer = customerRepository.findByIdAndTenantId(id, tenantId);
+        String tenantId = normalizeOptional(currentTenant(request));
+        String customerId = normalizeOptional(id);
+        if (isBlank(customerId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        Optional<com.yao.crm.entity.Customer> customer = customerRepository.findByIdAndTenantId(customerId, tenantId);
         if (!customer.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "customer_not_found", msg(request, "customer_not_found"), null));
         }
         if (!matchScopedOwner(request, customer.get().getOwner())) {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
-        String cacheKey = id + "|" + currentUser(request) + "|" + currentRole(request);
+        String cacheKey = customerId + "|" + currentUser(request) + "|" + currentRole(request);
         DashboardMetricsCacheService.CachedValue<List<Map<String, Object>>> cached = dashboardMetricsCacheService.getOrLoad(
                 tenantId,
                 "customer-timeline",
                 cacheKey,
-                () -> buildCustomerTimeline(tenantId, id)
+                () -> buildCustomerTimeline(tenantId, customerId)
         );
         List<Map<String, Object>> events = cached.getValue();
         Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("customerId", id);
+        body.put("customerId", customerId);
         body.put("items", events);
         body.put("total", events.size());
         return ResponseEntity.ok()
@@ -148,8 +164,12 @@ public class V1SalesInsightController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
-        String tenantId = currentTenant(request);
-        Optional<com.yao.crm.entity.Opportunity> opportunity = opportunityRepository.findById(id).filter(o -> tenantId.equals(o.getTenantId()));
+        String tenantId = normalizeOptional(currentTenant(request));
+        String opportunityId = normalizeOptional(id);
+        if (isBlank(opportunityId)) {
+            return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
+        }
+        Optional<com.yao.crm.entity.Opportunity> opportunity = opportunityRepository.findById(opportunityId).filter(o -> tenantId.equals(o.getTenantId()));
         if (!opportunity.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "opportunity_not_found", msg(request, "opportunity_not_found"), null));
         }
@@ -157,8 +177,8 @@ public class V1SalesInsightController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "scope_forbidden", msg(request, "scope_forbidden"), null));
         }
 
-        List<Quote> quotes = quoteRepository.findByTenantIdAndOpportunityId(tenantId, id);
-        List<OrderRecord> orders = orderRecordRepository.findByTenantIdAndOpportunityId(tenantId, id);
+        List<Quote> quotes = quoteRepository.findByTenantIdAndOpportunityId(tenantId, opportunityId);
+        List<OrderRecord> orders = orderRecordRepository.findByTenantIdAndOpportunityId(tenantId, opportunityId);
         Set<String> quoteIds = quotes.stream().map(Quote::getId).collect(Collectors.toSet());
         Set<String> orderIds = orders.stream().map(OrderRecord::getId).collect(Collectors.toSet());
         List<ApprovalInstance> approvals = approvalInstanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
@@ -166,7 +186,7 @@ public class V1SalesInsightController extends BaseApiController {
                         || ("ORDER".equalsIgnoreCase(a.getBizType()) && orderIds.contains(a.getBizId())))
                 .collect(Collectors.toList());
 
-        String cacheKey = id + "|" + currentUser(request) + "|" + currentRole(request);
+        String cacheKey = opportunityId + "|" + currentUser(request) + "|" + currentRole(request);
         DashboardMetricsCacheService.CachedValue<List<Map<String, Object>>> cached = dashboardMetricsCacheService.getOrLoad(
                 tenantId,
                 "opportunity-timeline",
@@ -188,7 +208,7 @@ public class V1SalesInsightController extends BaseApiController {
         );
         List<Map<String, Object>> events = cached.getValue();
         Map<String, Object> body = new LinkedHashMap<String, Object>();
-        body.put("opportunityId", id);
+        body.put("opportunityId", opportunityId);
         body.put("items", events);
         body.put("total", events.size());
         return ResponseEntity.ok()
@@ -501,5 +521,9 @@ public class V1SalesInsightController extends BaseApiController {
         if (from != null && value.isBefore(from)) return false;
         if (to != null && value.isAfter(to)) return false;
         return true;
+    }
+
+    private String normalizeOptional(String value) {
+        return isBlank(value) ? "" : value.trim();
     }
 }

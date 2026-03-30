@@ -17,40 +17,43 @@ import java.util.*;
 @Service
 public class NotificationJobService {
 
+    private static final int DEFAULT_PROCESS_QUEUE_BATCH_SIZE = 100;
+
     private final NotificationJobRepository jobRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
     private final IntegrationWebhookService integrationWebhookService;
+    private final int processQueueBatchSize;
     private final int maxRetries;
-    private final String providers;
+    private final List<String> slaEscalationTargets;
 
     public NotificationJobService(NotificationJobRepository jobRepository,
-                                  AuditLogService auditLogService,
-                                  ObjectMapper objectMapper,
-                                  IntegrationWebhookService integrationWebhookService,
-                                  @Value("${integration.notifications.max-retries:5}") int maxRetries,
-                                  @Value("${integration.webhooks.providers:WECOM,DINGTALK}") String providers) {
+                                   AuditLogService auditLogService,
+                                   ObjectMapper objectMapper,
+                                   IntegrationWebhookService integrationWebhookService,
+                                   @Value("${integration.notifications.process-queue-batch-size:100}") int processQueueBatchSize,
+                                   @Value("${integration.notifications.max-retries:5}") int maxRetries,
+                                   @Value("${integration.webhooks.providers:WECOM,DINGTALK}") String providers) {
         this.jobRepository = jobRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
         this.integrationWebhookService = integrationWebhookService;
+        this.processQueueBatchSize = processQueueBatchSize <= 0 ? DEFAULT_PROCESS_QUEUE_BATCH_SIZE : processQueueBatchSize;
         this.maxRetries = Math.max(1, maxRetries);
-        this.providers = providers == null ? "" : providers;
+        this.slaEscalationTargets = parseProviders(providers);
     }
 
     @Transactional(timeout = 30)
     public void enqueueSlaEscalated(String tenantId, String instanceId, String taskId, String approverRole) {
-        String[] configuredTargets = providers.split(",");
+        if (slaEscalationTargets.isEmpty()) {
+            return;
+        }
         List<String> targets = new ArrayList<String>();
         List<String> dedupeKeys = new ArrayList<String>();
-        Map<String, String> dedupeByTarget = new LinkedHashMap<String, String>();
-        for (String targetRaw : configuredTargets) {
-            String target = targetRaw == null ? "" : targetRaw.trim().toUpperCase(Locale.ROOT);
-            if (target.isEmpty()) continue;
+        for (String target : slaEscalationTargets) {
             String dedupeKey = tenantId + "|" + instanceId + "|" + taskId + "|approval_sla_escalated|" + target;
             targets.add(target);
             dedupeKeys.add(dedupeKey);
-            dedupeByTarget.put(target, dedupeKey);
         }
         Set<String> existingDedupeKeys = new HashSet<String>();
         if (!dedupeKeys.isEmpty()) {
@@ -59,8 +62,8 @@ public class NotificationJobService {
             }
         }
         for (String target : targets) {
-            String dedupeKey = dedupeByTarget.get(target);
-            if (dedupeKey == null || existingDedupeKeys.contains(dedupeKey)) continue;
+            String dedupeKey = tenantId + "|" + instanceId + "|" + taskId + "|approval_sla_escalated|" + target;
+            if (existingDedupeKeys.contains(dedupeKey)) continue;
             try {
                 Map<String, Object> payload = new LinkedHashMap<String, Object>();
                 payload.put("event", "approval_sla_escalated");
@@ -89,24 +92,40 @@ public class NotificationJobService {
 
     @Transactional(timeout = 30)
     public int processQueue() {
-        List<NotificationJob> jobs = jobRepository.findByStatusInAndNextRetryAtBeforeOrderByCreatedAtAsc(Arrays.asList("PENDING", "RETRY"), LocalDateTime.now());
         int processed = 0;
-        for (NotificationJob job : jobs) {
-            processed++;
-            try {
-                job.setStatus("RUNNING");
-                jobRepository.save(job);
-                boolean ok = dispatch(job);
-                if (ok) {
-                    job.setStatus("SUCCESS");
-                    job.setLastError(null);
+        LocalDateTime now = LocalDateTime.now();
+        Pageable pageable = PageRequest.of(
+                0,
+                processQueueBatchSize,
+                Sort.by(Sort.Direction.ASC, "createdAt").and(Sort.by(Sort.Direction.ASC, "id"))
+        );
+        while (true) {
+            Page<NotificationJob> jobs = jobRepository.findByStatusInAndNextRetryAtBefore(
+                    Arrays.asList("PENDING", "RETRY"),
+                    now,
+                    pageable
+            );
+            List<NotificationJob> batch = jobs.getContent();
+            if (batch.isEmpty()) {
+                break;
+            }
+            for (NotificationJob job : batch) {
+                processed++;
+                try {
+                    job.setStatus("RUNNING");
                     jobRepository.save(job);
-                    auditLogService.record("system", "SYSTEM", "NOTIFY_SUCCESS", job.getTarget(), job.getId(), "notification sent", job.getTenantId());
-                } else {
-                    failOrRetry(job, "dispatch returned false");
+                    boolean ok = dispatch(job);
+                    if (ok) {
+                        job.setStatus("SUCCESS");
+                        job.setLastError(null);
+                        jobRepository.save(job);
+                        auditLogService.record("system", "SYSTEM", "NOTIFY_SUCCESS", job.getTarget(), job.getId(), "notification sent", job.getTenantId());
+                    } else {
+                        failOrRetry(job, "dispatch returned false");
+                    }
+                } catch (Exception ex) {
+                    failOrRetry(job, ex.getMessage());
                 }
-            } catch (Exception ex) {
-                failOrRetry(job, ex.getMessage());
             }
         }
         return processed;
@@ -186,9 +205,23 @@ public class NotificationJobService {
     public Map<String, Object> retryByFilter(String tenantId, String status, int page, int size) {
         int finalPage = Math.max(1, page);
         int finalSize = Math.max(1, Math.min(size, 200));
-        // Force FAILED regardless of input status.
+        String normalizedStatus = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+        String effectiveStatus = (normalizedStatus.isEmpty() || "ALL".equals(normalizedStatus)) ? "FAILED" : normalizedStatus;
+
+        if (!"FAILED".equals(effectiveStatus)) {
+            Map<String, Object> out = new LinkedHashMap<String, Object>();
+            out.put("requested", 0);
+            out.put("succeeded", 0);
+            out.put("skipped", 0);
+            out.put("status", effectiveStatus);
+            out.put("page", finalPage);
+            out.put("size", finalSize);
+            auditLogService.record("system", "SYSTEM", "NOTIFY_RETRY_BY_FILTER", "NOTIFICATION_JOB", tenantId, out.toString(), tenantId);
+            return out;
+        }
+
         Pageable pageable = PageRequest.of(finalPage - 1, finalSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<NotificationJob> rows = jobRepository.findByTenantIdAndStatus(tenantId, "FAILED", pageable);
+        Page<NotificationJob> rows = jobRepository.findByTenantIdAndStatus(tenantId, effectiveStatus, pageable);
         int requested = rows.getContent().size();
         int succeeded = 0;
         int skipped = 0;
@@ -205,7 +238,7 @@ public class NotificationJobService {
         out.put("requested", requested);
         out.put("succeeded", succeeded);
         out.put("skipped", skipped);
-        out.put("status", status == null ? "" : status);
+        out.put("status", effectiveStatus);
         out.put("page", finalPage);
         out.put("size", finalSize);
         auditLogService.record("system", "SYSTEM", "NOTIFY_RETRY_BY_FILTER", "NOTIFICATION_JOB", tenantId, out.toString(), tenantId);
@@ -261,5 +294,23 @@ public class NotificationJobService {
 
     private String newId(String prefix) {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
+    }
+
+    private List<String> parseProviders(String providers) {
+        if (providers == null || providers.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> targets = new LinkedHashSet<String>();
+        String[] configuredTargets = providers.split(",");
+        for (String targetRaw : configuredTargets) {
+            String target = targetRaw == null ? "" : targetRaw.trim().toUpperCase(Locale.ROOT);
+            if (!target.isEmpty()) {
+                targets.add(target);
+            }
+        }
+        if (targets.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<String>(targets);
     }
 }

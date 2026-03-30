@@ -7,6 +7,7 @@ import com.yao.crm.repository.OpportunityRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -43,7 +44,7 @@ public class OpportunityController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                new HashSet<>(Set.of("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt")),
+                CollectionsUtil.setOf("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt"),
                 "updatedAt");
         org.springframework.data.domain.Page<Opportunity> result = opportunityRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
@@ -92,7 +93,8 @@ public class OpportunityController extends BaseApiController {
             if (salesScoped) {
                 predicates.add(cb.equal(root.get("owner"), ownerScope));
             }
-            return cb.and(predicates.toArray(Predicate[]::new));
+            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
+
         };
 
         Page<Opportunity> result = opportunityRepository.findAll(spec, pageable);
@@ -141,8 +143,12 @@ public class OpportunityController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        String normalizedId = id.trim();
         String tenantId = currentTenant(request);
-        Optional<Opportunity> optional = opportunityRepository.findByIdAndTenantId(id, tenantId);
+        Optional<Opportunity> optional = opportunityRepository.findByIdAndTenantId(normalizedId, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "opportunity_not_found", "NOT_FOUND", null));
         }
@@ -180,19 +186,21 @@ public class OpportunityController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
+        if (isBlank(id)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "bad_request", "BAD_REQUEST", null));
+        }
+        String normalizedId = id.trim();
 
         String tenantId = currentTenant(request);
-        if (!opportunityRepository.existsByIdAndTenantId(id, tenantId)) {
+        long deleted = opportunityRepository.deleteByIdAndTenantId(normalizedId, tenantId);
+        if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "opportunity_not_found", "NOT_FOUND", null));
         }
 
-        opportunityRepository.deleteById(id);
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "OPPORTUNITY", id, "Deleted opportunity");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "OPPORTUNITY", normalizedId, "Deleted opportunity");
         return ResponseEntity.noContent().build();
     }
     private String newId(String prefix) {
         return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
 }
-
-

@@ -15,14 +15,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -91,6 +96,25 @@ class SearchControllerTest {
     }
 
     @Test
+    void saveSearchShouldReturnBadRequestWhenTenantIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        SearchController.SaveSearchRequest body = new SearchController.SaveSearchRequest();
+        body.owner = "legacy-owner";
+        body.name = "Customer hot list";
+        body.searchType = "GLOBAL";
+        body.queryJson = "{\"q\":\"vip\"}";
+        body.isShared = true;
+        body.shareWithRoles = "ADMIN";
+
+        ResponseEntity<?> response = controller.saveSearch(request, "   ", body);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
     void getSavedSearchesShouldPreferAuthUsernameOverLegacyOwner() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
@@ -142,6 +166,17 @@ class SearchControllerTest {
     }
 
     @Test
+    void getSearchHistoryShouldReturnBadRequestWhenTenantIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        ResponseEntity<?> response = controller.getSearchHistory(request, " ", "legacy-owner", 10);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
     void deleteSavedSearchShouldScopeToTenantAndAuthenticatedOwner() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
@@ -150,7 +185,8 @@ class SearchControllerTest {
 
         ResponseEntity<?> response = controller.deleteSavedSearch(request, "tenant-1", "legacy-owner", "saved-1");
 
-        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        assertNull(response.getBody());
         verify(savedSearchRepository).deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice");
     }
 
@@ -165,6 +201,43 @@ class SearchControllerTest {
     }
 
     @Test
+    void deleteSavedSearchShouldReturnBadRequestWhenTenantIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        ResponseEntity<?> response = controller.deleteSavedSearch(request, "", "legacy-owner", "saved-1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
+    void deleteSavedSearchShouldReturnBadRequestWhenIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        ResponseEntity<?> response = controller.deleteSavedSearch(request, "tenant-1", "legacy-owner", "  ");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verify(savedSearchRepository, never()).deleteByIdAndTenantIdAndOwner(anyString(), anyString(), anyString());
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
+    void deleteSavedSearchShouldTrimTenantAndAuthenticatedOwnerBeforeDeleting() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "  alice  ");
+
+        when(savedSearchRepository.deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice")).thenReturn(1L);
+
+        ResponseEntity<?> response = controller.deleteSavedSearch(request, "  tenant-1  ", "legacy-owner", "saved-1");
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        assertNull(response.getBody());
+        verify(savedSearchRepository).deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice");
+    }
+
+    @Test
     void deleteSavedSearchShouldReturnNotFoundWhenTenantOwnerAndIdDoNotMatch() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
@@ -175,6 +248,18 @@ class SearchControllerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(savedSearchRepository).deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice");
+    }
+
+    @Test
+    void deleteSavedSearchShouldReturnNotFoundWhenOnlyLegacyOwnerIsProvidedAndRecordIsMissing() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        when(savedSearchRepository.deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "legacy-owner")).thenReturn(0L);
+
+        ResponseEntity<?> response = controller.deleteSavedSearch(request, "tenant-1", "legacy-owner", "saved-1");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        verify(savedSearchRepository).deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "legacy-owner");
     }
 
     @Test
@@ -228,6 +313,19 @@ class SearchControllerTest {
     }
 
     @Test
+    void incrementUsageShouldReturnNotFoundWhenOnlyLegacyOwnerIsProvidedAndRecordIsMissing() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        when(savedSearchRepository.findByIdAndTenantIdAndOwner("saved-1", "tenant-1", "legacy-owner"))
+                .thenReturn(Optional.empty());
+
+        ResponseEntity<?> response = controller.incrementUsage(request, "tenant-1", "legacy-owner", "saved-1");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        verify(savedSearchRepository).findByIdAndTenantIdAndOwner("saved-1", "tenant-1", "legacy-owner");
+    }
+
+    @Test
     void getSavedSearchesShouldFallbackToLegacyOwnerWhenAuthUsernameMissing() {
         MockHttpServletRequest request = new MockHttpServletRequest();
 
@@ -237,5 +335,158 @@ class SearchControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(savedSearchRepository).findByTenantIdAndOwner("tenant-1", "legacy-owner");
+    }
+
+    @Test
+    void getSavedSearchesShouldReturnBadRequestWhenTenantIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        ResponseEntity<?> response = controller.getSavedSearches(request, "  ", "legacy-owner");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
+    void incrementUsageShouldReturnBadRequestWhenTenantIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        ResponseEntity<?> response = controller.incrementUsage(request, "\t", "legacy-owner", "saved-1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
+    void incrementUsageShouldReturnBadRequestWhenIdIsBlank() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        ResponseEntity<?> response = controller.incrementUsage(request, "tenant-1", "legacy-owner", "\n");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verify(savedSearchRepository, never()).findByIdAndTenantIdAndOwner(anyString(), anyString(), anyString());
+        verify(savedSearchRepository, never()).save(any(SavedSearch.class));
+        verifyNoInteractions(savedSearchRepository);
+    }
+
+    @Test
+    void searchShouldReturnBadRequestWhenTenantIdIsBlank() {
+        ResponseEntity<?> response = controller.search("  ", "vip", 20, null);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(globalSearchService);
+    }
+
+    @Test
+    void searchShouldTrimTenantBeforeCallingGlobalSearchService() {
+        GlobalSearchService.SearchResult searchResult =
+                new GlobalSearchService.SearchResult(Collections.emptyMap(), 0);
+        when(globalSearchService.search("tenant-1", "vip", 20)).thenReturn(searchResult);
+
+        ResponseEntity<?> response = controller.search(" tenant-1 ", " vip ", 20, null);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(globalSearchService).search("tenant-1", "vip", 20);
+    }
+
+    @Test
+    void suggestionsShouldReturnBadRequestWhenTenantIdIsBlank() {
+        ResponseEntity<List<String>> response = controller.suggestions("  ", "vip", 5);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(globalSearchService, savedSearchRepository);
+    }
+
+    @Test
+    void suggestionsShouldReturnPrefixMatchesBeforeContainsMatchesAndDeduplicate() {
+        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class)))
+                .thenReturn(Arrays.asList("vip alpha", "vip beta"));
+        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class)))
+                .thenReturn(Arrays.asList("alpha vip", "vip beta", "vip gamma"));
+
+        ResponseEntity<List<String>> response = controller.suggestions("tenant-1", " vip ", 5);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(Arrays.asList("vip alpha", "vip beta", "alpha vip", "vip gamma"), response.getBody());
+        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class));
+        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class));
+    }
+
+    @Test
+    void suggestionsShouldClampLimitToMaximumPageSize() {
+        List<String> names = Arrays.asList(
+                "Suggestion 1", "Suggestion 2", "Suggestion 3", "Suggestion 4", "Suggestion 5",
+                "Suggestion 6", "Suggestion 7", "Suggestion 8", "Suggestion 9", "Suggestion 10",
+                "Suggestion 11", "Suggestion 12", "Suggestion 13", "Suggestion 14", "Suggestion 15",
+                "Suggestion 16", "Suggestion 17", "Suggestion 18", "Suggestion 19", "Suggestion 20",
+                "Suggestion 21", "Suggestion 22", "Suggestion 23", "Suggestion 24", "Suggestion 25");
+
+        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class)))
+                .thenReturn(Collections.emptyList());
+
+        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class)))
+                .thenReturn(names);
+
+        ResponseEntity<List<String>> response = controller.suggestions("tenant-1", "vip", 999);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(20, response.getBody().size());
+
+        ArgumentCaptor<Pageable> prefixPageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                eq("tenant-1"), eq("vip"), prefixPageableCaptor.capture());
+        assertEquals(20, prefixPageableCaptor.getValue().getPageSize());
+        assertEquals(0, prefixPageableCaptor.getValue().getPageNumber());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                eq("tenant-1"), eq("vip"), pageableCaptor.capture());
+        assertEquals(20, pageableCaptor.getValue().getPageSize());
+        assertEquals(0, pageableCaptor.getValue().getPageNumber());
+    }
+
+    @Test
+    void suggestionsShouldSkipContainsQueryWhenPrefixResultsReachSafeLimit() {
+        List<String> prefixNames = Arrays.asList(
+                "vip alpha", "vip beta", "vip gamma", "vip delta", "vip epsilon",
+                "vip zeta", "vip eta", "vip theta", "vip iota", "vip kappa",
+                "vip lambda", "vip mu", "vip nu", "vip xi", "vip omicron",
+                "vip pi", "vip rho", "vip sigma", "vip tau", "vip upsilon");
+
+        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class)))
+                .thenReturn(prefixNames);
+
+        ResponseEntity<List<String>> response = controller.suggestions("tenant-1", "vip", 20);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(prefixNames, response.getBody());
+        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class));
+        verify(savedSearchRepository, never()).findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                eq("tenant-1"), eq("vip"), any(Pageable.class));
+    }
+
+    @Test
+    void deleteSavedSearchShouldStillReturnNoContentOnNormalPath() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authUsername", "alice");
+
+        when(savedSearchRepository.deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice")).thenReturn(1L);
+
+        ResponseEntity<?> response = controller.deleteSavedSearch(request, "tenant-1", "legacy-owner", "saved-1");
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        assertNull(response.getBody());
+        verify(savedSearchRepository).deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice");
     }
 }

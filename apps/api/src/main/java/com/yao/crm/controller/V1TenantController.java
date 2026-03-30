@@ -7,6 +7,7 @@ import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.CollectionsUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,12 +19,17 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1")
 public class V1TenantController extends BaseApiController {
+
+    private static final Set<String> MARKET_PROFILES = CollectionsUtil.setOf("CN", "GLOBAL");
+    private static final Set<String> APPROVAL_MODES = CollectionsUtil.setOf("STRICT", "STAGE_GATE");
 
     private final TenantRepository tenantRepository;
     private final UserAccountRepository userAccountRepository;
@@ -48,7 +54,7 @@ public class V1TenantController extends BaseApiController {
     @GetMapping("/tenants")
     public ResponseEntity<?> listTenants(HttpServletRequest request) {
         if (!hasAnyRole(request, "ADMIN")) {
-            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+            return forbidden(request);
         }
         List<Tenant> rows = tenantRepository.findAll();
         rows.sort(new Comparator<Tenant>() {
@@ -69,25 +75,33 @@ public class V1TenantController extends BaseApiController {
     @PostMapping("/tenants")
     public ResponseEntity<?> createTenant(HttpServletRequest request, @Valid @RequestBody V1TenantUpsertRequest payload) {
         if (!hasAnyRole(request, "ADMIN")) {
-            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+            return forbidden(request);
         }
 
         Tenant tenant = new Tenant();
         tenant.setId("tn_" + Long.toString(System.currentTimeMillis(), 36));
-        tenant.setName(payload.getName());
-        tenant.setStatus(isBlank(payload.getStatus()) ? "ACTIVE" : payload.getStatus().trim().toUpperCase());
+        tenant.setName(normalizeOptional(payload.getName()));
+        tenant.setStatus(isBlank(payload.getStatus()) ? "ACTIVE" : payload.getStatus().trim().toUpperCase(Locale.ROOT));
         tenant.setQuotaUsers(payload.getQuotaUsers());
         tenant.setTimezone(isBlank(payload.getTimezone()) ? "Asia/Shanghai" : payload.getTimezone().trim());
-        tenant.setCurrency(isBlank(payload.getCurrency()) ? "CNY" : payload.getCurrency().trim().toUpperCase());
-        tenant.setMarketProfile(isBlank(payload.getMarketProfile()) ? "CN" : payload.getMarketProfile().trim().toUpperCase());
+        tenant.setCurrency(isBlank(payload.getCurrency()) ? "CNY" : payload.getCurrency().trim().toUpperCase(Locale.ROOT));
+        String marketProfile = isBlank(payload.getMarketProfile()) ? "CN" : payload.getMarketProfile().trim().toUpperCase(Locale.ROOT);
+        if (!MARKET_PROFILES.contains(marketProfile)) {
+            return badRequest(request, "tenant_market_profile_invalid");
+        }
+        tenant.setMarketProfile(marketProfile);
         tenant.setTaxRule(isBlank(payload.getTaxRule()) ? "VAT_CN" : payload.getTaxRule().trim().toUpperCase());
-        tenant.setApprovalMode(isBlank(payload.getApprovalMode()) ? "STRICT" : payload.getApprovalMode().trim().toUpperCase());
+        String approvalMode = isBlank(payload.getApprovalMode()) ? "STRICT" : payload.getApprovalMode().trim().toUpperCase(Locale.ROOT);
+        if (!APPROVAL_MODES.contains(approvalMode)) {
+            return badRequest(request, "tenant_approval_mode_invalid");
+        }
+        tenant.setApprovalMode(approvalMode);
         tenant.setChannelsJson(isBlank(payload.getChannels()) ? "[\"WECOM\",\"DINGTALK\"]" : payload.getChannels().trim());
-        tenant.setDataResidency(isBlank(payload.getDataResidency()) ? "CN" : payload.getDataResidency().trim().toUpperCase());
-        tenant.setMaskLevel(isBlank(payload.getMaskLevel()) ? "STANDARD" : payload.getMaskLevel().trim().toUpperCase());
+        tenant.setDataResidency(isBlank(payload.getDataResidency()) ? "CN" : payload.getDataResidency().trim().toUpperCase(Locale.ROOT));
+        tenant.setMaskLevel(isBlank(payload.getMaskLevel()) ? "STANDARD" : payload.getMaskLevel().trim().toUpperCase(Locale.ROOT));
         String dateFormat = normalizeTenantDateFormat(payload.getDateFormat());
         if (isBlank(dateFormat)) {
-            return ResponseEntity.badRequest().body(errorBody(request, "tenant_date_format_invalid", msg(request, "tenant_date_format_invalid"), null));
+            return badRequest(request, "tenant_date_format_invalid");
         }
         tenant.setDateFormat(dateFormat);
         tenant = tenantRepository.save(tenant);
@@ -112,30 +126,46 @@ public class V1TenantController extends BaseApiController {
     @PatchMapping("/tenants/{id}")
     public ResponseEntity<?> updateTenant(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody V1TenantUpsertRequest payload) {
         if (!hasAnyRole(request, "ADMIN")) {
-            return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
+            return forbidden(request);
+        }
+        String tenantId = normalizeOptional(id);
+        if (isBlank(tenantId)) {
+            return badRequest(request, "bad_request");
         }
 
-        Optional<Tenant> optional = tenantRepository.findById(id);
+        Optional<Tenant> optional = tenantRepository.findById(tenantId);
         if (!optional.isPresent()) {
-            return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
+            return notFound(request, "tenant_not_found");
         }
 
         Tenant tenant = optional.get();
-        tenant.setName(payload.getName());
-        tenant.setStatus(isBlank(payload.getStatus()) ? tenant.getStatus() : payload.getStatus().trim().toUpperCase());
+        tenant.setName(normalizeOptional(payload.getName()));
+        tenant.setStatus(isBlank(payload.getStatus()) ? tenant.getStatus() : payload.getStatus().trim().toUpperCase(Locale.ROOT));
         tenant.setQuotaUsers(payload.getQuotaUsers());
         if (!isBlank(payload.getTimezone())) tenant.setTimezone(payload.getTimezone().trim());
-        if (!isBlank(payload.getCurrency())) tenant.setCurrency(payload.getCurrency().trim().toUpperCase());
-        if (!isBlank(payload.getMarketProfile())) tenant.setMarketProfile(payload.getMarketProfile().trim().toUpperCase());
+        if (!isBlank(payload.getCurrency())) tenant.setCurrency(payload.getCurrency().trim().toUpperCase(Locale.ROOT));
+        if (!isBlank(payload.getMarketProfile())) {
+            String marketProfile = payload.getMarketProfile().trim().toUpperCase(Locale.ROOT);
+            if (!MARKET_PROFILES.contains(marketProfile)) {
+                return badRequest(request, "tenant_market_profile_invalid");
+            }
+            tenant.setMarketProfile(marketProfile);
+        }
         if (!isBlank(payload.getTaxRule())) tenant.setTaxRule(payload.getTaxRule().trim().toUpperCase());
-        if (!isBlank(payload.getApprovalMode())) tenant.setApprovalMode(payload.getApprovalMode().trim().toUpperCase());
+        if (!isBlank(payload.getApprovalMode())) {
+            String approvalMode = payload.getApprovalMode().trim().toUpperCase(Locale.ROOT);
+            if (!APPROVAL_MODES.contains(approvalMode)) {
+                return badRequest(request, "tenant_approval_mode_invalid");
+            }
+            tenant.setApprovalMode(approvalMode);
+        }
         if (!isBlank(payload.getChannels())) tenant.setChannelsJson(payload.getChannels().trim());
-        if (!isBlank(payload.getDataResidency())) tenant.setDataResidency(payload.getDataResidency().trim().toUpperCase());
-        if (!isBlank(payload.getMaskLevel())) tenant.setMaskLevel(payload.getMaskLevel().trim().toUpperCase());
+        if (!isBlank(payload.getDataResidency())) tenant.setDataResidency(payload.getDataResidency().trim().toUpperCase(Locale.ROOT));
+        if (!isBlank(payload.getMaskLevel())) tenant.setMaskLevel(payload.getMaskLevel().trim().toUpperCase(Locale.ROOT));
         if (!isBlank(payload.getDateFormat())) {
             String dateFormat = normalizeTenantDateFormat(payload.getDateFormat());
             if (isBlank(dateFormat)) {
-                return ResponseEntity.badRequest().body(errorBody(request, "tenant_date_format_invalid", msg(request, "tenant_date_format_invalid"), null));
+                return badRequest(request, "tenant_date_format_invalid");
             }
             tenant.setDateFormat(dateFormat);
         }
@@ -163,6 +193,25 @@ public class V1TenantController extends BaseApiController {
         item.put("createdAt", row.getCreatedAt());
         item.put("updatedAt", row.getUpdatedAt());
         return item;
+    }
+
+    private String normalizeOptional(String value) {
+        return isBlank(value) ? "" : value.trim();
+    }
+
+    private ResponseEntity<?> forbidden(HttpServletRequest request) {
+        String code = normalizeCode("forbidden", "forbidden");
+        return ResponseEntity.status(403).body(errorBody(request, code, msg(request, code), null));
+    }
+
+    private ResponseEntity<?> badRequest(HttpServletRequest request, String msgKey) {
+        String code = normalizeCode(msgKey, "bad_request");
+        return ResponseEntity.badRequest().body(errorBody(request, code, msg(request, code), null));
+    }
+
+    private ResponseEntity<?> notFound(HttpServletRequest request, String msgKey) {
+        String code = normalizeCode(msgKey, "not_found");
+        return ResponseEntity.status(404).body(errorBody(request, code, msg(request, code), null));
     }
 }
 

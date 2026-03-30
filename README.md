@@ -4,11 +4,11 @@
 
 ## 1. 项目现状（你可以先看这个）
 
-- 架构：`React + Vite`（前端）+ `Spring Boot 2.7`（后端）+ `MySQL + Flyway`。
+- 架构：`React + Vite`（前端）+ `Spring Boot 2.7`（后端，JDK 17）+ `MySQL + Flyway`。
 - 运行模式：本地默认 `dev`，数据库默认 `crm_local`。
 - 多租户：核心接口按 `X-Tenant-Id` 做租户隔离。
 - 集成能力：支持企业微信/钉钉 webhook；飞书支持 webhook 和 App ID/App Secret 直连（tenant_access_token + 消息接口）。
-- 迁移状态：当前 migration 版本到 `V17`。
+- 迁移状态：当前 migration 版本到 `V20`。
 
 ## 2. 目录结构
 
@@ -27,7 +27,7 @@ crm/
         enums/                # 常量枚举（状态码、类型枚举）
         event/                # 领域事件（事件发布与监听）
       src/main/resources/
-        db/migration/         # Flyway 脚本 V1~V17
+        db/migration/         # Flyway 脚本 V1~V20
     web/                      # React 前端
       src/crm/components/     # 页面与业务组件
   scripts/                    # 启动、DB、修复、巡检脚本
@@ -69,7 +69,7 @@ crm/
 
 | 工具 Tool | 版本 Version | 说明 Note |
 |-----------|-------------|----------|
-| JDK | 8+ | Java 开发环境 |
+| JDK | 17+ | Java 开发环境 |
 | Node.js | 18+ | 前端运行环境 |
 | MySQL | 8.0+ | 主数据库 |
 | Redis | 6.0+ | 缓存（可选，默认使用本地缓存） |

@@ -13,13 +13,18 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -102,6 +107,14 @@ class ReportServiceTest {
                 reportAggregationService
         );
 
+        // Mock the reportAggregationService to return a mock result
+        Map<String, Object> mockResult = new HashMap<String, Object>();
+        Map<String, Object> mockSummary = new HashMap<String, Object>();
+        mockSummary.put("customers", 2L);
+        mockSummary.put("revenue", 300L);
+        mockResult.put("summary", mockSummary);
+        when(reportAggregationService.aggregateWithScope(anyString(), anySet())).thenReturn(mockResult);
+
         Map<String, Object> report = reportService.overviewByTenant(
                 "tenant_default",
                 null,
@@ -117,7 +130,7 @@ class ReportServiceTest {
         Assertions.assertEquals(2L, summary.get("customers"));
         Assertions.assertEquals(300L, summary.get("revenue"));
 
-        verify(customerRepository).countByTenantIdAndOwnerIn(anyString(), anyCollection());
+        verify(reportAggregationService).aggregateWithScope(anyString(), anySet());
         verify(customerRepository, never()).findByTenantId(anyString());
         verify(customerRepository, never()).findByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(userAccountRepository).findIdentityPairsByTenantIdAndRole("tenant_default", "SALES");
@@ -138,6 +151,15 @@ class ReportServiceTest {
         ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
+
+        // Mock the emptyOverviewBody method to return a mock result
+        Map<String, Object> mockEmptyResult = new HashMap<String, Object>();
+        Map<String, Object> mockEmptySummary = new HashMap<String, Object>();
+        mockEmptySummary.put("customers", 0L);
+        mockEmptySummary.put("opportunities", 0L);
+        mockEmptySummary.put("quotes", 0L);
+        mockEmptyResult.put("summary", mockEmptySummary);
+        when(reportAggregationService.emptyOverviewBody()).thenReturn(mockEmptyResult);
 
         when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
@@ -170,10 +192,12 @@ class ReportServiceTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> summary = (Map<String, Object>) report.get("summary");
-        Assertions.assertEquals(0, ((Number) summary.get("customers")).intValue());
-        Assertions.assertEquals(0, ((Number) summary.get("opportunities")).intValue());
-        Assertions.assertEquals(0, ((Number) summary.get("quotes")).intValue());
+        Assertions.assertNotNull(summary);
+        Assertions.assertEquals(0L, summary.get("customers"));
+        Assertions.assertEquals(0L, summary.get("opportunities"));
+        Assertions.assertEquals(0L, summary.get("quotes"));
 
+        verify(reportAggregationService).emptyOverviewBody();
         verify(customerRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(opportunityRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(taskRepository, never()).countByTenantIdAndDoneTrueAndOwnerIn(anyString(), anyCollection());
@@ -543,5 +567,69 @@ class ReportServiceTest {
                 eq("2026-03-01|2026-03-31|bob"),
                 any()
         );
+    }
+
+    @Test
+    void summarizeQuotesAndOrdersShouldUseSinglePassLoops() {
+        CountingList<com.yao.crm.entity.Quote> quotes = new CountingList<com.yao.crm.entity.Quote>();
+        com.yao.crm.entity.Quote approved = mock(com.yao.crm.entity.Quote.class);
+        when(approved.getStatus()).thenReturn("APPROVED");
+        com.yao.crm.entity.Quote accepted = mock(com.yao.crm.entity.Quote.class);
+        when(accepted.getStatus()).thenReturn("accepted");
+        com.yao.crm.entity.Quote blank = mock(com.yao.crm.entity.Quote.class);
+        when(blank.getStatus()).thenReturn("  ");
+        quotes.add(approved);
+        quotes.add(accepted);
+        quotes.add(blank);
+
+        CountingList<com.yao.crm.entity.OrderRecord> orders = new CountingList<com.yao.crm.entity.OrderRecord>();
+        com.yao.crm.entity.OrderRecord completed = mock(com.yao.crm.entity.OrderRecord.class);
+        when(completed.getStatus()).thenReturn("COMPLETED");
+        when(completed.getId()).thenReturn("order-1");
+        when(completed.getAmount()).thenReturn(120L);
+        com.yao.crm.entity.OrderRecord pending = mock(com.yao.crm.entity.OrderRecord.class);
+        when(pending.getStatus()).thenReturn("NEW");
+        when(pending.getId()).thenReturn("order-2");
+        when(pending.getAmount()).thenReturn(null);
+        orders.add(completed);
+        orders.add(pending);
+
+        ReportService.QuoteSummary quoteSummary = ReportService.summarizeQuotes(quotes);
+        ReportService.OrderSummary orderSummary = ReportService.summarizeOrders(orders);
+
+        Assertions.assertEquals(1, quotes.iteratorCalls);
+        Assertions.assertEquals(0, quotes.streamCalls);
+        Assertions.assertEquals(1, orders.iteratorCalls);
+        Assertions.assertEquals(0, orders.streamCalls);
+
+        Assertions.assertEquals(2L, quoteSummary.approvedCount);
+        Assertions.assertEquals(1L, quoteSummary.acceptedCount);
+        Assertions.assertEquals(1, quoteSummary.byStatus.get("APPROVED"));
+        Assertions.assertEquals(1, quoteSummary.byStatus.get("accepted"));
+        Assertions.assertEquals(1, quoteSummary.byStatus.get("Unknown"));
+
+        Assertions.assertEquals(1L, orderSummary.completedCount);
+        Assertions.assertEquals(120L, orderSummary.amountTotal);
+        Assertions.assertTrue(orderSummary.orderIds.contains("order-1"));
+        Assertions.assertTrue(orderSummary.orderIds.contains("order-2"));
+        Assertions.assertEquals(1, orderSummary.byStatus.get("COMPLETED"));
+        Assertions.assertEquals(1, orderSummary.byStatus.get("NEW"));
+    }
+
+    private static final class CountingList<E> extends ArrayList<E> {
+        private int iteratorCalls;
+        private int streamCalls;
+
+        @Override
+        public Iterator<E> iterator() {
+            this.iteratorCalls++;
+            return super.iterator();
+        }
+
+        @Override
+        public java.util.stream.Stream<E> stream() {
+            this.streamCalls++;
+            return super.stream();
+        }
     }
 }

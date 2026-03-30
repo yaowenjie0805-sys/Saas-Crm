@@ -397,7 +397,7 @@ public class CollaborationService {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));
 
-        Set<String> members = new HashSet<>(Arrays.asList(team.getMemberIds().split(",")));
+        Set<String> members = new HashSet<>(Set.of(team.getMemberIds().split(",")));
         members.add(userId);
 
         team.setMemberIds(String.join(",", members));
@@ -415,7 +415,7 @@ public class CollaborationService {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));
 
-        Set<String> members = new HashSet<>(Arrays.asList(team.getMemberIds().split(",")));
+        Set<String> members = new HashSet<>(Set.of(team.getMemberIds().split(",")));
         members.remove(userId);
 
         team.setMemberIds(String.join(",", members));

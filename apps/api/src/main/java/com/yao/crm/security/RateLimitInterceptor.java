@@ -16,8 +16,12 @@ import java.util.regex.Pattern;
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
+    private static final String AUTH_PRINCIPAL_ATTR = "authPrincipal";
     private static final String AUTH_TENANT_ID_ATTR = "authTenantId";
     private static final String AUTH_USERNAME_ATTR = "authUsername";
+    private static final String AUTH_ROLE_ATTR = "authRole";
+    private static final String AUTH_OWNER_SCOPE_ATTR = "authOwnerScope";
+    private static final String AUTH_MFA_VERIFIED_ATTR = "authMfaVerified";
     private static final Pattern NUMERIC_PATH_SEGMENT = Pattern.compile("^\\d+$");
     private static final Pattern UUID_PATH_SEGMENT = Pattern.compile(
             "^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -87,6 +91,10 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private String buildRateLimitKey(HttpServletRequest request, String requestUri) {
         String route = normalizeRouteKeyPart(requestUri, "unknown-route");
+        AuthPrincipal cachedPrincipal = getCachedAuthenticatedPrincipal(request);
+        if (cachedPrincipal != null) {
+            return buildRateLimitKey(cachedPrincipal, route);
+        }
         String tenantId = normalizeRequestAttributePart(request.getAttribute(AUTH_TENANT_ID_ATTR));
         String username = normalizeRequestAttributePart(request.getAttribute(AUTH_USERNAME_ATTR));
         if (tenantId != null && username != null) {
@@ -95,29 +103,58 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
         AuthPrincipal principal = resolveAuthenticatedPrincipal(request);
         if (principal != null) {
-            String principalTenantId = normalizeKeyPart(principal.getTenantId(), "tenant_default");
-            String principalUsername = normalizeKeyPart(principal.getUsername(), "unknown-user");
-            return principalTenantId + "|" + principalUsername + "|" + route;
+            cacheAuthenticatedPrincipal(request, principal);
+            return buildRateLimitKey(principal, route);
         }
         String ip = normalizeKeyPart(request.getRemoteAddr(), "unknown");
         return ip + "|" + route;
     }
 
+    private String buildRateLimitKey(AuthPrincipal principal, String route) {
+        String principalTenantId = normalizeKeyPart(principal.getTenantId(), "tenant_default");
+        String principalUsername = normalizeKeyPart(principal.getUsername(), "unknown-user");
+        return principalTenantId + "|" + principalUsername + "|" + route;
+    }
+
+    private void cacheAuthenticatedPrincipal(HttpServletRequest request, AuthPrincipal principal) {
+        request.setAttribute(AUTH_PRINCIPAL_ATTR, principal);
+        request.setAttribute(AUTH_USERNAME_ATTR, principal.getUsername());
+        request.setAttribute(AUTH_ROLE_ATTR, principal.getRole());
+        request.setAttribute(AUTH_OWNER_SCOPE_ATTR, principal.getOwnerScope());
+        request.setAttribute(AUTH_TENANT_ID_ATTR, principal.getTenantId());
+        request.setAttribute(AUTH_MFA_VERIFIED_ATTR, principal.isMfaVerified());
+    }
+
+    private AuthPrincipal getCachedAuthenticatedPrincipal(HttpServletRequest request) {
+        Object principal = request.getAttribute(AUTH_PRINCIPAL_ATTR);
+        if (principal instanceof AuthPrincipal) {
+            AuthPrincipal cachedPrincipal = (AuthPrincipal) principal;
+            if (hasText(cachedPrincipal.getUsername())
+                    && hasText(cachedPrincipal.getRole())
+                    && hasText(cachedPrincipal.getOwnerScope())
+                    && hasText(cachedPrincipal.getTenantId())) {
+                return cachedPrincipal;
+            }
+        }
+        return null;
+    }
+
     private AuthPrincipal resolveAuthenticatedPrincipal(HttpServletRequest request) {
+        AuthPrincipal cachedPrincipal = getCachedAuthenticatedPrincipal(request);
+        if (cachedPrincipal != null) {
+            return cachedPrincipal;
+        }
         String token = resolveToken(request);
         if (token == null || token.trim().isEmpty()) {
             return null;
         }
-        return tokenService.verify(token.trim());
+        return verifySafely(token.trim());
     }
 
     private String resolveToken(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7).trim();
-            if (!token.isEmpty()) {
-                return token;
-            }
+        String token = resolveBearerToken(request.getHeader("Authorization"));
+        if (token != null) {
+            return token;
         }
         Cookie[] cookies = request.getCookies();
         if (cookies == null || cookies.length == 0) {
@@ -132,6 +169,30 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             }
         }
         return null;
+    }
+
+    private String resolveBearerToken(String authHeader) {
+        if (authHeader == null) {
+            return null;
+        }
+        String candidate = authHeader.trim();
+        if (candidate.length() < 7 || !candidate.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return null;
+        }
+        String token = candidate.substring(7).trim();
+        return token.isEmpty() ? null : token;
+    }
+
+    private AuthPrincipal verifySafely(String token) {
+        try {
+            return tokenService.verify(token);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private String normalizeRequestAttributePart(Object value) {

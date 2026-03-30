@@ -143,7 +143,7 @@ test.describe('Sidebar Navigation', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Should either show login or redirect to login
-    await expect(page.locator('.login-card, [data-testid="login-page"]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('[data-testid="login-page"]')).toBeVisible({ timeout: 5000 })
   })
 
   test('should maintain sidebar visibility on page navigation', async ({ page }) => {

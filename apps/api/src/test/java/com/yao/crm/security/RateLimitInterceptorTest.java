@@ -16,6 +16,7 @@ import javax.servlet.http.Cookie;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -144,6 +145,31 @@ class RateLimitInterceptorTest {
         verify(rateLimitService).allow(keyCaptor.capture(), limitCaptor.capture());
         assertEquals("tenant-a|alice|/api/v1/approval/requests/{id}", keyCaptor.getValue());
         assertEquals(Integer.valueOf(120), limitCaptor.getValue());
+        verify(tokenService).verify("token-123");
+    }
+
+    @Test
+    @DisplayName("shouldCacheResolvedPrincipalOnTheRequestForDownstreamReuse")
+    void shouldCacheResolvedPrincipalOnTheRequestForDownstreamReuse() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/approval/requests/123");
+        request.setRemoteAddr("10.0.0.8");
+        request.addHeader("Authorization", "Bearer token-123");
+        request.addHeader("X-Tenant-Id", "tenant-a");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        AuthPrincipal principal = new AuthPrincipal("alice", "ADMIN", "alice", "tenant-a", true);
+        when(tokenService.verify("token-123")).thenReturn(principal);
+        when(rateLimitService.allow(anyString(), anyInt())).thenReturn(true);
+
+        assertTrue(interceptor.preHandle(request, response, new Object()));
+
+        assertNotNull(request.getAttribute("authPrincipal"));
+        assertEquals(principal, request.getAttribute("authPrincipal"));
+        assertEquals("alice", request.getAttribute("authUsername"));
+        assertEquals("ADMIN", request.getAttribute("authRole"));
+        assertEquals("alice", request.getAttribute("authOwnerScope"));
+        assertEquals("tenant-a", request.getAttribute("authTenantId"));
+        assertEquals(Boolean.TRUE, request.getAttribute("authMfaVerified"));
         verify(tokenService).verify("token-123");
     }
 

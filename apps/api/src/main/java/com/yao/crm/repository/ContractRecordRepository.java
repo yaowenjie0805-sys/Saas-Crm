@@ -15,5 +15,5 @@ public interface ContractRecordRepository extends JpaRepository<ContractRecord, 
     java.util.List<ContractRecord> findByTenantIdAndOwnerIn(String tenantId, Collection<String> owners);
     java.util.List<ContractRecord> findByTenantIdAndOwnerInAndCreatedAtBetween(String tenantId, Collection<String> owners, LocalDateTime from, LocalDateTime to);
     java.util.Optional<ContractRecord> findByIdAndTenantId(String id, String tenantId);
-    boolean existsByIdAndTenantId(String id, String tenantId);
+    long deleteByIdAndTenantId(String id, String tenantId);
 }

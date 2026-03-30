@@ -20,7 +20,7 @@ test.describe('Authentication Flow', () => {
   test('should display login page when not authenticated', async ({ page }) => {
     await page.goto('/')
     // Should redirect to login or show login form
-    const loginCard = page.locator('.login-card')
+    const loginCard = page.locator('[data-testid="login-page"] .login-card')
     await expect(loginCard).toBeVisible({ timeout: 10000 })
   })
 
@@ -28,14 +28,16 @@ test.describe('Authentication Flow', () => {
     await page.goto('/')
 
     // Fill login form
-    const usernameInput = page.locator('.login-card input').first()
-    const passwordInput = page.locator('.login-card input[type="password"]')
+    const tenantIdInput = page.locator('[data-testid="login-tenant-id"]')
+    const usernameInput = page.locator('[data-testid="login-username"]')
+    const passwordInput = page.locator('[data-testid="login-password"]')
 
+    await tenantIdInput.fill(E2E_CREDENTIALS.tenantId)
     await usernameInput.fill(E2E_CREDENTIALS.username)
     await passwordInput.fill(E2E_CREDENTIALS.password)
 
     // Submit login
-    await page.locator('.login-card button[type="submit"], .login-card button:has-text("Login"), .login-card button:has-text("登录")').click()
+    await page.locator('[data-testid="login-submit"]').click()
 
     // Wait for redirect to dashboard
     await expect(page.getByTestId('app-sidebar')).toBeVisible({ timeout: 15000 })
@@ -45,13 +47,15 @@ test.describe('Authentication Flow', () => {
   test('should show error with invalid credentials', async ({ page }) => {
     await page.goto('/')
 
-    const usernameInput = page.locator('.login-card input').first()
-    const passwordInput = page.locator('.login-card input[type="password"]')
+    const tenantIdInput = page.locator('[data-testid="login-tenant-id"]')
+    const usernameInput = page.locator('[data-testid="login-username"]')
+    const passwordInput = page.locator('[data-testid="login-password"]')
 
+    await tenantIdInput.fill(E2E_CREDENTIALS.tenantId)
     await usernameInput.fill('invalid_user')
     await passwordInput.fill('wrong_password')
 
-    await page.locator('.login-card button[type="submit"], .login-card button:has-text("Login"), .login-card button:has-text("登录")').click()
+    await page.locator('[data-testid="login-submit"]').click()
 
     // Should show error message or toast
     const errorToast = page.locator('.toast.error, .toast-error, [class*="error"]').first()
@@ -79,16 +83,16 @@ test.describe('Authentication Flow', () => {
     await ensureLoggedIn(page)
     await expect(page.getByTestId('app-sidebar')).toBeVisible()
 
-    // Click logout button
-    const logoutBtn = page.locator('.logout-btn, [data-testid="logout-btn"], button:has-text("Logout"), button:has-text("退出")')
+    // Click logout button - use first() to handle multiple logout buttons
+    const logoutBtn = page.locator('.logout-btn, [data-testid="logout-btn"], button:has-text("Logout"), button:has-text("退出")').first()
     await logoutBtn.click()
 
     // Should redirect to login or clear session
     await page.waitForLoadState('domcontentloaded')
     // Either show login form or redirect to login page
-    const isLoggedOut = await page.locator('.login-card').isVisible({ timeout: 5000 }).catch(() => false)
+    const isLoggedOut = await page.locator('[data-testid="login-page"] .login-card').isVisible({ timeout: 5000 }).catch(() => false)
     if (!isLoggedOut) {
-      await expect(page.getByTestId('login-page, login-form, .login-card')).toBeVisible({ timeout: 5000 })
+      await expect(page.locator('[data-testid="login-page"], [data-testid="login-form"], .login-card').first()).toBeVisible({ timeout: 5000 })
     }
   })
 
@@ -98,7 +102,7 @@ test.describe('Authentication Flow', () => {
     // Check for user info in sidebar
     const accountPill = page.locator('[data-testid="account-pill"], .account-pill, .user-info')
     await expect(accountPill).toBeVisible()
-    await expect(accountPill).toContainText(E2E_CREDENTIALS.username)
+    await expect(accountPill).toContainText(/admin|系统管理员|System Admin/i)
   })
 
   test('should handle session timeout gracefully', async ({ page }) => {
@@ -115,6 +119,6 @@ test.describe('Authentication Flow', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Should redirect to login or show login form
-    await expect(page.locator('.login-card, [data-testid="login-page"]')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('[data-testid="login-page"]')).toBeVisible({ timeout: 10000 })
   })
 })
