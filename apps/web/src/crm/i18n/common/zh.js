@@ -383,6 +383,7 @@ export const ZH = {
   "target": "\u76ee\u6807",
   "na": "\u6682\u65e0",
   "approvalAny": "\u4efb\u610f",
+  "dateFormat": "日期格式",
   "dateFormatOption_yyyy_MM_dd": "yyyy-MM-dd",
   "dateFormatOption_dd_MM_yyyy": "dd/MM/yyyy",
   "dateFormatOption_MM_dd_yyyy": "MM-dd-yyyy",

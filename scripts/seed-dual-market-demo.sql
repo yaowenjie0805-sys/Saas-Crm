@@ -7,9 +7,9 @@ INSERT INTO tenants (
   market_profile, tax_rule, approval_mode, channels_json, data_residency, mask_level,
   created_at, updated_at
 ) VALUES
-  ('tenant_cn_demo', 'China Demo Tenant', 'ACTIVE', 120, 'Asia/Shanghai', 'CNY', 'yyyy-MM-dd',
+  ('tenant_cn_demo', '中国演示租户', 'ACTIVE', 120, 'Asia/Shanghai', 'CNY', 'yyyy-MM-dd',
    'CN', 'VAT_CN', 'STRICT', '["WECOM","DINGTALK"]', 'CN', 'STANDARD', NOW(), NOW()),
-  ('tenant_global_demo', 'Global Demo Tenant', 'ACTIVE', 120, 'UTC', 'USD', 'yyyy-MM-dd',
+  ('tenant_global_demo', '全球演示租户', 'ACTIVE', 120, 'UTC', 'USD', 'yyyy-MM-dd',
    'GLOBAL', 'VAT_GLOBAL', 'STAGE_GATE', '["EMAIL","SLACK"]', 'GLOBAL', 'STRICT', NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),

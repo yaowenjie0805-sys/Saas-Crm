@@ -383,6 +383,7 @@ export const EN = {
   "target": "Target",
   "na": "N/A",
   "approvalAny": "ANY",
+  "dateFormat": "Date Format",
   "dateFormatOption_yyyy_MM_dd": "yyyy-MM-dd",
   "dateFormatOption_dd_MM_yyyy": "dd/MM/yyyy",
   "dateFormatOption_MM_dd_yyyy": "MM-dd-yyyy",

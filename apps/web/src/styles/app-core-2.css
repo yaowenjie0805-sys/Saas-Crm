@@ -405,8 +405,31 @@
   min-width: 0;
 }
 
-.tenant-save-btn {
+/* 租户配置项标签化显示 */
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-label {
+  font-size: 0.7rem;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-value {
+  font-size: 0.8rem;
+}
+
+.config-item-full {
   grid-column: 1 / -1;
+}
+
+.tenant-save-btn {
   justify-self: end;
 }
 
