@@ -10,52 +10,22 @@ export const E2E_CREDENTIALS = {
   password: 'admin123',
 }
 
-const buildPersistedAuth = (auth, tenantId) => ({
-  username: auth?.username || '',
-  displayName: auth?.displayName || '',
-  role: auth?.role || '',
-  ownerScope: auth?.ownerScope || '',
-  tenantId: auth?.tenantId || tenantId,
-  department: auth?.department || '',
-  dataScope: auth?.dataScope || '',
-  dateFormat: auth?.dateFormat || 'yyyy-MM-dd',
-  sessionActive: true,
-})
-
-async function bootstrapAuth(page, credentials) {
-  const response = await page.request.post(`${API_BASE_URL}/v1/auth/login`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Tenant-Id': credentials.tenantId,
-    },
-    data: credentials,
-  })
-  expect(response.ok(), `Expected API login to succeed, got ${response.status()}`).toBeTruthy()
-  const authBody = await response.json()
-  const token = String(authBody?.token || '').trim()
-  expect(token, 'Expected API login to return token').not.toBe('')
-  const persistedAuth = buildPersistedAuth(authBody, credentials.tenantId)
-  await page.context().addCookies([
-    {
-      name: 'CRM_SESSION',
-      value: token,
-      url: API_ORIGIN,
-      httpOnly: true,
-      sameSite: 'Lax',
-    },
-  ])
-
-  await page.addInitScript(
-    ({ auth, tenantId }) => {
-      localStorage.setItem('crm_auth', JSON.stringify(auth))
-      localStorage.setItem('crm_last_tenant', tenantId)
-    },
-    { auth: persistedAuth, tenantId: credentials.tenantId },
-  )
-}
-
 export async function ensureLoggedIn(page, credentials = E2E_CREDENTIALS) {
-  await bootstrapAuth(page, credentials)
+  // Navigate to login page
   await page.goto('/', { waitUntil: 'domcontentloaded' })
+  
+  // Check if already logged in
+  const sidebar = page.getByTestId('app-sidebar')
+  if (await sidebar.isVisible({ timeout: 3000 }).catch(() => false)) {
+    return
+  }
+  
+  // Perform login via UI
+  await page.locator('[data-testid="login-tenant-id"]').fill(credentials.tenantId)
+  await page.locator('[data-testid="login-username"]').fill(credentials.username)
+  await page.locator('[data-testid="login-password"]').fill(credentials.password)
+  await page.locator('[data-testid="login-submit"]').click()
+  
+  // Wait for navigation to dashboard
   await expect(page.getByTestId('app-sidebar')).toBeVisible({ timeout: DEFAULT_TIMEOUT })
 }

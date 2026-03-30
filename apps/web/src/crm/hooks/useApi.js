@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { api, apiDownload, apiUpload, STORAGE_KEYS } from '../shared';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { requestApi, downloadApi, uploadApi } from '../api/client';
 
 /**
  * API请求Hook封装
@@ -28,11 +28,11 @@ export function useApi() {
     try {
       // 移除 url 中可能的 /api 前缀，因为 api 函数会自动添加
       const path = url.replace(/^\/api/, '');
-      const data = await api(path, options);
+      const data = await requestApi(path, options);
       return data;
     } catch (err) {
       if (isMountedRef.current) {
-        setError(err.message);
+        setError(err?.message ?? String(err));
       }
       throw err;
     } finally {
@@ -381,7 +381,7 @@ export function useImportExport() {
   // 创建导入任务（FormData 使用统一的 apiUpload）
   const createImportJob = useCallback(async (formData) => {
     // apiUpload 会自动处理租户头和认证
-    return apiUpload('/api/v2/import/jobs', formData);
+    return uploadApi('/api/v2/import/jobs', formData);
   }, []);
 
   // 获取导入任务状态
@@ -401,7 +401,7 @@ export function useImportExport() {
     const path = `/api/v2/import/templates/${entityType}?format=${format}`;
     const filename = `import_template_${entityType}.${format}`;
     // apiDownload 自动处理租户头和认证，并触发浏览器下载
-    return apiDownload(path, filename);
+    return downloadApi(path, filename);
   }, []);
 
   // 创建导出任务
@@ -421,7 +421,7 @@ export function useImportExport() {
   const downloadExportFile = useCallback(async (jobId, filename = 'export') => {
     const path = `/api/v2/export/jobs/${jobId}/download`;
     // apiDownload 自动处理租户头和认证，并触发浏览器下载
-    return apiDownload(path, filename);
+    return downloadApi(path, filename);
   }, []);
 
   return {

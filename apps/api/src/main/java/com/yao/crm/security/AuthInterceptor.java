@@ -19,6 +19,13 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
 
+    private static final String AUTH_PRINCIPAL_ATTR = "authPrincipal";
+    private static final String AUTH_USERNAME_ATTR = "authUsername";
+    private static final String AUTH_ROLE_ATTR = "authRole";
+    private static final String AUTH_OWNER_SCOPE_ATTR = "authOwnerScope";
+    private static final String AUTH_TENANT_ID_ATTR = "authTenantId";
+    private static final String AUTH_MFA_VERIFIED_ATTR = "authMfaVerified";
+    private static final String AUTH_TENANT_DATE_FORMAT_ATTR = "authTenantDateFormat";
     private static final String DEFAULT_TENANT_DATE_FORMAT = "yyyy-MM-dd";
     private static final long TENANT_DATE_FORMAT_TTL_MINUTES = 5L;
 
@@ -54,7 +61,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        String path = request.getRequestURI();
+        String path = request.getRequestURI() == null ? "" : request.getRequestURI();
         if (path.startsWith("/api/health")
                 || path.equals("/api/auth/login")
                 || path.equals("/api/auth/register")
@@ -63,57 +70,142 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || path.equals("/api/v1/auth/login")
                 || path.equals("/api/v1/auth/mfa/verify")
                 || path.equals("/api/v1/auth/invitations/accept")
-                || path.equals("/api/v1/auth/oidc/callback")) {
+            || path.equals("/api/v1/auth/oidc/callback")) {
             return true;
         }
 
-        String token = resolveToken(request);
-        if (token == null || token.trim().isEmpty()) {
-            writeUnauthorized(request, response, i18nService.msg(request, "missing_bearer"));
-            return false;
-        }
-        AuthPrincipal principal = tokenService.verify(token);
+        AuthPrincipal principal = getCachedAuthenticatedPrincipal(request);
         if (principal == null) {
+            principal = buildPrincipalFromRequestAttributes(request);
+        }
+        if (principal == null) {
+            String token = resolveToken(request);
+            if (token == null || token.trim().isEmpty()) {
+                writeUnauthorized(request, response, i18nService.msg(request, "missing_bearer"));
+                return false;
+            }
+            principal = verifySafely(token);
+            if (principal == null) {
+                writeUnauthorized(request, response, i18nService.msg(request, "invalid_or_expired"));
+                return false;
+            }
+            request.setAttribute(AUTH_PRINCIPAL_ATTR, principal);
+        }
+        String principalTenantId = normalizeTenantId(principal.getTenantId());
+        cacheAuthenticatedPrincipal(request, principal);
+        request.setAttribute(AUTH_TENANT_DATE_FORMAT_ATTR, getTenantDateFormat(principalTenantId));
+
+        String headerTenant = request.getHeader("X-Tenant-Id");
+        if (isTenantScopedPath(path) && !hasText(principalTenantId)) {
             writeUnauthorized(request, response, i18nService.msg(request, "invalid_or_expired"));
             return false;
         }
-
-        request.setAttribute("authUsername", principal.getUsername());
-        request.setAttribute("authRole", principal.getRole());
-        request.setAttribute("authOwnerScope", principal.getOwnerScope());
-        request.setAttribute("authTenantId", principal.getTenantId());
-        request.setAttribute("authMfaVerified", principal.isMfaVerified());
-        request.setAttribute("authTenantDateFormat", getTenantDateFormat(principal.getTenantId()));
-
-        String headerTenant = request.getHeader("X-Tenant-Id");
-        if (path.startsWith("/api/v1/") || path.startsWith("/api/v2/")) {
+        if (isTenantScopedPath(path)) {
             if (headerTenant == null || headerTenant.trim().isEmpty()) {
                 markCrossTenantForbidden(request, principal, "tenant_header_missing");
                 writeForbidden(request, response, i18nService.msg(request, "tenant_header_required"));
                 return false;
             }
-            if (!headerTenant.trim().equals(principal.getTenantId())) {
+            if (!headerTenant.trim().equals(principalTenantId)) {
                 markCrossTenantForbidden(request, principal, "tenant_mismatch");
                 writeForbidden(request, response, i18nService.msg(request, "tenant_mismatch"));
                 return false;
             }
-        } else if (headerTenant != null && !headerTenant.trim().isEmpty() && !headerTenant.trim().equals(principal.getTenantId())) {
-            markCrossTenantForbidden(request, principal, "tenant_mismatch");
-            writeForbidden(request, response, i18nService.msg(request, "tenant_mismatch"));
-            return false;
+        } else if (headerTenant != null && !headerTenant.trim().isEmpty()) {
+            if (!hasText(principalTenantId) || !headerTenant.trim().equals(principalTenantId)) {
+                markCrossTenantForbidden(request, principal, "tenant_mismatch");
+                writeForbidden(request, response, i18nService.msg(request, "tenant_mismatch"));
+                return false;
+            }
         }
         return true;
     }
 
+    private AuthPrincipal buildPrincipalFromRequestAttributes(HttpServletRequest request) {
+        String cachedUsername = readRequestAttribute(request, AUTH_USERNAME_ATTR);
+        String cachedRole = readRequestAttribute(request, AUTH_ROLE_ATTR);
+        String cachedOwnerScope = readRequestAttribute(request, AUTH_OWNER_SCOPE_ATTR);
+        String cachedTenantId = readRequestAttribute(request, AUTH_TENANT_ID_ATTR);
+        Boolean cachedMfaVerified = readBooleanRequestAttribute(request, AUTH_MFA_VERIFIED_ATTR);
+        if (cachedUsername != null
+                && cachedRole != null
+                && cachedOwnerScope != null
+                && cachedTenantId != null
+                && cachedMfaVerified != null) {
+            AuthPrincipal principal = new AuthPrincipal(
+                    cachedUsername,
+                    cachedRole,
+                    cachedOwnerScope,
+                    cachedTenantId,
+                    cachedMfaVerified
+            );
+            request.setAttribute(AUTH_PRINCIPAL_ATTR, principal);
+            return principal;
+        }
+        return null;
+    }
+
+    private AuthPrincipal getCachedAuthenticatedPrincipal(HttpServletRequest request) {
+        Object principal = request.getAttribute(AUTH_PRINCIPAL_ATTR);
+        if (principal instanceof AuthPrincipal) {
+            AuthPrincipal cachedPrincipal = (AuthPrincipal) principal;
+            if (hasText(cachedPrincipal.getUsername())
+                    && hasText(cachedPrincipal.getRole())
+                    && hasText(cachedPrincipal.getOwnerScope())
+                    && hasText(cachedPrincipal.getTenantId())) {
+                return cachedPrincipal;
+            }
+        }
+        return null;
+    }
+
+    private void cacheAuthenticatedPrincipal(HttpServletRequest request, AuthPrincipal principal) {
+        request.setAttribute(AUTH_PRINCIPAL_ATTR, principal);
+        request.setAttribute(AUTH_USERNAME_ATTR, normalizePrincipalAttribute(principal.getUsername(), ""));
+        request.setAttribute(AUTH_ROLE_ATTR, normalizePrincipalAttribute(principal.getRole(), ""));
+        request.setAttribute(AUTH_OWNER_SCOPE_ATTR, normalizePrincipalAttribute(principal.getOwnerScope(), ""));
+        request.setAttribute(AUTH_TENANT_ID_ATTR, normalizeTenantId(principal.getTenantId()));
+        request.setAttribute(AUTH_MFA_VERIFIED_ATTR, principal.isMfaVerified());
+    }
+
+    private String readRequestAttribute(HttpServletRequest request, String attributeName) {
+        Object value = request.getAttribute(attributeName);
+        if (!(value instanceof String)) {
+            return null;
+        }
+        String candidate = ((String) value).trim();
+        return candidate.isEmpty() ? null : candidate;
+    }
+
+    private Boolean readBooleanRequestAttribute(HttpServletRequest request, String attributeName) {
+        Object value = request.getAttribute(attributeName);
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof String) {
+            String candidate = ((String) value).trim();
+            if (candidate.isEmpty()) {
+                return null;
+            }
+            return Boolean.parseBoolean(candidate);
+        }
+        return null;
+    }
+
     private String getTenantDateFormat(String tenantId) {
-        if (tenantId == null || tenantId.trim().isEmpty()) {
+        String normalizedTenantId = normalizeTenantId(tenantId);
+        if (normalizedTenantId == null) {
             return DEFAULT_TENANT_DATE_FORMAT;
         }
-        return tenantDateFormatCache.get(tenantId, this::loadTenantDateFormat);
+        return tenantDateFormatCache.get(normalizedTenantId, this::loadTenantDateFormat);
     }
 
     private String loadTenantDateFormat(String tenantId) {
-        String tenantDateFormat = tenantRepository.findById(tenantId)
+        String normalizedTenantId = normalizeTenantId(tenantId);
+        if (normalizedTenantId == null) {
+            return DEFAULT_TENANT_DATE_FORMAT;
+        }
+        String tenantDateFormat = tenantRepository.findById(normalizedTenantId)
                 .map(t -> t.getDateFormat())
                 .orElse(DEFAULT_TENANT_DATE_FORMAT);
         if ("YYYY-MM-DD".equalsIgnoreCase(tenantDateFormat)) {
@@ -126,12 +218,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private String resolveToken(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7).trim();
-            if (!token.isEmpty()) {
-                return token;
-            }
+        String token = resolveBearerToken(request.getHeader("Authorization"));
+        if (token != null) {
+            return token;
         }
         Cookie[] cookies = request.getCookies();
         if (cookies == null || cookies.length == 0) {
@@ -146,6 +235,46 @@ public class AuthInterceptor implements HandlerInterceptor {
             }
         }
         return null;
+    }
+
+    private String resolveBearerToken(String authHeader) {
+        if (authHeader == null) {
+            return null;
+        }
+        String candidate = authHeader.trim();
+        if (candidate.length() < 7 || !candidate.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return null;
+        }
+        String token = candidate.substring(7).trim();
+        return token.isEmpty() ? null : token;
+    }
+
+    private AuthPrincipal verifySafely(String token) {
+        try {
+            return tokenService.verify(token);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private String normalizeTenantId(String tenantId) {
+        return normalizePrincipalAttribute(tenantId, null);
+    }
+
+    private String normalizePrincipalAttribute(String value, String fallback) {
+        String candidate = value == null ? "" : value.trim();
+        if (candidate.isEmpty()) {
+            return fallback;
+        }
+        return candidate;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isTenantScopedPath(String path) {
+        return path != null && (path.startsWith("/api/v1/") || path.startsWith("/api/v2/"));
     }
 
     private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response, String message) throws Exception {

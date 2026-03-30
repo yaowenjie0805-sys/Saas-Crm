@@ -70,6 +70,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Install Playwright Browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Frontend Smoke E2E
+        run: npm run test:e2e
+        env:
+          E2E_TEST_GLOB: apps/web/tests/e2e/smoke.spec.js
+
   # Job 3: 后端测试（依赖 lint，与 frontend 并行）
   backend:
     needs: lint
@@ -113,3 +121,12 @@ jobs:
 
       - name: Production Preflight
         run: npm run preflight:prod
+
+      - name: Upload Preflight Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-preflight-evidence
+          path: |
+            logs/release/**
+            logs/security/**
+            logs/preflight/**

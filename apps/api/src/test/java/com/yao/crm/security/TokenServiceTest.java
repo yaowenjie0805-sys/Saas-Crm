@@ -4,6 +4,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -120,7 +124,7 @@ class TokenServiceTest {
         AuthPrincipal principal = tokenService.verify(token);
 
         assertNotNull(principal);
-        assertEquals("tenant_default", principal.getTenantId());
+        assertEquals("", principal.getTenantId());
     }
 
     @Test
@@ -161,8 +165,7 @@ class TokenServiceTest {
 
         AuthPrincipal principal = tokenService.verify(token);
 
-        assertNotNull(principal);
-        assertEquals("", principal.getUsername());
+        assertNull(principal);
     }
 
     @Test
@@ -187,6 +190,27 @@ class TokenServiceTest {
     }
 
     @Test
+    @DisplayName("shouldReturnNull_whenTokenIsTooLarge")
+    void shouldReturnNull_whenTokenIsTooLarge() {
+        String oversizedToken = repeat('a', 4090) + "." + repeat('b', 32);
+
+        AuthPrincipal principal = tokenService.verify(oversizedToken);
+
+        assertNull(principal);
+    }
+
+    @Test
+    @DisplayName("shouldReturnNull_whenPayloadBase64IsInvalidEvenWithValidSignature")
+    void shouldReturnNull_whenPayloadBase64IsInvalidEvenWithValidSignature() throws Exception {
+        String payload = "!!!!";
+        String token = payload + "." + sign(payload);
+
+        AuthPrincipal principal = tokenService.verify(token);
+
+        assertNull(principal);
+    }
+
+    @Test
     @DisplayName("shouldCreateDifferentTokensAtDifferentTimes")
     void shouldCreateDifferentTokensAtDifferentTimes() throws InterruptedException {
         String token1 = tokenService.createToken("testuser", "USER", "owner-1");
@@ -197,13 +221,42 @@ class TokenServiceTest {
     }
 
     @Test
-    @DisplayName("shouldVerifyTokenWithDefaultTenant")
-    void shouldVerifyTokenWithDefaultTenant() {
+    @DisplayName("shouldCreateTokenWithoutDefaultTenantFallback")
+    void shouldCreateTokenWithoutDefaultTenantFallback() {
         String token = tokenService.createToken("testuser", "USER", "owner-1");
 
         AuthPrincipal principal = tokenService.verify(token);
 
         assertNotNull(principal);
-        assertEquals("tenant_default", principal.getTenantId());
+        assertEquals("", principal.getTenantId());
+    }
+
+    @Test
+    @DisplayName("shouldNotDefaultTenantForLegacyTokenWithoutTenantSegment")
+    void shouldNotDefaultTenantForLegacyTokenWithoutTenantSegment() throws Exception {
+        long exp = System.currentTimeMillis() + 60000;
+        String legacyPayload = "legacy-user|USER|" + exp;
+        String encoded = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(legacyPayload.getBytes(StandardCharsets.UTF_8));
+        String token = encoded + "." + sign(encoded);
+
+        AuthPrincipal principal = tokenService.verify(token);
+
+        assertNotNull(principal);
+        assertEquals("", principal.getTenantId());
+    }
+
+    private String sign(String payload) throws Exception {
+        Method method = TokenService.class.getDeclaredMethod("sign", String.class);
+        method.setAccessible(true);
+        return (String) method.invoke(tokenService, payload);
+    }
+
+    private String repeat(char value, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int i = 0; i < count; i++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 }

@@ -24,6 +24,7 @@ public class TokenService {
     private static final Logger log = LoggerFactory.getLogger(TokenService.class);
 
     private static final int TOKEN_VERSION = 2;
+    private static final int MAX_TOKEN_LENGTH = 4096;
     private static final int MAX_JSON_LENGTH = 2048;
     private static final long MAX_EXPIRY_FUTURE_MILLIS = 30L * 24 * 60 * 60 * 1000; // 30 days
 
@@ -134,13 +135,13 @@ public class TokenService {
             "secret", "changeme", "your_jwt_secret_here", "default", "test",
             "crm-secret-change-me", "crm-secret", "jwt-secret", "jwt-secret-key"
         ));
-        if (weakSecrets.contains(secret.toLowerCase())) {
+        if (secret != null && weakSecrets.contains(secret.toLowerCase())) {
             log.warn("JWT secret key appears to be a default/weak value. Change it immediately for production use!");
         }
     }
 
     public String createToken(String username, String role, String ownerScope) {
-        return createToken(username, role, ownerScope, "tenant_default", true);
+        return createToken(username, role, ownerScope, "", true);
     }
 
     public String createToken(String username, String role, String ownerScope, String tenantId, boolean mfaVerified) {
@@ -160,26 +161,34 @@ public class TokenService {
     }
 
     public AuthPrincipal verify(String token) {
-        if (token == null || !token.contains(".")) {
+        if (token == null) {
             return null;
         }
-        String[] parts = token.split("\\.");
-        if (parts.length != 2) {
+        String normalizedToken = token.trim();
+        if (normalizedToken.isEmpty() || normalizedToken.length() > MAX_TOKEN_LENGTH) {
             return null;
         }
-        String payload = parts[0];
-        String signature = parts[1];
-        if (!sign(payload).equals(signature)) {
+        int firstDot = normalizedToken.indexOf('.');
+        if (firstDot <= 0 || firstDot != normalizedToken.lastIndexOf('.') || firstDot == normalizedToken.length() - 1) {
             return null;
         }
-        String decoded = new String(base64UrlDecode(payload), StandardCharsets.UTF_8);
+        String payload = normalizedToken.substring(0, firstDot);
+        String signature = normalizedToken.substring(firstDot + 1);
+        try {
+            if (!sign(payload).equals(signature)) {
+                return null;
+            }
+            String decoded = new String(base64UrlDecode(payload), StandardCharsets.UTF_8);
 
-        // V2 JSON format
-        if (decoded.startsWith("{")) {
-            return verifyJsonPayload(decoded);
+            // V2 JSON format
+            if (decoded.startsWith("{")) {
+                return verifyJsonPayload(decoded);
+            }
+            // V1 legacy pipe-delimited format (backward compatible)
+            return verifyLegacyPayload(decoded);
+        } catch (IllegalArgumentException ex) {
+            return null;
         }
-        // V1 legacy pipe-delimited format (backward compatible)
-        return verifyLegacyPayload(decoded);
     }
 
     private AuthPrincipal verifyJsonPayload(String json) {
@@ -190,9 +199,13 @@ public class TokenService {
 
         try {
             TokenPayload payload = MAPPER.readValue(json, TokenPayload.class);
+            String username = normalizeWhitespace(payload.getUsername());
+            String role = normalizeWhitespace(payload.getRole());
+            String ownerScope = normalizeWhitespace(payload.getOwnerId());
+            String tenantId = normalizeWhitespace(payload.getTenantId());
 
             // Validate required fields
-            if (payload.getUsername() == null || payload.getUsername().isEmpty()) {
+            if (username == null || username.isEmpty()) {
                 return null;
             }
             if (payload.getExpiry() <= 0) {
@@ -210,14 +223,11 @@ public class TokenService {
                 return null;
             }
 
-            String ownerScope = safe(payload.getOwnerId());
-            String tenantId = safe(payload.getTenantId());
-
             return new AuthPrincipal(
-                    payload.getUsername(),
-                    safe(payload.getRole()),
-                    ownerScope.isEmpty() ? payload.getUsername() : ownerScope,
-                    tenantId.isEmpty() ? "tenant_default" : tenantId,
+                    username,
+                    safe(role),
+                    ownerScope.isEmpty() ? username : ownerScope,
+                    safe(tenantId),
                     payload.getMfaVerified() == 1
             );
         } catch (JsonProcessingException e) {
@@ -241,10 +251,21 @@ public class TokenService {
         if (System.currentTimeMillis() > exp) {
             return null;
         }
-        String ownerScope = values.length >= 4 ? values[3] : values[0];
-        String tenantId = values.length >= 6 ? safe(values[4]) : "tenant_default";
+        String username = normalizeWhitespace(values[0]);
+        if (username == null || username.isEmpty()) {
+            return null;
+        }
+        String role = safe(normalizeWhitespace(values[1]));
+        String ownerScope = values.length >= 4 ? safe(normalizeWhitespace(values[3])) : username;
+        String tenantId = values.length >= 6 ? safe(normalizeWhitespace(values[4])) : "";
         boolean mfaVerified = values.length >= 6 ? "1".equals(values[5]) : true;
-        return new AuthPrincipal(values[0], values[1], ownerScope, tenantId, mfaVerified);
+        return new AuthPrincipal(
+                username,
+                role,
+                ownerScope.isEmpty() ? username : ownerScope,
+                tenantId,
+                mfaVerified
+        );
     }
 
     private String jsonEscape(String value) {
@@ -274,5 +295,12 @@ public class TokenService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String normalizeWhitespace(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.trim();
     }
 }

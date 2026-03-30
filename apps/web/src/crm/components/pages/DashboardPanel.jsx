@@ -1,4 +1,4 @@
-﻿import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import StatsSection from './dashboard/StatsSection'
 import WorkbenchSection from './dashboard/WorkbenchSection'
 import ReportsSection from './dashboard/ReportsSection'
@@ -41,18 +41,35 @@ function DashboardPanel({
   retryReportExportJob,
   downloadReportExportJob,
 }) {
-  if (!['dashboard', 'reports'].includes(activePage)) return null
+  const showDashboardOrReports = ['dashboard', 'reports'].includes(activePage)
 
-  // Transform stats data
-  const normalizedStats = (stats || []).map((item) => ({
-    ...item,
-    label: translateStatLabel(t, item.label),
-    value: formatStatValue(t, item.label, item.value),
-  }))
+  // Prefer the dedicated stats payload; only fall back to report summary fields when needed.
+  const normalizedStats = useMemo(() => {
+    const primaryStats = Array.isArray(stats) ? stats.filter(Boolean) : []
+    const fallbackStats = []
+    const summary = reports?.summary
+
+    if (primaryStats.length === 0 && summary && typeof summary === 'object') {
+      if (summary.customers != null) {
+        fallbackStats.push({ label: 'TOTAL_CUSTOMERS', value: summary.customers })
+      }
+      if (summary.revenue != null) {
+        fallbackStats.push({ label: 'PROJECTED_REVENUE', value: summary.revenue })
+      }
+    }
+
+    return (primaryStats.length > 0 ? primaryStats : fallbackStats).map((item) => ({
+      ...item,
+      label: translateStatLabel(t, item.label),
+      value: formatStatValue(t, item.label, item.value),
+    }))
+  }, [reports, stats, t])
 
   // Reports section handlers
   const handleExportReportCsv = () => exportReportCsv?.()
   const refreshReportJobs = () => refreshPage('reports', 'panel_action')
+
+  if (!showDashboardOrReports) return null
 
   return (
     <>
