@@ -109,8 +109,9 @@ class V1OrderControllerTest {
     void confirmOrderShouldReturnIdRequiredWhenIdIsBlank() {
         ResponseEntity<?> response = controller.confirmOrder(request, "   ");
 
-        // @NotBlank validation returns 404 NOT_FOUND via Spring's default handling
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("id_required", body.get("code"));
     }
 
     @Test
@@ -119,15 +120,14 @@ class V1OrderControllerTest {
         row.setId("ord-1");
         row.setStatus("DRAFT");
         row.setTenantId("tenant-1");
-        // Controller doesn't trim the ID, so we need to stub with the exact ID passed
-        when(orderRecordRepository.findByIdAndTenantId("  ord-1  ", "tenant-1")).thenReturn(Optional.of(row));
+        when(orderRecordRepository.findByIdAndTenantId("ord-1", "tenant-1")).thenReturn(Optional.of(row));
         when(commerceFacadeService.resolveOrderApprovalMode(row, "tenant-1")).thenReturn("STRICT");
         when(orderRecordRepository.save(any(OrderRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ResponseEntity<?> response = controller.confirmOrder(request, "  ord-1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(orderRecordRepository).findByIdAndTenantId("  ord-1  ", "tenant-1");
+        verify(orderRecordRepository).findByIdAndTenantId("ord-1", "tenant-1");
         assertEquals("CONFIRMED", row.getStatus());
     }
 
@@ -139,10 +139,7 @@ class V1OrderControllerTest {
         row.setStatus("CONFIRMED");
         row.setTenantId("tenant-1");
         row.setQuoteId("");
-        // Controller doesn't trim the ID, so we need to stub with the exact ID passed
-        when(orderRecordRepository.findByIdAndTenantId("  ord-2  ", "tenant-1")).thenReturn(Optional.of(row));
-        // resolveOrderApprovalMode is called before status check, so we need to stub it
-        when(commerceFacadeService.resolveOrderApprovalMode(row, "tenant-1")).thenReturn("STRICT");
+        when(orderRecordRepository.findByIdAndTenantId("ord-2", "tenant-1")).thenReturn(Optional.of(row));
 
         ResponseEntity<?> response = controller.confirmOrder(request, "  ord-2  ");
 
@@ -160,19 +157,16 @@ class V1OrderControllerTest {
 
         when(commerceFacadeService.normalizeStatusOrBlank(eq(" confirmed "), anySet())).thenReturn("CONFIRMED");
         when(commerceFacadeService.normalizePageSize(10)).thenReturn(10);
-        // The opportunityId is not trimmed in the controller, so it should be "  opp-1  "
-        // The owners are also not trimmed in the controller
-        when(commerceFacadeService.findOrders(eq("tenant-1"), eq("CONFIRMED"), eq("  opp-1  "), anyCollection(), any(Pageable.class)))
+        when(commerceFacadeService.findOrders(eq("tenant-1"), eq("CONFIRMED"), eq("opp-1"), anyCollection(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
 
         ResponseEntity<?> response = controller.listOrders(request, " confirmed ", "  opp-1  ", 1, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         ArgumentCaptor<Collection<String>> ownersCaptor = ArgumentCaptor.forClass(Collection.class);
-        verify(commerceFacadeService).findOrders(eq("tenant-1"), eq("CONFIRMED"), eq("  opp-1  "), ownersCaptor.capture(), any(Pageable.class));
+        verify(commerceFacadeService).findOrders(eq("tenant-1"), eq("CONFIRMED"), eq("opp-1"), ownersCaptor.capture(), any(Pageable.class));
         LinkedHashSet<String> owners = new LinkedHashSet<>(ownersCaptor.getValue());
-        // The controller does not trim owner values from request attributes
-        assertEquals(new LinkedHashSet<>(Arrays.asList("  alice  ", "  team-a  ")), owners);
+        assertEquals(new LinkedHashSet<>(Arrays.asList("alice", "team-a")), owners);
     }
 
     @Test
@@ -183,9 +177,8 @@ class V1OrderControllerTest {
         Opportunity opportunity = new Opportunity();
         opportunity.setId("opp-1");
         opportunity.setTenantId("tenant-1");
-        // The IDs are not trimmed before repository lookup in applyOrderPayload
-        when(customerRepository.findById("  cus-1  ")).thenReturn(Optional.of(customer));
-        when(opportunityRepository.findById("  opp-1  ")).thenReturn(Optional.of(opportunity));
+        when(customerRepository.findById("cus-1")).thenReturn(Optional.of(customer));
+        when(opportunityRepository.findById("opp-1")).thenReturn(Optional.of(opportunity));
         when(orderRecordRepository.save(any(OrderRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderCreateRequest payload = new OrderCreateRequest();
@@ -201,10 +194,8 @@ class V1OrderControllerTest {
         ArgumentCaptor<OrderRecord> orderCaptor = ArgumentCaptor.forClass(OrderRecord.class);
         verify(orderRecordRepository).save(orderCaptor.capture());
         OrderRecord saved = orderCaptor.getValue();
-        // The customerId and opportunityId are set as-is from payload (not trimmed)
-        assertEquals("  cus-1  ", saved.getCustomerId());
-        assertEquals("  opp-1  ", saved.getOpportunityId());
-        // Owner is trimmed in applyOrderPayload when it's not blank
+        assertEquals("cus-1", saved.getCustomerId());
+        assertEquals("opp-1", saved.getOpportunityId());
         assertEquals("bob", saved.getOwner());
         assertEquals("CONFIRMED", saved.getStatus());
         assertEquals(123L, saved.getAmount());
