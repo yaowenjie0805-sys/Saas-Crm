@@ -13,6 +13,7 @@ import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.enums.LeadStatusEnum;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -58,6 +59,7 @@ public class LeadImportService {
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
     private final RabbitTemplate rabbitTemplate;
+    private final IdGenerator idGenerator;
     private final int chunkSize;
     private final int maxRetries;
     private final int maxRows;
@@ -74,6 +76,7 @@ public class LeadImportService {
                              AuditLogService auditLogService,
                              ObjectMapper objectMapper,
                              RabbitTemplate rabbitTemplate,
+                             IdGenerator idGenerator,
                              Environment environment,
                              @Value("${lead.import.chunk-size:1000}") int chunkSize,
                              @Value("${lead.import.max-retries:3}") int maxRetries,
@@ -90,6 +93,7 @@ public class LeadImportService {
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
         this.rabbitTemplate = rabbitTemplate;
+        this.idGenerator = idGenerator;
         this.chunkSize = Math.max(500, Math.min(chunkSize, 2000));
         this.maxRetries = Math.max(1, maxRetries);
         this.maxRows = Math.max(1000, maxRows);
@@ -104,7 +108,7 @@ public class LeadImportService {
         validateUpload(file);
         ensureTenantImportCapacity(tenantId);
         LeadImportJob job = new LeadImportJob();
-        job.setId(newId("lij"));
+        job.setId(idGenerator.generate("lij"));
         job.setTenantId(tenantId);
         job.setFileName(file.getOriginalFilename());
         job.setStatus("PENDING");
@@ -345,7 +349,7 @@ public class LeadImportService {
                     addedKeys.add(dedupe);
                     pendingKeys.add(dedupe);
                     Lead lead = new Lead();
-                    lead.setId(newId("ld"));
+                    lead.setId(idGenerator.generate("ld"));
                     lead.setTenantId(tenantId);
                     lead.setName(row.name);
                     lead.setCompany(row.company);
@@ -423,7 +427,7 @@ public class LeadImportService {
     private void enqueueChunk(String tenantId, String jobId, int chunkNo, List<String> rows, String requestId) throws Exception {
         List<String> chunkRows = new ArrayList<String>(rows);
         LeadImportJobChunk chunk = new LeadImportJobChunk();
-        chunk.setId(newId("ljc"));
+        chunk.setId(idGenerator.generate("ljc"));
         chunk.setTenantId(tenantId);
         chunk.setJobId(jobId);
         chunk.setChunkNo(chunkNo);
@@ -510,7 +514,7 @@ public class LeadImportService {
 
     private void saveItemFailure(String tenantId, String jobId, int lineNo, String rawLine, String errorCode, String message) {
         LeadImportJobItem item = new LeadImportJobItem();
-        item.setId(newId("lji"));
+        item.setId(idGenerator.generate("lji"));
         item.setTenantId(tenantId);
         item.setJobId(jobId);
         item.setLineNo(lineNo);
@@ -686,9 +690,6 @@ public class LeadImportService {
         return tenantId + "|" + jobId;
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private static class DedupeKeyCache {
         private final Set<String> committedKeys = ConcurrentHashMap.newKeySet();

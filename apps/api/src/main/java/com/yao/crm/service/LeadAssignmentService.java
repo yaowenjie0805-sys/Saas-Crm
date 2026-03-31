@@ -8,6 +8,7 @@ import com.yao.crm.entity.LeadAssignmentRule;
 import com.yao.crm.repository.LeadAssignmentRuleRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.UserAccountRepository;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,17 +30,20 @@ public class LeadAssignmentService {
     private final UserAccountRepository userAccountRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private final IdGenerator idGenerator;
 
     public LeadAssignmentService(LeadAssignmentRuleRepository ruleRepository,
                                  LeadRepository leadRepository,
                                  UserAccountRepository userAccountRepository,
                                  AuditLogService auditLogService,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 IdGenerator idGenerator) {
         this.ruleRepository = ruleRepository;
         this.leadRepository = leadRepository;
         this.userAccountRepository = userAccountRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
+        this.idGenerator = idGenerator;
     }
 
     public List<Map<String, Object>> listRules(String tenantId) {
@@ -53,7 +57,7 @@ public class LeadAssignmentService {
     @Transactional
     public LeadAssignmentRule createRule(String tenantId, String operator, V1LeadAssignmentRuleRequest payload) {
         LeadAssignmentRule rule = new LeadAssignmentRule();
-        rule.setId(newId("lar"));
+        rule.setId(idGenerator.generate("lar"));
         rule.setTenantId(tenantId);
         rule.setName(payload.getName().trim());
         rule.setEnabled(Boolean.TRUE.equals(payload.getEnabled()));
@@ -183,9 +187,6 @@ public class LeadAssignmentService {
         return value == null ? "" : value.trim();
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     public static class Member {
         public String username;

@@ -3,6 +3,7 @@ package com.yao.crm.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.NotificationJob;
 import com.yao.crm.repository.NotificationJobRepository;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ class NotificationJobServiceTest {
 
     @Mock
     private IntegrationWebhookService integrationWebhookService;
+
+    @Mock
+    private IdGenerator idGenerator;
 
     private NotificationJobService service;
 
@@ -173,6 +177,7 @@ class NotificationJobServiceTest {
                 .thenReturn(Collections.<NotificationJob>emptyList());
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"event\":\"approval_sla_escalated\"}");
         when(jobRepository.save(any(NotificationJob.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(idGenerator.generate(anyString())).thenReturn("noj-123");
 
         service.enqueueSlaEscalated("tenant-1", "instance-1", "task-1", "approver-1");
 
@@ -253,6 +258,7 @@ class NotificationJobServiceTest {
                 auditLogService,
                 objectMapper,
                 integrationWebhookService,
+                idGenerator,
                 processQueueBatchSize,
                 5,
                 providers

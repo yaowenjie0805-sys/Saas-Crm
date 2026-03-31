@@ -6,6 +6,7 @@ import com.yao.crm.entity.ApprovalTemplate;
 import com.yao.crm.entity.ApprovalTemplateVersion;
 import com.yao.crm.repository.ApprovalTemplateRepository;
 import com.yao.crm.repository.ApprovalTemplateVersionRepository;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,15 +27,18 @@ public class ApprovalTemplateVersionService {
     private final ApprovalTemplateVersionRepository versionRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private final IdGenerator idGenerator;
 
     public ApprovalTemplateVersionService(ApprovalTemplateRepository templateRepository,
                                           ApprovalTemplateVersionRepository versionRepository,
                                           AuditLogService auditLogService,
-                                          ObjectMapper objectMapper) {
+                                          ObjectMapper objectMapper,
+                                          IdGenerator idGenerator) {
         this.templateRepository = templateRepository;
         this.versionRepository = versionRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
+        this.idGenerator = idGenerator;
     }
 
     @Transactional
@@ -98,7 +102,7 @@ public class ApprovalTemplateVersionService {
 
     private void saveVersionSnapshot(String tenantId, String operator, ApprovalTemplate template) {
         ApprovalTemplateVersion ver = new ApprovalTemplateVersion();
-        ver.setId(newId("apv"));
+        ver.setId(idGenerator.generate("apv"));
         ver.setTenantId(tenantId);
         ver.setTemplateId(template.getId());
         ver.setVersion(template.getVersion());
@@ -245,7 +249,4 @@ public class ApprovalTemplateVersionService {
         return row;
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 }

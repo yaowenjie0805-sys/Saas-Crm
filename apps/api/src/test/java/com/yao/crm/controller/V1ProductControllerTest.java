@@ -12,6 +12,7 @@ import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +52,8 @@ class V1ProductControllerTest {
     private AuditLogService auditLogService;
     @Mock
     private I18nService i18nService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private V1ProductController controller;
     private MockHttpServletRequest request;
@@ -63,7 +66,8 @@ class V1ProductControllerTest {
                 priceBookItemRepository,
                 commerceFacadeService,
                 auditLogService,
-                i18nService
+                i18nService,
+                idGenerator
         );
         when(i18nService.msg(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         request = new MockHttpServletRequest();

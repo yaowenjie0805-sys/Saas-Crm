@@ -42,15 +42,25 @@
 | 钉钉 | webhook（可签名） | `/api/v1/integrations/webhooks/dingtalk` + `IntegrationWebhookService` | `INTEGRATION_DINGTALK_WEBHOOK_URL`, `INTEGRATION_DINGTALK_SECRET` |
 | 飞书 | App 模式优先，webhook 兜底 | `/api/v1/integrations/webhooks/feishu` + `IntegrationWebhookService` | `INTEGRATION_FEISHU_APP_ID`, `INTEGRATION_FEISHU_APP_SECRET`, `INTEGRATION_FEISHU_RECEIVE_ID` |
 
-## 5. 核心基础设施模块
+## 5. AI 人工智能模块（新增）
+
+| 模块 | 主要后端服务 | 配置项 | 备注 |
+|---|---|---|---|
+| AI 内容生成 | `AiContentGenerationService` | `ai.openai.api-key` | 跟进摘要、评论回复、营销邮件 |
+| AI 销售预测 | `AiSalesForecastService` | `ai.openai.api-key` | 赢单概率、销售建议 |
+| AI 线索分类 | `AiLeadClassificationService` | `ai.openai.api-key` | 转化概率、来源分类 |
+| AI 基础设施 | `AiService` / `OpenAiServiceImpl` | `AiConfig` | 统一接口，支持 OpenAI/GPT-4o |
+
+## 6. 核心基础设施模块
 
 | 模块 | 对应目录/组件 | 说明 | 备注 |
 |---|---|---|---|
 | 异常处理模块 | `apps/api/src/main/java/com/yao/crm/exception/` | 基于 `BusinessException` 抽象和 `ErrorCode` 枚举构建统一业务异常体系，所有业务异常通过统一错误码和国际化消息对外暴露。 | 统一错误响应格式（含 `traceId`、`errorCode` 等），便于前后端协同排障。 |
 | 枚举管理模块 | `apps/api/src/main/java/com/yao/crm/enums/` | 集中管理角色、数据范围、实体状态、审批状态、工作流状态等核心枚举，保证跨模块语义一致性。 | 枚举值不可随意修改，对应配置与前端常量需同步维护。 |
 | 事件驱动模块 | `apps/api/src/main/java/com/yao/crm/event/` | 提供 `DomainEvent` 抽象、`DomainEventPublisher` 接口和基于 Spring 的发布实现，支持缓存失效等业务事件（如 `CacheInvalidationListener`）。 | 适用于跨聚合解耦、缓存刷新、审计扩展等场景。 |
+| AI 人工智能 | `apps/api/src/main/java/com/yao/crm/service/Ai*.java` | 统一的 AI 服务接口和 OpenAI 实现，支持内容生成、销售预测、线索分类等 AI 功能。 | 配置 `ai.openai.api-key` 启用，AI 不可用时自动降级。 |
 
-## 6. 代码阅读顺序建议
+## 7. 代码阅读顺序建议
 
 1. 前端入口与面板装配：`apps/web/src/crm/components/MainContentPanels.jsx`
 2. 对应页面：`apps/web/src/crm/components/pages/*`
@@ -59,7 +69,7 @@
 5. 业务实现：`apps/api/src/main/java/com/yao/crm/service/*`
 6. 迁移与表结构：`apps/api/src/main/resources/db/migration/*`
 
-## 6. 与本矩阵配套阅读
+## 8. 与本矩阵配套阅读
 
 - 全景调用关系：`docs/PROJECT_FLOW_MAP.md`
 - 热点文件地图：`docs/DEVELOPMENT_HOTSPOTS.md`

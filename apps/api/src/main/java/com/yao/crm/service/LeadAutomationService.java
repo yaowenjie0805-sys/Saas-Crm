@@ -10,6 +10,7 @@ import com.yao.crm.repository.AutomationRuleRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.NotificationJobRepository;
 import com.yao.crm.repository.TaskRepository;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ public class LeadAutomationService {
     private final NotificationJobRepository notificationJobRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private final IdGenerator idGenerator;
     private final ConcurrentHashMap<String, Long> dedupeWindow = new ConcurrentHashMap<String, Long>();
 
     public LeadAutomationService(AutomationRuleRepository automationRuleRepository,
@@ -36,13 +38,15 @@ public class LeadAutomationService {
                                  LeadRepository leadRepository,
                                  NotificationJobRepository notificationJobRepository,
                                  AuditLogService auditLogService,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 IdGenerator idGenerator) {
         this.automationRuleRepository = automationRuleRepository;
         this.taskRepository = taskRepository;
         this.leadRepository = leadRepository;
         this.notificationJobRepository = notificationJobRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
+        this.idGenerator = idGenerator;
     }
 
     @Transactional
@@ -95,7 +99,7 @@ public class LeadAutomationService {
 
     private void createTask(String tenantId, Lead lead, Map<String, Object> payload, String operator) {
         TaskItem task = new TaskItem();
-        task.setId(newId("t"));
+        task.setId(idGenerator.generate("t"));
         task.setTenantId(tenantId);
         task.setTitle(stringOr(payload.get("title"), "Follow up lead: " + lead.getName()));
         task.setTime(stringOr(payload.get("time"), "Today 18:00"));
@@ -119,7 +123,7 @@ public class LeadAutomationService {
         String dedupeKey = tenantId + "|" + lead.getId() + "|IN_APP|" + Integer.toHexString(message.hashCode());
         if (notificationJobRepository.findByTenantIdAndDedupeKey(tenantId, dedupeKey).isPresent()) return;
         NotificationJob job = new NotificationJob();
-        job.setId(newId("noj"));
+        job.setId(idGenerator.generate("noj"));
         job.setTenantId(tenantId);
         job.setEventType("lead_automation_notification");
         job.setTarget("IN_APP");
@@ -170,15 +174,10 @@ public class LeadAutomationService {
     }
 
     private void prune(long now) {
-        for (Map.Entry<String, Long> entry : dedupeWindow.entrySet()) {
+        dedupeWindow.entrySet().removeIf(entry -> {
             Long value = entry.getValue();
-            if (value == null || now - value > 5 * 60_000L) {
-                dedupeWindow.remove(entry.getKey());
-            }
-        }
+            return value == null || now - value > 5 * 60_000L;
+        });
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 }

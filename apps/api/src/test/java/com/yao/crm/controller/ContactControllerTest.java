@@ -7,6 +7,7 @@ import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +39,8 @@ class ContactControllerTest {
 
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private MockHttpServletRequest request;
 
@@ -45,7 +48,7 @@ class ContactControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new ContactController(contactRepository, customerRepository, auditLogService, new I18nService());
+        controller = new ContactController(contactRepository, customerRepository, auditLogService, new I18nService(), idGenerator);
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");

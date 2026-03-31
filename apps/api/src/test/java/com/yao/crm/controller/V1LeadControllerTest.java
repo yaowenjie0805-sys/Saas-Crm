@@ -15,6 +15,7 @@ import com.yao.crm.service.LeadAutomationService;
 import com.yao.crm.service.LeadImportFailedRowsExportJobService;
 import com.yao.crm.service.LeadImportService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,6 +63,8 @@ class V1LeadControllerTest {
     private LeadImportFailedRowsExportJobService leadImportFailedRowsExportJobService;
     @Mock
     private I18nService i18nService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private V1LeadController controller;
     private MockHttpServletRequest request;
@@ -80,7 +83,8 @@ class V1LeadControllerTest {
                 leadAutomationService,
                 leadImportService,
                 leadImportFailedRowsExportJobService,
-                i18nService
+                i18nService,
+                idGenerator
         );
         when(i18nService.msg(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         request = new MockHttpServletRequest();

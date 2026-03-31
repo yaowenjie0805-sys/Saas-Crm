@@ -14,6 +14,7 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -37,6 +38,7 @@ public class PaymentController extends BaseApiController {
     private final OrderRecordRepository orderRecordRepository;
     private final AuditLogService auditLogService;
     private final ValueNormalizerService valueNormalizerService;
+    private final IdGenerator idGenerator;
 
     public PaymentController(PaymentRecordRepository paymentRepository,
                              ContractRecordRepository contractRepository,
@@ -44,7 +46,8 @@ public class PaymentController extends BaseApiController {
                              OrderRecordRepository orderRecordRepository,
                              AuditLogService auditLogService,
                              ValueNormalizerService valueNormalizerService,
-                             I18nService i18nService) {
+                             I18nService i18nService,
+                             IdGenerator idGenerator) {
         super(i18nService);
         this.paymentRepository = paymentRepository;
         this.contractRepository = contractRepository;
@@ -52,6 +55,7 @@ public class PaymentController extends BaseApiController {
         this.orderRecordRepository = orderRecordRepository;
         this.auditLogService = auditLogService;
         this.valueNormalizerService = valueNormalizerService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/payments/search")
@@ -143,7 +147,7 @@ public class PaymentController extends BaseApiController {
         }
 
         PaymentRecord payment = new PaymentRecord();
-        payment.setId(newId("pm"));
+        payment.setId(idGenerator.generate("pm"));
         payment.setContractId(contract.getId());
         payment.setCustomerId(contract.getCustomerId());
         String normalizedOrderId = normalizeOptional(payload.getOrderId());
@@ -303,9 +307,6 @@ public class PaymentController extends BaseApiController {
         return ResponseEntity.noContent().build();
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private LocalDate parseDateOrNull(HttpServletRequest request, String value) {
         String normalized = normalizeRequired(value);

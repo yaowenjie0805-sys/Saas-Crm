@@ -10,6 +10,7 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -31,17 +32,20 @@ public class FollowUpController extends BaseApiController {
     private final CustomerRepository customerRepository;
     private final AuditLogService auditLogService;
     private final ValueNormalizerService valueNormalizerService;
+    private final IdGenerator idGenerator;
 
     public FollowUpController(FollowUpRepository followUpRepository,
                               CustomerRepository customerRepository,
                               AuditLogService auditLogService,
                               ValueNormalizerService valueNormalizerService,
-                              I18nService i18nService) {
+                              I18nService i18nService,
+                              IdGenerator idGenerator) {
         super(i18nService);
         this.followUpRepository = followUpRepository;
         this.customerRepository = customerRepository;
         this.auditLogService = auditLogService;
         this.valueNormalizerService = valueNormalizerService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/follow-ups/search")
@@ -126,7 +130,7 @@ public class FollowUpController extends BaseApiController {
         }
 
         FollowUp followUp = new FollowUp();
-        followUp.setId(newId("f"));
+        followUp.setId(idGenerator.generate("f"));
         followUp.setTenantId(tenantId);
         followUp.setCustomerId(normalizedCustomerId);
         followUp.setAuthor(isSalesScoped(request) ? currentUser(request) : (isBlank(payload.getAuthor()) ? currentUser(request) : payload.getAuthor().trim()));
@@ -232,9 +236,6 @@ public class FollowUpController extends BaseApiController {
         return customer.isPresent() && ownerMatchesScope(request, customer.get().getOwner());
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private LocalDate parseNextActionDateOrNull(HttpServletRequest request, String value) {
         String normalized = normalizeRequired(value);

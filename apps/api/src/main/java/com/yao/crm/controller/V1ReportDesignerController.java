@@ -10,6 +10,7 @@ import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,6 +33,7 @@ public class V1ReportDesignerController extends BaseApiController {
     private final LeadRepository leadRepository;
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
+    private final IdGenerator idGenerator;
 
     public V1ReportDesignerController(ReportDesignerTemplateRepository templateRepository,
                                       CustomerRepository customerRepository,
@@ -41,7 +43,8 @@ public class V1ReportDesignerController extends BaseApiController {
                                       LeadRepository leadRepository,
                                       AuditLogService auditLogService,
                                       ObjectMapper objectMapper,
-                                      I18nService i18nService) {
+                                      I18nService i18nService,
+                                      IdGenerator idGenerator) {
         super(i18nService);
         this.templateRepository = templateRepository;
         this.customerRepository = customerRepository;
@@ -51,6 +54,7 @@ public class V1ReportDesignerController extends BaseApiController {
         this.leadRepository = leadRepository;
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
+        this.idGenerator = idGenerator;
     }
 
     @PostMapping("/datasets/query")
@@ -86,7 +90,7 @@ public class V1ReportDesignerController extends BaseApiController {
             return ResponseEntity.status(409).body(errorBody(request, "report_template_name_exists", msg(request, "report_template_name_exists"), null));
         }
         ReportDesignerTemplate template = new ReportDesignerTemplate();
-        template.setId(newId("rpt"));
+        template.setId(idGenerator.generate("rpt"));
         template.setTenantId(tenantId);
         template.setName(name);
         template.setDataset(dataset);
@@ -301,9 +305,6 @@ public class V1ReportDesignerController extends BaseApiController {
         }
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private String normalizeTemplateId(String value) {
         return isBlank(value) ? "" : value.trim();

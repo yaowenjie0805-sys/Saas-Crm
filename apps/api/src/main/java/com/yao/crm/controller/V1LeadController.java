@@ -22,6 +22,7 @@ import com.yao.crm.service.LeadImportService;
 import com.yao.crm.service.ValueNormalizerService;
 import com.yao.crm.enums.LeadStatusEnum;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.data.domain.Page;
@@ -56,6 +57,7 @@ public class V1LeadController extends BaseApiController {
     private final LeadAutomationService leadAutomationService;
     private final LeadImportService leadImportService;
     private final LeadImportFailedRowsExportJobService leadImportFailedRowsExportJobService;
+    private final IdGenerator idGenerator;
 
     public V1LeadController(LeadRepository leadRepository,
                             CustomerRepository customerRepository,
@@ -68,7 +70,8 @@ public class V1LeadController extends BaseApiController {
                             LeadAutomationService leadAutomationService,
                             LeadImportService leadImportService,
                             LeadImportFailedRowsExportJobService leadImportFailedRowsExportJobService,
-                            I18nService i18nService) {
+                            I18nService i18nService,
+                            IdGenerator idGenerator) {
         super(i18nService);
         this.leadRepository = leadRepository;
         this.customerRepository = customerRepository;
@@ -81,6 +84,7 @@ public class V1LeadController extends BaseApiController {
         this.leadAutomationService = leadAutomationService;
         this.leadImportService = leadImportService;
         this.leadImportFailedRowsExportJobService = leadImportFailedRowsExportJobService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping
@@ -150,7 +154,7 @@ public class V1LeadController extends BaseApiController {
         }
         String tenantId = normalize(currentTenant(request));
         Lead lead = new Lead();
-        lead.setId(newId("ld"));
+        lead.setId(idGenerator.generate("ld"));
         try {
             applyPayload(request, lead, payload, true);
         } catch (IllegalArgumentException ex) {
@@ -251,7 +255,7 @@ public class V1LeadController extends BaseApiController {
         if (isBlank(owner)) owner = currentUser(request);
 
         Customer customer = new Customer();
-        customer.setId(newId("c"));
+        customer.setId(idGenerator.generate("c"));
         customer.setName(isBlank(lead.getCompany()) ? lead.getName() : lead.getCompany());
         customer.setOwner(owner);
         customer.setTag("Lead Converted");
@@ -261,7 +265,7 @@ public class V1LeadController extends BaseApiController {
         customer = customerRepository.save(customer);
 
         Contact contact = new Contact();
-        contact.setId(newId("ct"));
+        contact.setId(idGenerator.generate("ct"));
         contact.setCustomerId(customer.getId());
         contact.setName(isBlank(payload == null ? null : payload.getContactName()) ? lead.getName() : payload.getContactName().trim());
         contact.setTitle(isBlank(payload == null ? null : payload.getContactTitle()) ? "Decision Maker" : payload.getContactTitle().trim());
@@ -272,7 +276,7 @@ public class V1LeadController extends BaseApiController {
         contact = contactRepository.save(contact);
 
         Opportunity opportunity = new Opportunity();
-        opportunity.setId(newId("o"));
+        opportunity.setId(idGenerator.generate("o"));
         opportunity.setStage(valueNormalizerService.normalizeOpportunityStage(isBlank(payload == null ? null : payload.getOpportunityStage()) ? "Lead" : payload.getOpportunityStage().trim()));
         opportunity.setCount(1);
         opportunity.setAmount(0L);
@@ -701,7 +705,4 @@ public class V1LeadController extends BaseApiController {
         return out;
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 }

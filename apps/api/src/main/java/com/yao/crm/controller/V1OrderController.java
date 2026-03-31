@@ -12,6 +12,7 @@ import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +48,7 @@ public class V1OrderController extends CommerceControllerSupport {
     private final CommerceFacadeService commerceFacadeService;
     private final AuditLogService auditLogService;
     private final I18nService i18nService;
+    private final IdGenerator idGenerator;
 
     public V1OrderController(OrderRecordRepository orderRecordRepository,
                              CustomerRepository customerRepository,
@@ -55,7 +57,8 @@ public class V1OrderController extends CommerceControllerSupport {
                              ContractRecordRepository contractRecordRepository,
                              CommerceFacadeService commerceFacadeService,
                              AuditLogService auditLogService,
-                             I18nService i18nService) {
+                             I18nService i18nService,
+                             IdGenerator idGenerator) {
         super(i18nService);
         this.orderRecordRepository = orderRecordRepository;
         this.customerRepository = customerRepository;
@@ -65,6 +68,7 @@ public class V1OrderController extends CommerceControllerSupport {
         this.commerceFacadeService = commerceFacadeService;
         this.auditLogService = auditLogService;
         this.i18nService = i18nService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/orders")
@@ -109,7 +113,7 @@ public class V1OrderController extends CommerceControllerSupport {
         }
         String tenantId = currentTenant(request);
         OrderRecord row = new OrderRecord();
-        row.setId(newId("ord"));
+        row.setId(idGenerator.generate("ord"));
         row.setTenantId(tenantId);
         row.setOrderNo(generateNo("ORD"));
         String validate = applyOrderPayload(request, row, payload, true);
@@ -213,7 +217,7 @@ public class V1OrderController extends CommerceControllerSupport {
             return ResponseEntity.status(409).body(errorBody(request, "order_not_confirmed", msg(request, "order_not_confirmed"), null));
         }
         ContractRecord contract = new ContractRecord();
-        contract.setId(newId("ctr"));
+        contract.setId(idGenerator.generate("ctr"));
         contract.setTenantId(tenantId);
         contract.setCustomerId(order.getCustomerId());
         contract.setContractNo(generateNo("CTR"));

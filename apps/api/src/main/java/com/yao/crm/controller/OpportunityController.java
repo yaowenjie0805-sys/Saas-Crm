@@ -8,6 +8,7 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -26,15 +27,18 @@ public class OpportunityController extends BaseApiController {
     private final OpportunityRepository opportunityRepository;
     private final AuditLogService auditLogService;
     private final ValueNormalizerService valueNormalizerService;
+    private final IdGenerator idGenerator;
 
     public OpportunityController(OpportunityRepository opportunityRepository,
                                  AuditLogService auditLogService,
                                  ValueNormalizerService valueNormalizerService,
-                                 I18nService i18nService) {
+                                 I18nService i18nService,
+                                 IdGenerator idGenerator) {
         super(i18nService);
         this.opportunityRepository = opportunityRepository;
         this.auditLogService = auditLogService;
         this.valueNormalizerService = valueNormalizerService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/opportunities")
@@ -114,7 +118,7 @@ public class OpportunityController extends BaseApiController {
         }
 
         Opportunity opportunity = new Opportunity();
-        opportunity.setId(newId("o"));
+        opportunity.setId(idGenerator.generate("o"));
         opportunity.setTenantId(currentTenant(request));
         if (!valueNormalizerService.isValidOpportunityStage(payload.getStage())) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_opportunity_stage", "BAD_REQUEST", null));
@@ -199,8 +203,5 @@ public class OpportunityController extends BaseApiController {
 
         auditLogService.record(currentUser(request), currentRole(request), "DELETE", "OPPORTUNITY", normalizedId, "Deleted opportunity");
         return ResponseEntity.noContent().build();
-    }
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
     }
 }

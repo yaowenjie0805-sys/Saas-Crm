@@ -6,6 +6,7 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,8 @@ class ContractControllerTest {
 
     @Mock
     private ValueNormalizerService valueNormalizerService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private MockHttpServletRequest request;
 
@@ -47,7 +50,7 @@ class ContractControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new ContractController(contractRepository, customerRepository, auditLogService, valueNormalizerService, new I18nService());
+        controller = new ContractController(contractRepository, customerRepository, auditLogService, valueNormalizerService, new I18nService(), idGenerator);
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");

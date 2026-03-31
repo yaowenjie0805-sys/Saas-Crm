@@ -18,6 +18,7 @@ public interface ApprovalTaskRepository extends JpaRepository<ApprovalTask, Stri
     List<ApprovalTask> findByTenantIdAndStatusOrderByCreatedAtDesc(String tenantId, String status);
     List<ApprovalTask> findByStatusAndDeadlineAtBefore(String status, LocalDateTime deadlineAt);
     List<ApprovalTask> findByTenantIdAndEscalationSourceTaskIdOrderByCreatedAtDesc(String tenantId, String escalationSourceTaskId);
+    List<ApprovalTask> findByEscalationSourceTaskIdIn(List<String> escalationSourceTaskIds);
 
     @Transactional
     @Modifying

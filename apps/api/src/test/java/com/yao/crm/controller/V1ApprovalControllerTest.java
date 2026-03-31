@@ -15,6 +15,7 @@ import com.yao.crm.service.ApprovalSlaService;
 import com.yao.crm.service.ApprovalTemplateVersionService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,6 +62,8 @@ class V1ApprovalControllerTest {
     private ApprovalTemplateVersionService templateVersionService;
     @Mock
     private I18nService i18nService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private V1ApprovalController controller;
     private MockHttpServletRequest request;
@@ -79,7 +82,8 @@ class V1ApprovalControllerTest {
                 approvalSlaService,
                 templateVersionService,
                 new ObjectMapper(),
-                i18nService
+                i18nService,
+                idGenerator
         );
         when(i18nService.msg(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         request = new MockHttpServletRequest();

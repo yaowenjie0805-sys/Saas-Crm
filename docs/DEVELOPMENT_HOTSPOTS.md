@@ -100,6 +100,63 @@
 2. 涉及三方集成时，先补脚本化连通性检查，再改业务发送逻辑。
 3. 每次改完至少跑：`npm run test:backend` + `npm run build`。
 
+## 9. AI 人工智能服务热点
+
+### 9.1 AI 服务架构
+
+| 服务类 | 文件路径 | 功能说明 |
+|--------|----------|----------|
+| AI 配置 | `apps/api/src/main/java/com/yao/crm/config/AiConfig.java` | OpenAI/Anthropic API 配置 |
+| AI 服务接口 | `apps/api/src/main/java/com/yao/crm/service/AiService.java` | AI 服务统一接口 |
+| OpenAI 实现 | `apps/api/src/main/java/com/yao/crm/service/impl/OpenAiServiceImpl.java` | GPT-4o 实现 |
+
+### 9.2 AI 功能服务
+
+| 服务类 | 文件路径 | 功能说明 |
+|--------|----------|----------|
+| 内容生成 | `apps/api/src/main/java/com/yao/crm/service/AiContentGenerationService.java` | 跟进摘要、评论回复、营销邮件生成 |
+| 销售预测 | `apps/api/src/main/java/com/yao/crm/service/AiSalesForecastService.java` | 赢单概率、销售建议 |
+| 线索分类 | `apps/api/src/main/java/com/yao/crm/service/AiLeadClassificationService.java` | 转化概率、来源分类、质量评分 |
+
+### 9.3 AI 配置项
+
+```properties
+# AI 配置 (application.properties)
+ai.openai.api-key=${OPENAI_API_KEY:}
+ai.openai.base-url=${OPENAI_BASE_URL:https://api.openai.com}
+ai.openai.model=${OPENAI_MODEL:gpt-4o}
+ai.anthropic.api-key=${ANTHROPIC_API_KEY:}
+ai.anthropic.model=${ANTHROPIC_MODEL:claude-3-5-sonnet}
+```
+
+### 9.4 排查建议
+
+- AI 服务不可用：检查 `ai.openai.api-key` 是否配置
+- 响应慢/失败：检查网络连接和 API 配额
+- 降级方案：AI 服务不可用时会自动使用简单规则替代
+
+## 10. 代码优化记录
+
+### 10.1 IdGenerator 工具类
+
+- 统一 ID 生成策略，消除 18+ 文件中的重复 `newId()` 方法
+- 文件：`apps/api/src/main/java/com/yao/crm/util/IdGenerator.java`
+
+### 10.2 ReportService 重构
+
+- 提取泛型方法，减少 ~80 行重复代码
+- 文件：`apps/api/src/main/java/com/yao/crm/service/ReportService.java`
+
+### 10.3 LeadAutomationService 优化
+
+- 使用 `removeIf()` 替代手动迭代，提升去重窗口清理性能
+- 文件：`apps/api/src/main/java/com/yao/crm/service/LeadAutomationService.java`
+
+### 10.4 ApprovalSlaService N+1 优化
+
+- 将循环内查询改为批量查询，查询次数从 N+1 降为 2
+- 文件：`apps/api/src/main/java/com/yao/crm/service/ApprovalSlaService.java`
+
 ## 9. 测试覆盖热点
 
 新增 44+ 测试方法，覆盖以下模块：

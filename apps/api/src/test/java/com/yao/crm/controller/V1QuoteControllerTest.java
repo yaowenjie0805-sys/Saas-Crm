@@ -11,6 +11,7 @@ import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +67,8 @@ class V1QuoteControllerTest {
     private CommerceFacadeService commerceFacadeService;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private V1QuoteController controller;
 
@@ -86,7 +89,8 @@ class V1QuoteControllerTest {
                 commerceFacadeService,
                 auditLogService,
                 new ObjectMapper(),
-                new I18nService()
+                new I18nService(),
+                idGenerator
         );
     }
 

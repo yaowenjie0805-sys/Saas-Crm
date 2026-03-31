@@ -9,6 +9,7 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,15 +28,18 @@ public class ContactController extends BaseApiController {
     private final ContactRepository contactRepository;
     private final CustomerRepository customerRepository;
     private final AuditLogService auditLogService;
+    private final IdGenerator idGenerator;
 
     public ContactController(ContactRepository contactRepository,
                              CustomerRepository customerRepository,
                              AuditLogService auditLogService,
-                             I18nService i18nService) {
+                             I18nService i18nService,
+                             IdGenerator idGenerator) {
         super(i18nService);
         this.contactRepository = contactRepository;
         this.customerRepository = customerRepository;
         this.auditLogService = auditLogService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/contacts/search")
@@ -121,7 +125,7 @@ public class ContactController extends BaseApiController {
         }
 
         Contact contact = new Contact();
-        contact.setId(newId("ct"));
+        contact.setId(idGenerator.generate("ct"));
         contact.setTenantId(tenantId);
         contact.setCustomerId(normalizedCustomerId);
         contact.setName(payload.getName());
@@ -217,7 +221,4 @@ public class ContactController extends BaseApiController {
         return ResponseEntity.noContent().build();
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 }

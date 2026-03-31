@@ -7,6 +7,7 @@ import com.yao.crm.repository.TaskRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,11 +27,13 @@ public class TaskController extends BaseApiController {
 
     private final TaskRepository taskRepository;
     private final AuditLogService auditLogService;
+    private final IdGenerator idGenerator;
 
-    public TaskController(TaskRepository taskRepository, AuditLogService auditLogService, I18nService i18nService) {
+    public TaskController(TaskRepository taskRepository, AuditLogService auditLogService, I18nService i18nService, IdGenerator idGenerator) {
         super(i18nService);
         this.taskRepository = taskRepository;
         this.auditLogService = auditLogService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/tasks")
@@ -129,7 +132,7 @@ public class TaskController extends BaseApiController {
         }
 
         TaskItem task = new TaskItem();
-        task.setId(newId("t"));
+        task.setId(idGenerator.generate("t"));
         task.setTenantId(currentTenant(request));
         task.setTitle(payload.getTitle());
         task.setTime(payload.getTime());
@@ -163,9 +166,6 @@ public class TaskController extends BaseApiController {
         return ResponseEntity.ok(saved);
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private Boolean parseDoneFilter(String done) {
         if (isBlank(done)) return null;

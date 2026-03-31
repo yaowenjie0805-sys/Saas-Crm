@@ -10,6 +10,7 @@ import com.yao.crm.repository.LeadImportJobChunkRepository;
 import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.LeadRepository;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -72,6 +73,9 @@ class LeadImportServiceTest {
     private RabbitTemplate rabbitTemplate;
 
     @Mock
+    private IdGenerator idGenerator;
+
+    @Mock
     private Environment environment;
 
     private LeadImportService service;
@@ -89,6 +93,7 @@ class LeadImportServiceTest {
                 auditLogService,
                 new ObjectMapper(),
                 rabbitTemplate,
+                idGenerator,
                 environment,
                 1000,
                 3,

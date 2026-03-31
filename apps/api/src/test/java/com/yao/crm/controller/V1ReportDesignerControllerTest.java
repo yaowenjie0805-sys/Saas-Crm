@@ -11,6 +11,7 @@ import com.yao.crm.repository.PaymentRecordRepository;
 import com.yao.crm.repository.ReportDesignerTemplateRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,7 @@ class V1ReportDesignerControllerTest {
     private ContractRecordRepository contractRecordRepository;
     private PaymentRecordRepository paymentRecordRepository;
     private LeadRepository leadRepository;
+    private IdGenerator idGenerator;
     private V1ReportDesignerController controller;
 
     @BeforeEach
@@ -44,6 +46,7 @@ class V1ReportDesignerControllerTest {
         contractRecordRepository = mock(ContractRecordRepository.class);
         paymentRecordRepository = mock(PaymentRecordRepository.class);
         leadRepository = mock(LeadRepository.class);
+        idGenerator = mock(IdGenerator.class);
         AuditLogService auditLogService = mock(AuditLogService.class);
         controller = new V1ReportDesignerController(
                 templateRepository,
@@ -54,7 +57,8 @@ class V1ReportDesignerControllerTest {
                 leadRepository,
                 auditLogService,
                 new ObjectMapper(),
-                new I18nService()
+                new I18nService(),
+                idGenerator
         );
     }
 

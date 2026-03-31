@@ -10,6 +10,7 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -31,17 +32,20 @@ public class ContractController extends BaseApiController {
     private final CustomerRepository customerRepository;
     private final AuditLogService auditLogService;
     private final ValueNormalizerService valueNormalizerService;
+    private final IdGenerator idGenerator;
 
     public ContractController(ContractRecordRepository contractRepository,
                               CustomerRepository customerRepository,
                               AuditLogService auditLogService,
                               ValueNormalizerService valueNormalizerService,
-                              I18nService i18nService) {
+                              I18nService i18nService,
+                              IdGenerator idGenerator) {
         super(i18nService);
         this.contractRepository = contractRepository;
         this.customerRepository = customerRepository;
         this.auditLogService = auditLogService;
         this.valueNormalizerService = valueNormalizerService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/contracts/search")
@@ -131,7 +135,7 @@ public class ContractController extends BaseApiController {
         }
 
         ContractRecord contract = new ContractRecord();
-        contract.setId(newId("cr"));
+        contract.setId(idGenerator.generate("cr"));
         contract.setTenantId(tenantId);
         contract.setCustomerId(normalizedCustomerId);
         contract.setContractNo(isBlank(payload.getContractNo()) ? newContractNo() : payload.getContractNo().trim());
@@ -246,9 +250,6 @@ public class ContractController extends BaseApiController {
         return ResponseEntity.noContent().build();
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private String newContractNo() {
         return "CT-" + System.currentTimeMillis();

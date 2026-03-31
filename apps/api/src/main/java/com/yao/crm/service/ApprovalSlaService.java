@@ -7,6 +7,7 @@ import com.yao.crm.repository.ApprovalEventRepository;
 import com.yao.crm.repository.ApprovalInstanceRepository;
 import com.yao.crm.repository.ApprovalTaskRepository;
 import com.yao.crm.enums.ApprovalStatus;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class ApprovalSlaService {
@@ -25,23 +27,38 @@ public class ApprovalSlaService {
     private final ApprovalEventRepository eventRepository;
     private final AuditLogService auditLogService;
     private final NotificationJobService notificationJobService;
+    private final IdGenerator idGenerator;
 
     public ApprovalSlaService(ApprovalTaskRepository taskRepository,
                               ApprovalInstanceRepository instanceRepository,
                               ApprovalEventRepository eventRepository,
                               AuditLogService auditLogService,
-                              NotificationJobService notificationJobService) {
+                              NotificationJobService notificationJobService,
+                              IdGenerator idGenerator) {
         this.taskRepository = taskRepository;
         this.instanceRepository = instanceRepository;
         this.eventRepository = eventRepository;
         this.auditLogService = auditLogService;
         this.notificationJobService = notificationJobService;
+        this.idGenerator = idGenerator;
     }
 
     @Transactional(timeout = 30)
     public ScanResult scanOverdueAndEscalate() {
         LocalDateTime now = LocalDateTime.now();
         List<ApprovalTask> overdue = taskRepository.findByStatusAndDeadlineAtBefore(ApprovalStatus.PENDING.name(), now);
+
+        // Batch load all existing escalations for overdue tasks to avoid N+1 queries
+        List<String> overdueTaskIds = overdue.stream()
+                .map(ApprovalTask::getId)
+                .collect(Collectors.toList());
+        Map<String, List<ApprovalTask>> existingEscalationsMap = new LinkedHashMap<>();
+        if (!overdueTaskIds.isEmpty()) {
+            List<ApprovalTask> allExistingEsc = taskRepository.findByEscalationSourceTaskIdIn(overdueTaskIds);
+            existingEscalationsMap = allExistingEsc.stream()
+                    .collect(Collectors.groupingBy(ApprovalTask::getEscalationSourceTaskId, LinkedHashMap::new, Collectors.toList()));
+        }
+
         int handled = 0;
         Map<String, Integer> tierStats = new LinkedHashMap<String, Integer>();
         tierStats.put("P1", 0);
@@ -59,7 +76,7 @@ public class ApprovalSlaService {
                 recordEvent(task, "SLA_REMINDER", "system", "Pending task overdue | tier=" + tier + " | overdueMinutes=" + overdueMinutes);
                 auditLogService.record("system", "SYSTEM", "SLA_REMINDER", "APPROVAL_TASK", task.getId(), "Pending task overdue | tier=" + tier + " | overdueMinutes=" + overdueMinutes, task.getTenantId());
             }
-            List<ApprovalTask> existingEsc = taskRepository.findByTenantIdAndEscalationSourceTaskIdOrderByCreatedAtDesc(task.getTenantId(), task.getId());
+            List<ApprovalTask> existingEsc = existingEscalationsMap.getOrDefault(task.getId(), List.of());
             if (!existingEsc.isEmpty()) {
                 continue;
             }
@@ -76,7 +93,7 @@ public class ApprovalSlaService {
                 String role = roles[i] == null ? "" : roles[i].trim().toUpperCase();
                 if (role.isEmpty()) continue;
                 ApprovalTask esc = new ApprovalTask();
-                esc.setId(newId("aptk"));
+                esc.setId(idGenerator.generate("aptk"));
                 esc.setTenantId(task.getTenantId());
                 esc.setInstanceId(task.getInstanceId());
                 esc.setApproverRole(role);
@@ -146,7 +163,7 @@ public class ApprovalSlaService {
 
     private void recordEvent(ApprovalTask task, String eventType, String operator, String detail) {
         ApprovalEvent event = new ApprovalEvent();
-        event.setId(newId("apev"));
+        event.setId(idGenerator.generate("apev"));
         event.setTenantId(task.getTenantId());
         event.setInstanceId(task.getInstanceId());
         event.setTaskId(task.getId());
@@ -157,7 +174,4 @@ public class ApprovalSlaService {
         eventRepository.save(event);
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 }

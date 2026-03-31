@@ -5,6 +5,7 @@ import com.yao.crm.dto.request.UpdateOpportunityRequest;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
+import com.yao.crm.util.IdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,8 @@ class OpportunityControllerTest {
 
     @Mock
     private ValueNormalizerService valueNormalizerService;
+    @Mock
+    private IdGenerator idGenerator;
 
     private MockHttpServletRequest request;
 
@@ -40,7 +43,7 @@ class OpportunityControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new OpportunityController(opportunityRepository, auditLogService, valueNormalizerService, new I18nService());
+        controller = new OpportunityController(opportunityRepository, auditLogService, valueNormalizerService, new I18nService(), idGenerator);
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");

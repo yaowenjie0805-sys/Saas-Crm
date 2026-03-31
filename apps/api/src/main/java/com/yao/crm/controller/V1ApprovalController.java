@@ -13,6 +13,7 @@ import com.yao.crm.service.ApprovalSlaService;
 import com.yao.crm.service.ApprovalTemplateVersionService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
+import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -42,6 +43,7 @@ public class V1ApprovalController extends BaseApiController {
     private final ApprovalSlaService approvalSlaService;
     private final ApprovalTemplateVersionService templateVersionService;
     private final ObjectMapper objectMapper;
+    private final IdGenerator idGenerator;
 
     public V1ApprovalController(ApprovalTemplateRepository templateRepository,
                                 ApprovalInstanceRepository instanceRepository,
@@ -54,7 +56,8 @@ public class V1ApprovalController extends BaseApiController {
                                 ApprovalSlaService approvalSlaService,
                                 ApprovalTemplateVersionService templateVersionService,
                                 ObjectMapper objectMapper,
-                                I18nService i18nService) {
+                                I18nService i18nService,
+                                IdGenerator idGenerator) {
         super(i18nService);
         this.templateRepository = templateRepository;
         this.instanceRepository = instanceRepository;
@@ -67,6 +70,7 @@ public class V1ApprovalController extends BaseApiController {
         this.approvalSlaService = approvalSlaService;
         this.templateVersionService = templateVersionService;
         this.objectMapper = objectMapper;
+        this.idGenerator = idGenerator;
     }
 
     @PostMapping("/templates")
@@ -77,7 +81,7 @@ public class V1ApprovalController extends BaseApiController {
         try {
             String tenantId = normalize(currentTenant(request));
             ApprovalTemplate t = new ApprovalTemplate();
-            t.setId(newId("apt"));
+            t.setId(idGenerator.generate("apt"));
             t.setTenantId(tenantId);
             t.setBizType(payload.getBizType().trim().toUpperCase(Locale.ROOT));
             t.setName(payload.getName().trim());
@@ -261,7 +265,7 @@ public class V1ApprovalController extends BaseApiController {
         }
 
         ApprovalInstance instance = new ApprovalInstance();
-        instance.setId(newId("api"));
+        instance.setId(idGenerator.generate("api"));
         instance.setTenantId(tenantId);
         instance.setTemplateId(selected.getId());
         instance.setBizType(bizTypeUpper);
@@ -276,7 +280,7 @@ public class V1ApprovalController extends BaseApiController {
         for (int i = 0; i < effectiveNodes.size(); i++) {
             NodeDef node = effectiveNodes.get(i);
             ApprovalTask task = new ApprovalTask();
-            task.setId(newId("aptk"));
+            task.setId(idGenerator.generate("aptk"));
             task.setTenantId(tenantId);
             task.setInstanceId(instance.getId());
             task.setApproverRole(node.approverRoles.isEmpty() ? "MANAGER" : node.approverRoles.get(0));
@@ -342,7 +346,7 @@ public class V1ApprovalController extends BaseApiController {
         if (payload != null) task.setComment(payload.getComment());
 
         ApprovalTask next = new ApprovalTask();
-        next.setId(newId("aptk"));
+        next.setId(idGenerator.generate("aptk"));
         next.setTenantId(task.getTenantId());
         next.setInstanceId(task.getInstanceId());
         next.setApproverRole(task.getApproverRole());
@@ -897,7 +901,7 @@ public class V1ApprovalController extends BaseApiController {
 
     private void recordEvent(String tenantId, String instanceId, String taskId, String eventType, String operatorUser, String detail, String requestId) {
         ApprovalEvent event = new ApprovalEvent();
-        event.setId(newId("apev"));
+        event.setId(idGenerator.generate("apev"));
         event.setTenantId(tenantId);
         event.setInstanceId(instanceId);
         event.setTaskId(taskId);
@@ -908,9 +912,6 @@ public class V1ApprovalController extends BaseApiController {
         eventRepository.save(event);
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();

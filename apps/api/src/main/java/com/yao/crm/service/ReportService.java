@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -517,100 +518,106 @@ public class ReportService {
         return out;
     }
 
-    private List<Customer> loadCustomers(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+    // 通用加载方法 - 使用函数式接口减少重复代码
+    @FunctionalInterface
+    interface OwnerDateQuery<T> {
+        List<T> apply(String tenantId, Collection<String> owners, LocalDateTime from, LocalDateTime to);
+    }
+
+    @FunctionalInterface
+    interface OwnerQuery<T> {
+        List<T> apply(String tenantId, Collection<String> owners);
+    }
+
+    @FunctionalInterface
+    interface DateQuery<T> {
+        List<T> apply(String tenantId, LocalDateTime from, LocalDateTime to);
+    }
+
+    @FunctionalInterface
+    interface SimpleQuery<T> {
+        List<T> apply(String tenantId);
+    }
+
+    private <T> List<T> loadEntities(
+            String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners,
+            DateQuery<T> findByDate,
+            OwnerDateQuery<T> findByOwnerAndDate,
+            SimpleQuery<T> findByTenant,
+            OwnerQuery<T> findByOwner) {
+        if (owners != null && owners.isEmpty()) return Collections.emptyList();
         if (from != null && to != null) {
             return owners == null
-                    ? customerRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : customerRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+                    ? findByDate.apply(tenantId, from, to)
+                    : findByOwnerAndDate.apply(tenantId, owners, from, to);
         }
         return owners == null
-                ? customerRepository.findByTenantId(tenantId)
-                : customerRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+                ? findByTenant.apply(tenantId)
+                : findByOwner.apply(tenantId, owners);
+    }
+
+    private List<Customer> loadCustomers(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
+        return loadEntities(tenantId, from, to, owners,
+                customerRepository::findByTenantIdAndCreatedAtBetween,
+                customerRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                customerRepository::findByTenantId,
+                customerRepository::findByTenantIdAndOwnerIn);
     }
 
     private List<Opportunity> loadOpportunities(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? opportunityRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : opportunityRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? opportunityRepository.findByTenantId(tenantId)
-                : opportunityRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                opportunityRepository::findByTenantIdAndCreatedAtBetween,
+                opportunityRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                opportunityRepository::findByTenantId,
+                opportunityRepository::findByTenantIdAndOwnerIn);
     }
 
     private List<TaskItem> loadTasks(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? taskRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : taskRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? taskRepository.findByTenantId(tenantId)
-                : taskRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                taskRepository::findByTenantIdAndCreatedAtBetween,
+                taskRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                taskRepository::findByTenantId,
+                taskRepository::findByTenantIdAndOwnerIn);
     }
 
     private List<FollowUp> loadFollowUps(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? followUpRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : followUpRepository.findByTenantIdAndAuthorInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? followUpRepository.findByTenantId(tenantId)
-                : followUpRepository.findByTenantIdAndAuthorIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                followUpRepository::findByTenantIdAndCreatedAtBetween,
+                followUpRepository::findByTenantIdAndAuthorInAndCreatedAtBetween,
+                followUpRepository::findByTenantId,
+                followUpRepository::findByTenantIdAndAuthorIn);
     }
 
     private List<Quote> loadQuotes(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? quoteRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : quoteRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? quoteRepository.findByTenantId(tenantId)
-                : quoteRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                quoteRepository::findByTenantIdAndCreatedAtBetween,
+                quoteRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                quoteRepository::findByTenantId,
+                quoteRepository::findByTenantIdAndOwnerIn);
     }
 
     private List<OrderRecord> loadOrders(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? orderRecordRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : orderRecordRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? orderRecordRepository.findByTenantId(tenantId)
-                : orderRecordRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                orderRecordRepository::findByTenantIdAndCreatedAtBetween,
+                orderRecordRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                orderRecordRepository::findByTenantId,
+                orderRecordRepository::findByTenantIdAndOwnerIn);
     }
 
     private List<PaymentRecord> loadPayments(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? paymentRecordRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : paymentRecordRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? paymentRecordRepository.findByTenantId(tenantId)
-                : paymentRecordRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                paymentRecordRepository::findByTenantIdAndCreatedAtBetween,
+                paymentRecordRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                paymentRecordRepository::findByTenantId,
+                paymentRecordRepository::findByTenantIdAndOwnerIn);
     }
 
     private List<Lead> loadLeads(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
-        if (from != null && to != null) {
-            return owners == null
-                    ? leadRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
-                    : leadRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
-        }
-        return owners == null
-                ? leadRepository.findByTenantId(tenantId)
-                : leadRepository.findByTenantIdAndOwnerIn(tenantId, owners);
+        return loadEntities(tenantId, from, to, owners,
+                leadRepository::findByTenantIdAndCreatedAtBetween,
+                leadRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
+                leadRepository::findByTenantId,
+                leadRepository::findByTenantIdAndOwnerIn);
     }
 
     private Set<String> loadRoleIdentities(String tenantId, String role) {

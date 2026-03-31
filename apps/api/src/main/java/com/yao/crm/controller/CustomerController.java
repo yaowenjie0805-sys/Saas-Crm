@@ -8,6 +8,7 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,15 +29,18 @@ public class CustomerController extends BaseApiController {
     private final CustomerRepository customerRepository;
     private final AuditLogService auditLogService;
     private final ValueNormalizerService valueNormalizerService;
+    private final IdGenerator idGenerator;
 
     public CustomerController(CustomerRepository customerRepository,
                               AuditLogService auditLogService,
                               ValueNormalizerService valueNormalizerService,
-                              I18nService i18nService) {
+                              I18nService i18nService,
+                              IdGenerator idGenerator) {
         super(i18nService);
         this.customerRepository = customerRepository;
         this.auditLogService = auditLogService;
         this.valueNormalizerService = valueNormalizerService;
+        this.idGenerator = idGenerator;
     }
 
     @GetMapping("/customers")
@@ -125,7 +129,7 @@ public class CustomerController extends BaseApiController {
         }
 
         Customer customer = new Customer();
-        customer.setId(newId("c"));
+        customer.setId(idGenerator.generate("c"));
         customer.setTenantId(currentTenant(request));
         customer.setName(payload.getName());
         if (isSalesScoped(request)) {
@@ -202,7 +206,4 @@ public class CustomerController extends BaseApiController {
         return ResponseEntity.noContent().build();
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 }

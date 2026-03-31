@@ -15,6 +15,7 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.util.CollectionsUtil;
+import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,13 +43,15 @@ public class V1ProductController extends CommerceControllerSupport {
     private final CommerceFacadeService commerceFacadeService;
     private final AuditLogService auditLogService;
     private final I18nService i18nService;
+    private final IdGenerator idGenerator;
 
     public V1ProductController(ProductRepository productRepository,
                                 PriceBookRepository priceBookRepository,
                                 PriceBookItemRepository priceBookItemRepository,
                                 CommerceFacadeService commerceFacadeService,
                                 AuditLogService auditLogService,
-                                I18nService i18nService) {
+                                I18nService i18nService,
+                                IdGenerator idGenerator) {
         super(i18nService);
         this.productRepository = productRepository;
         this.priceBookRepository = priceBookRepository;
@@ -56,6 +59,7 @@ public class V1ProductController extends CommerceControllerSupport {
         this.commerceFacadeService = commerceFacadeService;
         this.auditLogService = auditLogService;
         this.i18nService = i18nService;
+        this.idGenerator = idGenerator;
     }
 
     // ========== Products ==========
@@ -89,7 +93,7 @@ public class V1ProductController extends CommerceControllerSupport {
         }
         String tenantId = currentTenant(request);
         Product product = new Product();
-        product.setId(newId("prd"));
+        product.setId(idGenerator.generate("prd"));
         product.setTenantId(tenantId);
         String validate = applyProductPayload(product, payload, true);
         if (!isBlank(validate)) {
@@ -163,7 +167,7 @@ public class V1ProductController extends CommerceControllerSupport {
         }
         String tenantId = currentTenant(request);
         PriceBook row = new PriceBook();
-        row.setId(newId("pb"));
+        row.setId(idGenerator.generate("pb"));
         row.setTenantId(tenantId);
         String validate = applyPriceBookPayload(row, payload, true);
         if (!isBlank(validate)) {
@@ -247,7 +251,7 @@ public class V1ProductController extends CommerceControllerSupport {
             return ResponseEntity.status(404).body(errorBody(request, "product_not_found", msg(request, "product_not_found"), null));
         }
         PriceBookItem item = priceBookItemRepository.findByTenantIdAndPriceBookIdAndProductId(tenantId, normalizedPriceBookId, productId).orElseGet(PriceBookItem::new);
-        if (isBlank(item.getId())) item.setId(newId("pbi"));
+        if (isBlank(item.getId())) item.setId(idGenerator.generate("pbi"));
         item.setTenantId(tenantId);
         item.setPriceBookId(normalizedPriceBookId);
         item.setProductId(productId);

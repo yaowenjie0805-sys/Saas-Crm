@@ -3,6 +3,7 @@ package com.yao.crm.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.NotificationJob;
 import com.yao.crm.repository.NotificationJobRepository;
+import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ public class NotificationJobService {
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
     private final IntegrationWebhookService integrationWebhookService;
+    private final IdGenerator idGenerator;
     private final int processQueueBatchSize;
     private final int maxRetries;
     private final List<String> slaEscalationTargets;
@@ -31,6 +33,7 @@ public class NotificationJobService {
                                    AuditLogService auditLogService,
                                    ObjectMapper objectMapper,
                                    IntegrationWebhookService integrationWebhookService,
+                                   IdGenerator idGenerator,
                                    @Value("${integration.notifications.process-queue-batch-size:100}") int processQueueBatchSize,
                                    @Value("${integration.notifications.max-retries:5}") int maxRetries,
                                    @Value("${integration.webhooks.providers:WECOM,DINGTALK}") String providers) {
@@ -38,6 +41,7 @@ public class NotificationJobService {
         this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
         this.integrationWebhookService = integrationWebhookService;
+        this.idGenerator = idGenerator;
         this.processQueueBatchSize = processQueueBatchSize <= 0 ? DEFAULT_PROCESS_QUEUE_BATCH_SIZE : processQueueBatchSize;
         this.maxRetries = Math.max(1, maxRetries);
         this.slaEscalationTargets = parseProviders(providers);
@@ -72,7 +76,7 @@ public class NotificationJobService {
                 payload.put("taskId", taskId);
                 payload.put("approverRole", approverRole);
                 NotificationJob job = new NotificationJob();
-                job.setId(newId("noj"));
+                job.setId(idGenerator.generate("noj"));
                 job.setTenantId(tenantId);
                 job.setEventType("approval_sla_escalated");
                 job.setTarget(target);
@@ -292,9 +296,6 @@ public class NotificationJobService {
         return item;
     }
 
-    private String newId(String prefix) {
-        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
-    }
 
     private List<String> parseProviders(String providers) {
         if (providers == null || providers.trim().isEmpty()) {
