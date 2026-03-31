@@ -4,10 +4,15 @@ import javax.persistence.Column;
 import javax.persistence.MappedSuperclass;
 import javax.persistence.PrePersist;
 import javax.persistence.PreUpdate;
+import javax.persistence.Version;
 import java.time.LocalDateTime;
 
 @MappedSuperclass
 public abstract class BaseEntity {
+
+    @Version
+    @Column(name = "version")
+    protected Long version;
 
     @Column(name = "created_at", updatable = false)
     protected LocalDateTime createdAt;

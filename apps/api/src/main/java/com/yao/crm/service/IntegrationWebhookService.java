@@ -26,6 +26,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class IntegrationWebhookService {
@@ -33,6 +36,80 @@ public class IntegrationWebhookService {
     private static final Logger log = LoggerFactory.getLogger(IntegrationWebhookService.class);
     private static final TypeReference<Map<String, Object>> MAP_REF = new TypeReference<Map<String, Object>>() {};
     private static final String FEISHU_BASE_URL = "https://open.feishu.cn";
+
+    // Circuit breaker configuration
+    private static final int FAILURE_THRESHOLD = 5;
+    private static final long COOLDOWN_MS = 60_000; // 1 minute
+    private static final int HALF_OPEN_MAX_CALLS = 3;
+
+    // Circuit state enum
+    private enum CircuitState { CLOSED, OPEN, HALF_OPEN }
+
+    // Per-provider circuit breaker state
+    private static class CircuitBreaker {
+        private volatile CircuitState state = CircuitState.CLOSED;
+        private final AtomicInteger failureCount = new AtomicInteger(0);
+        private final AtomicInteger halfOpenSuccessCount = new AtomicInteger(0);
+        private volatile long lastFailureTime = 0;
+
+        void recordSuccess() {
+            if (state == CircuitState.HALF_OPEN) {
+                if (halfOpenSuccessCount.incrementAndGet() >= HALF_OPEN_MAX_CALLS) {
+                    reset();
+                }
+            } else {
+                failureCount.set(0);
+            }
+        }
+
+        void recordFailure() {
+            lastFailureTime = System.currentTimeMillis();
+            if (state == CircuitState.HALF_OPEN) {
+                transitionToOpen();
+            } else if (failureCount.incrementAndGet() >= FAILURE_THRESHOLD) {
+                transitionToOpen();
+            }
+        }
+
+        boolean allowRequest() {
+            if (state == CircuitState.CLOSED) {
+                return true;
+            }
+            if (state == CircuitState.OPEN) {
+                if (System.currentTimeMillis() - lastFailureTime > COOLDOWN_MS) {
+                    transitionToHalfOpen();
+                    return true;
+                }
+                return false;
+            }
+            // HALF_OPEN state - allow limited requests
+            return halfOpenSuccessCount.get() < HALF_OPEN_MAX_CALLS;
+        }
+
+        private void transitionToOpen() {
+            state = CircuitState.OPEN;
+            failureCount.set(0);
+            halfOpenSuccessCount.set(0);
+            log.warn("Circuit breaker opened for provider");
+        }
+
+        private void transitionToHalfOpen() {
+            state = CircuitState.HALF_OPEN;
+            halfOpenSuccessCount.set(0);
+            log.info("Circuit breaker transitioned to half-open");
+        }
+
+        private void reset() {
+            state = CircuitState.CLOSED;
+            failureCount.set(0);
+            halfOpenSuccessCount.set(0);
+            log.info("Circuit breaker reset to closed");
+        }
+
+        CircuitState getState() {
+            return state;
+        }
+    }
 
     private final NotificationChannelRepository notificationChannelRepository;
     private final ObjectMapper objectMapper;
@@ -50,6 +127,9 @@ public class IntegrationWebhookService {
     private final String feishuReceiveId;
     private final String feishuReceiveIdType;
     private final String feishuBaseUrl;
+
+    // Circuit breakers per provider
+    private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
     public IntegrationWebhookService(NotificationChannelRepository notificationChannelRepository,
                                      ObjectMapper objectMapper,
@@ -80,29 +160,55 @@ public class IntegrationWebhookService {
         this.feishuReceiveId = safeTrim(feishuReceiveId);
         this.feishuReceiveIdType = normalizeReceiveIdType(feishuReceiveIdType);
         this.feishuBaseUrl = safeTrim(feishuBaseUrl);
+
+        // Initialize circuit breakers for each provider
+        circuitBreakers.put("WECOM", new CircuitBreaker());
+        circuitBreakers.put("DINGTALK", new CircuitBreaker());
+        circuitBreakers.put("FEISHU", new CircuitBreaker());
     }
 
     public boolean sendMessage(String provider, String tenantId, String title, String content, String userId) {
         String normalized = normalizeProvider(provider);
+        CircuitBreaker circuitBreaker = circuitBreakers.get(normalized);
+
+        // Check circuit breaker before attempting any call
+        if (circuitBreaker != null && !circuitBreaker.allowRequest()) {
+            log.warn("Circuit breaker is open for provider={}, skipping webhook call", normalized);
+            return false;
+        }
+
         ProviderConfig config = resolveProviderConfig(normalized, tenantId);
         String text = safeText(title, "CRM Notification") + "\n" + safeText(content, "");
+
+        boolean success = false;
 
         if ("FEISHU".equals(normalized) && canUseFeishuApp(config)) {
             boolean appSent = sendFeishuByApp(config, text, userId);
             if (appSent) {
-                return true;
+                success = true;
+            } else {
+                log.warn("Feishu app mode failed, fallback to webhook if available. tenantId={}", tenantId);
             }
-            log.warn("Feishu app mode failed, fallback to webhook if available. tenantId={}", tenantId);
         }
 
-        if (isBlank(config.webhookUrl)) {
+        if (!success && !isBlank(config.webhookUrl)) {
+            Map<String, Object> body = buildProviderMessageBody(normalized, title, content, config.secret);
+            String finalUrl = buildSignedUrl(normalized, config.webhookUrl, config.secret);
+            success = postJson(finalUrl, body);
+        } else if (isBlank(config.webhookUrl)) {
             log.warn("Webhook skipped because url is missing. provider={}, tenantId={}", normalized, tenantId);
-            return false;
         }
 
-        Map<String, Object> body = buildProviderMessageBody(normalized, title, content, config.secret);
-        String finalUrl = buildSignedUrl(normalized, config.webhookUrl, config.secret);
-        return postJson(finalUrl, body);
+        // Record result in circuit breaker
+        if (circuitBreaker != null) {
+            if (success) {
+                circuitBreaker.recordSuccess();
+            } else {
+                circuitBreaker.recordFailure();
+            }
+        }
+
+        return success;
     }
 
     public boolean sendEvent(String provider, String tenantId, String eventType, String payloadJson, String jobId) {
