@@ -4,7 +4,7 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * 活动分享实体 - 记录客户动态分享
+ * 娲诲姩鍒嗕韩瀹炰綋 - 璁板綍瀹㈡埛鍔ㄦ€佸垎浜?
  */
 @Entity
 @Table(name = "activity_shares")
@@ -45,7 +45,7 @@ public class ActivityShare {
     public void prePersist() {
         if (id == null) id = java.util.UUID.randomUUID().toString();
         if (createdAt == null) createdAt = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     // Getters and Setters

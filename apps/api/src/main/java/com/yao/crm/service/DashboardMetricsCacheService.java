@@ -120,7 +120,7 @@ public class DashboardMetricsCacheService {
         long ttlMs = ttlMsOverride > 0 ? ttlMsOverride : namespaceTtlMs(ns);
         boolean fallback = false;
 
-        long version = localTenantVersions.containsKey(tenant) ? localTenantVersions.get(tenant) : 0L;
+        long version = localTenantVersions.getOrDefault(tenant, 0L);
         if (canUseRedis()) {
             try {
                 Object raw = redisTemplate.opsForValue().get(redisVersionKey(tenant));
@@ -170,8 +170,10 @@ public class DashboardMetricsCacheService {
                 fallback = true;
             }
         }
-        recordCacheMetric("miss", fallback ? "LOCAL" : "REDIS", fallback, ns);
-        return new CachedValue<T>(loaded, false, fallback ? "LOCAL" : "REDIS", fallback);
+        boolean redisTier = !fallback && canUseRedis();
+        String missTier = redisTier ? "REDIS" : "LOCAL";
+        recordCacheMetric("miss", missTier, fallback, ns);
+        return new CachedValue<T>(loaded, false, missTier, fallback);
     }
 
     @Scheduled(fixedDelayString = "${crm.cache.local.cleanup-interval-ms:60000}")
@@ -193,7 +195,7 @@ public class DashboardMetricsCacheService {
 
     public void bumpTenantVersion(String tenantId) {
         String tenant = normalizeTenant(tenantId);
-        long nextVersion = localTenantVersions.containsKey(tenant) ? localTenantVersions.get(tenant) + 1L : 1L;
+        long nextVersion = localTenantVersions.getOrDefault(tenant, 0L) + 1L;
         if (canUseRedis()) {
             try {
                 Long value = redisTemplate.opsForValue().increment(redisVersionKey(tenant), 1L);
@@ -218,7 +220,7 @@ public class DashboardMetricsCacheService {
         String tenant = normalizeTenant(tenantId);
         String domain = normalizeDomain(domainRaw);
         String domainKey = localDomainVersionKey(tenant, domain);
-        long nextVersion = localDomainVersions.containsKey(domainKey) ? localDomainVersions.get(domainKey) + 1L : 1L;
+        long nextVersion = localDomainVersions.getOrDefault(domainKey, 0L) + 1L;
         if (canUseRedis()) {
             try {
                 Long value = redisTemplate.opsForValue().increment(redisDomainVersionKey(tenant, domain), 1L);
@@ -298,7 +300,10 @@ public class DashboardMetricsCacheService {
     }
 
     private String normalizeTenant(String tenantId) {
-        return tenantId == null || tenantId.trim().isEmpty() ? "tenant_default" : tenantId.trim();
+        if (tenantId == null || tenantId.trim().isEmpty()) {
+            throw new IllegalStateException("tenant_id_required");
+        }
+        return tenantId.trim();
     }
 
     private String normalizeNamespace(String namespace) {
@@ -322,7 +327,7 @@ public class DashboardMetricsCacheService {
     private long loadDomainVersion(String tenantId, String domainRaw) {
         String domain = normalizeDomain(domainRaw);
         String mapKey = localDomainVersionKey(tenantId, domain);
-        long version = localDomainVersions.containsKey(mapKey) ? localDomainVersions.get(mapKey) : 0L;
+        long version = localDomainVersions.getOrDefault(mapKey, 0L);
         if (canUseRedis()) {
             try {
                 Object raw = redisTemplate.opsForValue().get(redisDomainVersionKey(tenantId, domain));

@@ -43,7 +43,7 @@ public class UserAccount extends BaseEntity {
 
     @PrePersist
     public void prePersist() {
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (department == null || department.trim().isEmpty()) department = "DEFAULT";
         if (dataScope == null || dataScope.trim().isEmpty()) dataScope = "SELF";
     }

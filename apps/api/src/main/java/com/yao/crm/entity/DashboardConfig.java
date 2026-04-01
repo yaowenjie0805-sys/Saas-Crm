@@ -4,7 +4,7 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * 仪表盘配置实体
+ * 浠〃鐩橀厤缃疄浣?
  */
 @Entity
 @Table(name = "dashboard_configs")
@@ -60,7 +60,7 @@ public class DashboardConfig {
         if (isDefault == null) isDefault = false;
         if (isSystem == null) isSystem = false;
         if (visibility == null || visibility.trim().isEmpty()) visibility = "PRIVATE";
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

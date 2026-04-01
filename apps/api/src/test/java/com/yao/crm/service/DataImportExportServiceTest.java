@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.repository.ContactRepository;
@@ -81,7 +83,7 @@ class DataImportExportServiceTest {
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DataImportExportService.ImportJobResult result =
-                service.createImportJob("tenant_1", "user123", "Customer", inputStream, "test.csv", "csv");
+                service.createImportJob(TENANT_TEST, "user123", "Customer", inputStream, "test.csv", "csv");
 
         assertNotNull(result);
         assertNotNull(result.getJobId());
@@ -95,7 +97,7 @@ class DataImportExportServiceTest {
         InputStream inputStream = new ByteArrayInputStream(csvContent.getBytes(StandardCharsets.UTF_8));
 
         DataImportExportService.ImportJobResult result =
-                service.createImportJob("tenant_1", "user123", "InvalidType", inputStream, "test.csv", "csv");
+                service.createImportJob(TENANT_TEST, "user123", "InvalidType", inputStream, "test.csv", "csv");
 
         assertNotNull(result);
         assertEquals("FAILED", result.getStatus());
@@ -109,7 +111,7 @@ class DataImportExportServiceTest {
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DataImportExportService.ImportJobResult createResult =
-                service.createImportJob("tenant_1", "user123", "Customer", inputStream, "test.csv", "csv");
+                service.createImportJob(TENANT_TEST, "user123", "Customer", inputStream, "test.csv", "csv");
 
         DataImportExportService.ImportJobResult status = service.getImportJobStatus(createResult.getJobId());
 
@@ -131,7 +133,7 @@ class DataImportExportServiceTest {
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DataImportExportService.ImportJobResult createResult =
-                service.createImportJob("tenant_1", "user123", "Customer", inputStream, "test.csv", "csv");
+                service.createImportJob(TENANT_TEST, "user123", "Customer", inputStream, "test.csv", "csv");
 
         service.cancelImportJob(createResult.getJobId());
         DataImportExportService.ImportJobResult status = service.getImportJobStatus(createResult.getJobId());
@@ -163,10 +165,10 @@ class DataImportExportServiceTest {
                 createCustomer("cust_1", "CompanyA"),
                 createCustomer("cust_2", "CompanyB")
         );
-        when(customerRepository.findByTenantId("tenant_1")).thenReturn(customers);
+        when(customerRepository.findByTenantId(TENANT_TEST)).thenReturn(customers);
 
         DataImportExportService.ExportJobResult result =
-                service.createExportJob("tenant_1", "user123", "Customer", null, null, "csv");
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
 
         assertNotNull(result);
         assertNotNull(result.getJobId());
@@ -176,7 +178,7 @@ class DataImportExportServiceTest {
     @Test
     void testCreateExportJob_InvalidEntityType() {
         DataImportExportService.ExportJobResult result =
-                service.createExportJob("tenant_1", "user123", "InvalidType", null, null, "csv");
+                service.createExportJob(TENANT_TEST, "user123", "InvalidType", null, null, "csv");
 
         assertNotNull(result);
         assertEquals("FAILED", result.getStatus());
@@ -186,10 +188,10 @@ class DataImportExportServiceTest {
     @Disabled("TODO: rewrite to use mock CacheService for async behavior")
     void testGetExportJobStatus() {
         List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
-        when(customerRepository.findByTenantId("tenant_1")).thenReturn(customers);
+        when(customerRepository.findByTenantId(TENANT_TEST)).thenReturn(customers);
 
         DataImportExportService.ExportJobResult createResult =
-                service.createExportJob("tenant_1", "user123", "Customer", null, null, "csv");
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
 
         DataImportExportService.ExportJobResult status = service.getExportJobStatus(createResult.getJobId());
 
@@ -223,7 +225,8 @@ class DataImportExportServiceTest {
         Customer customer = new Customer();
         customer.setId(id);
         customer.setName(name);
-        customer.setTenantId("tenant_1");
+        customer.setTenantId(TENANT_TEST);
         return customer;
     }
 }
+

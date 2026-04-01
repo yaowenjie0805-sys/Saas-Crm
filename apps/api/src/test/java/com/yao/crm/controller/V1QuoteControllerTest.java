@@ -29,9 +29,11 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
@@ -100,13 +102,13 @@ class V1QuoteControllerTest {
         when(commerceFacadeService.normalizeStatusOrBlank(eq(" draft "), anySet())).thenReturn("DRAFT");
         when(commerceFacadeService.normalizePageSize(10)).thenReturn(10);
         Page<Quote> page = new PageImpl<Quote>(Collections.emptyList());
-        when(commerceFacadeService.findQuotes(eq("tenant-1"), eq("DRAFT"), eq("opp-1"), eq(null), any(Pageable.class)))
+        when(commerceFacadeService.findQuotes(eq(TENANT_TEST), eq("DRAFT"), eq("opp-1"), eq(null), any(Pageable.class)))
                 .thenReturn(page);
 
         ResponseEntity<?> response = controller.listQuotes(request, " draft ", "  opp-1  ", 1, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(commerceFacadeService).findQuotes(eq("tenant-1"), eq("DRAFT"), eq("opp-1"), eq(null), any(Pageable.class));
+        verify(commerceFacadeService).findQuotes(eq(TENANT_TEST), eq("DRAFT"), eq("opp-1"), eq(null), any(Pageable.class));
     }
 
     @Test
@@ -115,22 +117,22 @@ class V1QuoteControllerTest {
         MockHttpServletRequest request = authedRequest("MANAGER");
         Quote existing = new Quote();
         existing.setId("qt-1");
-        existing.setTenantId("tenant-1");
+        existing.setTenantId(TENANT_TEST);
         existing.setStatus("DRAFT");
         existing.setOwner("legacy-owner");
-        when(quoteRepository.findByIdAndTenantId("qt-1", "tenant-1")).thenReturn(Optional.of(existing));
+        when(quoteRepository.findByIdAndTenantId("qt-1", TENANT_TEST)).thenReturn(Optional.of(existing));
 
         Customer customer = new Customer();
         customer.setId("c-1");
-        customer.setTenantId("tenant-1");
-        when(customerRepository.findById("c-1")).thenReturn(Optional.of(customer));
+        customer.setTenantId(TENANT_TEST);
+        when(customerRepository.findByIdAndTenantId("c-1", TENANT_TEST)).thenReturn(Optional.of(customer));
 
         Opportunity opportunity = new Opportunity();
         opportunity.setId("o-1");
-        opportunity.setTenantId("tenant-1");
-        when(opportunityRepository.findById("o-1")).thenReturn(Optional.of(opportunity));
+        opportunity.setTenantId(TENANT_TEST);
+        when(opportunityRepository.findByIdAndTenantId("o-1", TENANT_TEST)).thenReturn(Optional.of(opportunity));
 
-        when(quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc("tenant-1", "qt-1"))
+        when(quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(TENANT_TEST, "qt-1"))
                 .thenReturn(Collections.<QuoteItem>emptyList());
         when(quoteRepository.save(any(Quote.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -144,9 +146,9 @@ class V1QuoteControllerTest {
         ResponseEntity<?> response = controller.patchQuote(request, payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(quoteRepository).findByIdAndTenantId("qt-1", "tenant-1");
-        verify(customerRepository).findById("c-1");
-        verify(opportunityRepository).findById("o-1");
+        verify(quoteRepository).findByIdAndTenantId("qt-1", TENANT_TEST);
+        verify(customerRepository).findByIdAndTenantId("c-1", TENANT_TEST);
+        verify(opportunityRepository).findByIdAndTenantId("o-1", TENANT_TEST);
 
         ArgumentCaptor<Quote> savedCaptor = ArgumentCaptor.forClass(Quote.class);
         verify(quoteRepository, atLeastOnce()).save(savedCaptor.capture());
@@ -158,6 +160,15 @@ class V1QuoteControllerTest {
 
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("quote_updated", body.get("code"));
+        verify(auditLogService).record(
+                eq("tester"),
+                eq("MANAGER"),
+                eq("UPDATE"),
+                eq("QUOTE"),
+                eq("qt-1"),
+                anyString(),
+                eq(TENANT_TEST)
+        );
     }
 
     @Test
@@ -169,8 +180,8 @@ class V1QuoteControllerTest {
 
         Customer customer = new Customer();
         customer.setId("c-1");
-        customer.setTenantId("tenant-1");
-        when(customerRepository.findById("c-1")).thenReturn(Optional.of(customer));
+        customer.setTenantId(TENANT_TEST);
+        when(customerRepository.findByIdAndTenantId("c-1", TENANT_TEST)).thenReturn(Optional.of(customer));
 
         QuoteCreateRequest payload = new QuoteCreateRequest();
         payload.setCustomerId("  c-1  ");
@@ -186,20 +197,37 @@ class V1QuoteControllerTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void createQuoteShouldReturnCustomerNotFoundWhenTenantMismatch() {
+        MockHttpServletRequest request = authedRequest("MANAGER");
+        when(customerRepository.findByIdAndTenantId("c-1", TENANT_TEST)).thenReturn(Optional.empty());
+
+        QuoteCreateRequest payload = new QuoteCreateRequest();
+        payload.setCustomerId("c-1");
+
+        ResponseEntity<?> response = controller.createQuote(request, payload);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("customer_not_found", body.get("code"));
+        verify(quoteRepository, never()).save(any(Quote.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void listQuoteItemsShouldNormalizeIdForLookupAndResponseContract() {
         MockHttpServletRequest request = authedRequest("ANALYST");
         Quote quote = new Quote();
         quote.setId("qt-1");
-        quote.setTenantId("tenant-1");
+        quote.setTenantId(TENANT_TEST);
         quote.setOwner("owner-1");
-        when(quoteRepository.findByIdAndTenantId("qt-1", "tenant-1")).thenReturn(Optional.of(quote));
-        when(quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc("tenant-1", "qt-1"))
+        when(quoteRepository.findByIdAndTenantId("qt-1", TENANT_TEST)).thenReturn(Optional.of(quote));
+        when(quoteItemRepository.findByTenantIdAndQuoteIdOrderByCreatedAtAsc(TENANT_TEST, "qt-1"))
                 .thenReturn(Collections.<QuoteItem>emptyList());
 
         ResponseEntity<?> response = controller.listQuoteItems(request, "  qt-1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(quoteRepository).findByIdAndTenantId("qt-1", "tenant-1");
+        verify(quoteRepository).findByIdAndTenantId("qt-1", TENANT_TEST);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("qt-1", body.get("quoteId"));
     }
@@ -221,7 +249,8 @@ class V1QuoteControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", role);
         request.setAttribute("authUsername", "tester");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
         return request;
     }
 }
+

@@ -16,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.yao.crm.security.TenantRequirementMode;
+
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
 
@@ -68,6 +70,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || path.equals("/api/auth/sso/config")
                 || path.equals("/api/auth/sso/login")
                 || path.equals("/api/v1/auth/login")
+                || path.equals("/api/v1/auth/session")
                 || path.equals("/api/v1/auth/mfa/verify")
                 || path.equals("/api/v1/auth/invitations/accept")
             || path.equals("/api/v1/auth/oidc/callback")) {
@@ -98,6 +101,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         String headerTenant = request.getHeader("X-Tenant-Id");
         if (isTenantScopedPath(path) && !hasText(principalTenantId)) {
             writeUnauthorized(request, response, i18nService.msg(request, "invalid_or_expired"));
+            return false;
+        }
+        if (TenantRequirementMode.isRejectMissingTenant() && !hasText(principalTenantId)) {
+            writeForbidden(request, response, i18nService.msg(request, "tenant_required"));
             return false;
         }
         if (isTenantScopedPath(path)) {
@@ -298,6 +305,10 @@ public class AuthInterceptor implements HandlerInterceptor {
         String details = "reason=" + reason
                 + ";route=" + request.getRequestURI()
                 + ";requestId=" + traceId;
+        String tenantId = principal == null ? null : normalizeTenantId(principal.getTenantId());
+        if (!hasText(tenantId)) {
+            tenantId = "unknown";
+        }
         auditLogService.record(
                 principal == null ? "unknown" : principal.getUsername(),
                 principal == null ? "UNKNOWN" : principal.getRole(),
@@ -305,7 +316,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 "AUTHZ",
                 request.getRequestURI(),
                 details,
-                principal == null ? "tenant_default" : principal.getTenantId()
+                tenantId
         );
     }
 

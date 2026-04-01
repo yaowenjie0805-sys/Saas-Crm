@@ -52,7 +52,7 @@ public class Opportunity {
     public void prePersist() {
       LocalDateTime now = LocalDateTime.now();
       if (createdAt == null) createdAt = now;
-      if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+      if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
       if (settlementCurrency == null || settlementCurrency.trim().isEmpty()) settlementCurrency = "CNY";
       if (exchangeRateSnapshot == null || exchangeRateSnapshot.trim().isEmpty()) exchangeRateSnapshot = "1.000000@SYSTEM";
       if (taxDisplayMode == null || taxDisplayMode.trim().isEmpty()) taxDisplayMode = "TAX_INCLUSIVE";

@@ -53,7 +53,7 @@ public class ApprovalInstance {
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) createdAt = now;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "PENDING";
         if (currentSeq == null || currentSeq < 1) currentSeq = 1;
         updatedAt = now;

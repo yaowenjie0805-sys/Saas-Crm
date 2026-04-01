@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -12,6 +14,11 @@ import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class DashboardMetricsCacheServiceTest {
+    private static final String CACHE_INVALIDATION_MODE = TENANT_TEST.replace("_test", "");
+    private static final String TENANT_B = TENANT_TEST + "_b";
+    private static final String TENANT_B_VALUE = TENANT_TEST + "-b";
+    private static final String TENANT_A_RELOADED_VALUE = TENANT_TEST + "-a-2";
+    private static final String TENANT_B_RELOADED_VALUE = TENANT_TEST + "-b-2";
 
     @Test
     void shouldReturnHitWithinTtlAndMissAfterExpire() throws Exception {
@@ -19,7 +26,7 @@ class DashboardMetricsCacheServiceTest {
                 emptyRedisProvider(),
                 emptyMeterProvider(),
                 false,
-                "tenant",
+                CACHE_INVALIDATION_MODE,
                 60000L,
                 60000L,
                 60000L,
@@ -34,7 +41,7 @@ class DashboardMetricsCacheServiceTest {
 
         // Use a longer TTL for the first load to ensure it stays in cache
         DashboardMetricsCacheService.CachedValue<String> miss = cacheService.getOrLoad(
-                "tenant_a",
+                TENANT_TEST,
                 "reports-overview",
                 "k1",
                 2000L,
@@ -51,7 +58,7 @@ class DashboardMetricsCacheServiceTest {
 
         // Second call should hit cache (within TTL)
         DashboardMetricsCacheService.CachedValue<String> hit = cacheService.getOrLoad(
-                "tenant_a",
+                TENANT_TEST,
                 "reports-overview",
                 "k1",
                 2000L,
@@ -68,11 +75,11 @@ class DashboardMetricsCacheServiceTest {
         Assertions.assertEquals(1, calls.get());
 
         // Evict tenant to simulate TTL expiration
-        cacheService.evictTenant("tenant_a");
+        cacheService.evictTenant(TENANT_TEST);
         
         // After eviction, should be a miss and load new value
         DashboardMetricsCacheService.CachedValue<String> missAfterEvict = cacheService.getOrLoad(
-                "tenant_a",
+                TENANT_TEST,
                 "reports-overview",
                 "k1",
                 2000L,
@@ -95,7 +102,7 @@ class DashboardMetricsCacheServiceTest {
                 emptyRedisProvider(),
                 emptyMeterProvider(),
                 false,
-                "tenant",
+                CACHE_INVALIDATION_MODE,
                 60000L,
                 60000L,
                 60000L,
@@ -107,41 +114,106 @@ class DashboardMetricsCacheServiceTest {
                 60000L
         );
 
-        cacheService.getOrLoad("tenant_a", "dashboard-overview", "a", new Supplier<String>() {
+        cacheService.getOrLoad(TENANT_TEST, "dashboard-overview", "a", new Supplier<String>() {
             @Override
             public String get() {
-                return "tenant-a";
+                return TENANT_TEST;
             }
         });
-        cacheService.getOrLoad("tenant_b", "dashboard-overview", "b", new Supplier<String>() {
+        cacheService.getOrLoad(TENANT_B, "dashboard-overview", "b", new Supplier<String>() {
             @Override
             public String get() {
-                return "tenant-b";
+                return TENANT_B_VALUE;
             }
         });
 
-        cacheService.evictTenant("tenant_a");
+        cacheService.evictTenant(TENANT_TEST);
 
         DashboardMetricsCacheService.CachedValue<String> tenantAHit = cacheService.getOrLoad(
-                "tenant_a", "dashboard-overview", "a", new Supplier<String>() {
+                TENANT_TEST, "dashboard-overview", "a", new Supplier<String>() {
                     @Override
                     public String get() {
-                        return "tenant-a-2";
+                        return TENANT_A_RELOADED_VALUE;
                     }
                 }
         );
         DashboardMetricsCacheService.CachedValue<String> tenantBHit = cacheService.getOrLoad(
-                "tenant_b", "dashboard-overview", "b", new Supplier<String>() {
+                TENANT_B, "dashboard-overview", "b", new Supplier<String>() {
                     @Override
                     public String get() {
-                        return "tenant-b-2";
+                        return TENANT_B_RELOADED_VALUE;
                     }
                 }
         );
 
         Assertions.assertFalse(tenantAHit.isHit());
         Assertions.assertTrue(tenantBHit.isHit());
-        Assertions.assertEquals("tenant-b", tenantBHit.getValue());
+        Assertions.assertEquals(TENANT_B_VALUE, tenantBHit.getValue());
+    }
+
+    @Test
+    void shouldReportLocalTierWhenRedisDisabled() {
+        DashboardMetricsCacheService cacheService = new DashboardMetricsCacheService(
+                emptyRedisProvider(),
+                emptyMeterProvider(),
+                false,
+                CACHE_INVALIDATION_MODE,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                30000L,
+                60000L
+        );
+
+        DashboardMetricsCacheService.CachedValue<String> miss = cacheService.getOrLoad(
+                TENANT_TEST,
+                "dashboard-overview",
+                "local-tier-key",
+                new Supplier<String>() {
+                    @Override
+                    public String get() {
+                        return "local-value";
+                    }
+                }
+        );
+
+        Assertions.assertFalse(miss.isHit());
+        Assertions.assertEquals("LOCAL", miss.getTier());
+        Assertions.assertFalse(miss.isFallback());
+    }
+
+    @Test
+    void shouldFailFastWhenTenantIsBlank() {
+        DashboardMetricsCacheService cacheService = new DashboardMetricsCacheService(
+                emptyRedisProvider(),
+                emptyMeterProvider(),
+                false,
+                CACHE_INVALIDATION_MODE,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                30000L,
+                60000L
+        );
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> cacheService.getOrLoad("   ", "reports-overview", "k1", new Supplier<String>() {
+                    @Override
+                    public String get() {
+                        return "value";
+                    }
+                })
+        );
+        Assertions.assertEquals("tenant_id_required", error.getMessage());
     }
 
     @SuppressWarnings("unchecked")
@@ -156,3 +228,4 @@ class DashboardMetricsCacheServiceTest {
         return (ObjectProvider<MeterRegistry>) (ObjectProvider<?>) factory.getBeanProvider(MeterRegistry.class);
     }
 }
+

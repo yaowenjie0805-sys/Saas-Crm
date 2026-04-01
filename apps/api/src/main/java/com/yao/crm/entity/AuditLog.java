@@ -41,7 +41,7 @@ public class AuditLog {
             createdAt = LocalDateTime.now();
         }
         if (tenantId == null || tenantId.trim().isEmpty()) {
-            tenantId = "tenant_default";
+            throw new IllegalStateException("tenant_id_required");
         }
     }
 

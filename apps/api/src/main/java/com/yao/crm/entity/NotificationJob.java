@@ -57,7 +57,7 @@ public class NotificationJob {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "PENDING";
         if (retryCount == null || retryCount < 0) retryCount = 0;
         if (maxRetries == null || maxRetries < 1) maxRetries = 5;

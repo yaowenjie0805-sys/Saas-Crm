@@ -60,7 +60,7 @@ public class SavedSearch {
         if (updatedAt == null) updatedAt = now;
         if (usageCount == null) usageCount = 0;
         if (isShared == null) isShared = false;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (searchType == null || searchType.trim().isEmpty()) searchType = "GLOBAL";
     }
 

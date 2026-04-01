@@ -69,7 +69,7 @@ public class WorkflowDefinition {
         if (isSystem == null) isSystem = false;
         if (executionCount == null) executionCount = 0;
         if (status == null || status.trim().isEmpty()) status = "DRAFT";
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

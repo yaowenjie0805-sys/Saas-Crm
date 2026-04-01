@@ -43,6 +43,10 @@ public class DataInitializer {
 
     @Value("${app.seed.enabled:true}")
     private boolean seedEnabled;
+    @Value("${auth.bootstrap.default-password:CHANGE_ME_IN_PRODUCTION}")
+    private String bootstrapDefaultPassword;
+    @Value("${app.seed.tenant-id:}")
+    private String seedTenantId;
 
     @Bean
     public CommandLineRunner seedData(CustomerRepository customerRepository,
@@ -65,9 +69,10 @@ public class DataInitializer {
             if (!seedEnabled) {
                 return;
             }
-            if (!tenantRepository.existsById("tenant_default")) {
+            String tenantId = requireSeedTenantId();
+            if (!tenantRepository.existsById(tenantId)) {
                 Tenant tenant = new Tenant();
-                tenant.setId("tenant_default");
+                tenant.setId(tenantId);
                 tenant.setName("Default Tenant");
                 tenant.setStatus("ACTIVE");
                 tenant.setQuotaUsers(100);
@@ -177,16 +182,23 @@ public class DataInitializer {
                 }
             });
 
-            upsertUser(userAccountRepository, passwordEncoder, "u_admin", "admin", "admin123", "ADMIN", "\u7cfb\u7edf\u7ba1\u7406\u5458", "");
-            upsertUser(userAccountRepository, passwordEncoder, "u_manager", "manager", "manager123", "MANAGER", "\u9500\u552e\u7ecf\u7406", "");
-            upsertUser(userAccountRepository, passwordEncoder, "u_sales", "sales", "sales123", "SALES", "\u9500\u552e", "sales");
-            upsertUser(userAccountRepository, passwordEncoder, "u_analyst", "analyst", "analyst123", "ANALYST", "\u6570\u636e\u5206\u6790\u5e08", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_admin", "admin", bootstrapDefaultPassword, "ADMIN", "\u7cfb\u7edf\u7ba1\u7406\u5458", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_manager", "manager", bootstrapDefaultPassword, "MANAGER", "\u9500\u552e\u7ecf\u7406", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_sales", "sales", bootstrapDefaultPassword, "SALES", "\u9500\u552e", "sales");
+            upsertUser(userAccountRepository, passwordEncoder, "u_analyst", "analyst", bootstrapDefaultPassword, "ANALYST", "\u6570\u636e\u5206\u6790\u5e08", "");
 
             backfillLegacySeedTexts(taskRepository, followUpRepository, contactRepository, contractRepository, paymentRepository, userAccountRepository);
 
             normalizeLegacyValues(customerRepository, opportunityRepository, contractRepository, paymentRepository,
-                    followUpRepository, contactRepository, taskRepository, auditLogRepository, valueNormalizerService);
+                followUpRepository, contactRepository, taskRepository, auditLogRepository, valueNormalizerService);
         };
+    }
+
+    private String requireSeedTenantId() {
+        if (seedTenantId == null || seedTenantId.trim().isEmpty()) {
+            throw new IllegalStateException("seed_tenant_id_required");
+        }
+        return seedTenantId.trim();
     }
 
     private void normalizeLegacyValues(CustomerRepository customerRepository,
@@ -265,7 +277,7 @@ public class DataInitializer {
             String normalizedChannel = normalizer.normalizeFollowUpChannel(followUp.getChannel());
             boolean changed = false;
             if (isBlank(followUp.getTenantId())) {
-                followUp.setTenantId("tenant_default");
+                followUp.setTenantId(seedTenantId);
                 changed = true;
             }
             if (!equalsSafe(followUp.getChannel(), normalizedChannel)) {
@@ -286,7 +298,7 @@ public class DataInitializer {
         List<Customer> customerTenants = new ArrayList<>();
         for (Customer customer : customerRepository.findAll()) {
             if (isBlank(customer.getTenantId())) {
-                customer.setTenantId("tenant_default");
+                customer.setTenantId(seedTenantId);
                 customerTenants.add(customer);
             }
         }
@@ -297,7 +309,7 @@ public class DataInitializer {
         List<Opportunity> oppTenants = new ArrayList<>();
         for (Opportunity opportunity : opportunityRepository.findAll()) {
             if (isBlank(opportunity.getTenantId())) {
-                opportunity.setTenantId("tenant_default");
+                opportunity.setTenantId(seedTenantId);
                 oppTenants.add(opportunity);
             }
         }
@@ -308,7 +320,7 @@ public class DataInitializer {
         List<ContractRecord> contractTenants = new ArrayList<>();
         for (ContractRecord contract : contractRepository.findAll()) {
             if (isBlank(contract.getTenantId())) {
-                contract.setTenantId("tenant_default");
+                contract.setTenantId(seedTenantId);
                 contractTenants.add(contract);
             }
         }
@@ -319,7 +331,7 @@ public class DataInitializer {
         List<PaymentRecord> paymentTenants = new ArrayList<>();
         for (PaymentRecord payment : paymentRepository.findAll()) {
             if (isBlank(payment.getTenantId())) {
-                payment.setTenantId("tenant_default");
+                payment.setTenantId(seedTenantId);
                 paymentTenants.add(payment);
             }
         }
@@ -330,7 +342,7 @@ public class DataInitializer {
         List<Contact> contactTenants = new ArrayList<>();
         for (Contact contact : contactRepository.findAll()) {
             if (isBlank(contact.getTenantId())) {
-                contact.setTenantId("tenant_default");
+                contact.setTenantId(seedTenantId);
                 contactTenants.add(contact);
             }
         }
@@ -341,7 +353,7 @@ public class DataInitializer {
         List<TaskItem> taskTenants = new ArrayList<>();
         for (TaskItem task : taskRepository.findAll()) {
             if (isBlank(task.getTenantId())) {
-                task.setTenantId("tenant_default");
+                task.setTenantId(seedTenantId);
                 taskTenants.add(task);
             }
         }
@@ -352,7 +364,7 @@ public class DataInitializer {
         List<AuditLog> auditTenants = new ArrayList<>();
         for (AuditLog audit : auditLogRepository.findAll()) {
             if (isBlank(audit.getTenantId())) {
-                audit.setTenantId("tenant_default");
+                audit.setTenantId(seedTenantId);
                 auditTenants.add(audit);
             }
         }
@@ -396,7 +408,7 @@ public class DataInitializer {
 
     private void rewriteTaskIfLegacy(TaskRepository repository, String id, String legacyTitle, String newTitle) {
         repository.findById(id).ifPresent(task -> {
-            if (!"tenant_default".equals(task.getTenantId())) return;
+            if (!seedTenantId.equals(task.getTenantId())) return;
             if (!legacyTitle.equals(task.getTitle())) return;
             task.setTitle(newTitle);
             repository.save(task);
@@ -405,7 +417,7 @@ public class DataInitializer {
 
     private void rewriteFollowUpIfLegacy(FollowUpRepository repository, String id, String legacySummary, String newSummary) {
         repository.findById(id).ifPresent(row -> {
-            if (!"tenant_default".equals(row.getTenantId())) return;
+            if (!seedTenantId.equals(row.getTenantId())) return;
             if (!legacySummary.equals(row.getSummary())) return;
             row.setSummary(newSummary);
             repository.save(row);
@@ -414,7 +426,7 @@ public class DataInitializer {
 
     private void rewriteContactIfLegacy(ContactRepository repository, String id, String legacyName, String newName) {
         repository.findById(id).ifPresent(row -> {
-            if (!"tenant_default".equals(row.getTenantId())) return;
+            if (!seedTenantId.equals(row.getTenantId())) return;
             if (!legacyName.equals(row.getName())) return;
             row.setName(newName);
             repository.save(row);
@@ -423,7 +435,7 @@ public class DataInitializer {
 
     private void rewriteContractIfLegacy(ContractRecordRepository repository, String id, String legacyTitle, String newTitle) {
         repository.findById(id).ifPresent(row -> {
-            if (!"tenant_default".equals(row.getTenantId())) return;
+            if (!seedTenantId.equals(row.getTenantId())) return;
             if (!legacyTitle.equals(row.getTitle())) return;
             row.setTitle(newTitle);
             repository.save(row);
@@ -432,7 +444,7 @@ public class DataInitializer {
 
     private void rewritePaymentRemarkIfLegacy(PaymentRecordRepository repository, String id, String legacyRemark, String newRemark) {
         repository.findById(id).ifPresent(row -> {
-            if (!"tenant_default".equals(row.getTenantId())) return;
+            if (!seedTenantId.equals(row.getTenantId())) return;
             if (!legacyRemark.equals(row.getRemark())) return;
             row.setRemark(newRemark);
             repository.save(row);
@@ -440,7 +452,7 @@ public class DataInitializer {
     }
 
     private void rewriteUserDisplayNameIfLegacy(UserAccountRepository repository, String username, String legacyName, String newName) {
-        repository.findByUsernameAndTenantId(username, "tenant_default").ifPresent(row -> {
+        repository.findByUsernameAndTenantId(username, seedTenantId).ifPresent(row -> {
             if (!legacyName.equals(row.getDisplayName())) return;
             row.setDisplayName(newName);
             repository.save(row);
@@ -455,7 +467,7 @@ public class DataInitializer {
         customer.setTag(tag);
         customer.setValue(value);
         customer.setStatus(status);
-        customer.setTenantId("tenant_default");
+        customer.setTenantId(seedTenantId);
         return customer;
     }
 
@@ -467,7 +479,7 @@ public class DataInitializer {
         opportunity.setAmount(amount);
         opportunity.setProgress(progress);
         opportunity.setOwner(owner);
-        opportunity.setTenantId("tenant_default");
+        opportunity.setTenantId(seedTenantId);
         return opportunity;
     }
 
@@ -479,7 +491,7 @@ public class DataInitializer {
         taskItem.setLevel(level);
         taskItem.setDone(done);
         taskItem.setOwner(owner);
-        taskItem.setTenantId("tenant_default");
+        taskItem.setTenantId(seedTenantId);
         return taskItem;
     }
 
@@ -492,7 +504,7 @@ public class DataInitializer {
         followUp.setChannel(channel);
         followUp.setResult(result);
         followUp.setNextActionDate(nextActionDate);
-        followUp.setTenantId("tenant_default");
+        followUp.setTenantId(seedTenantId);
         return followUp;
     }
 
@@ -505,7 +517,7 @@ public class DataInitializer {
         contact.setPhone(phone);
         contact.setEmail(email);
         contact.setOwner(owner);
-        contact.setTenantId("tenant_default");
+        contact.setTenantId(seedTenantId);
         return contact;
     }
 
@@ -519,7 +531,7 @@ public class DataInitializer {
         contract.setStatus(status);
         contract.setSignDate(signDate);
         contract.setOwner(owner);
-        contract.setTenantId("tenant_default");
+        contract.setTenantId(seedTenantId);
         return contract;
     }
 
@@ -534,14 +546,14 @@ public class DataInitializer {
         payment.setStatus(status);
         payment.setRemark(remark);
         payment.setOwner(owner);
-        payment.setTenantId("tenant_default");
+        payment.setTenantId(seedTenantId);
         return payment;
     }
 
     private Product makeProduct(String id, String code, String name, String category, Long standardPrice, Double taxRate, String currency) {
         Product product = new Product();
         product.setId(id);
-        product.setTenantId("tenant_default");
+        product.setTenantId(seedTenantId);
         product.setCode(code);
         product.setName(name);
         product.setCategory(category);
@@ -557,7 +569,7 @@ public class DataInitializer {
     private Quote makeQuote(String id, String quoteNo, String customerId, String opportunityId, String owner, String status, Long subtotal, Long tax, Long total) {
         Quote quote = new Quote();
         quote.setId(id);
-        quote.setTenantId("tenant_default");
+        quote.setTenantId(seedTenantId);
         quote.setQuoteNo(quoteNo);
         quote.setCustomerId(customerId);
         quote.setOpportunityId(opportunityId);
@@ -576,7 +588,7 @@ public class DataInitializer {
                                     Double discountRate, Double taxRate, Long subtotal, Long tax, Long total) {
         QuoteItem item = new QuoteItem();
         item.setId(id);
-        item.setTenantId("tenant_default");
+        item.setTenantId(seedTenantId);
         item.setQuoteId(quoteId);
         item.setProductId(productId);
         item.setProductName(productName);
@@ -593,7 +605,7 @@ public class DataInitializer {
     private OrderRecord makeOrder(String id, String orderNo, String customerId, String opportunityId, String quoteId, String owner, String status, Long amount) {
         OrderRecord order = new OrderRecord();
         order.setId(id);
-        order.setTenantId("tenant_default");
+        order.setTenantId(seedTenantId);
         order.setOrderNo(orderNo);
         order.setCustomerId(customerId);
         order.setOpportunityId(opportunityId);
@@ -615,7 +627,7 @@ public class DataInitializer {
         user.setDisplayName(displayName);
         user.setOwnerScope(ownerScope);
         user.setEnabled(true);
-        user.setTenantId("tenant_default");
+        user.setTenantId(seedTenantId);
         user.setDepartment("DEFAULT");
         user.setDataScope("SELF");
         return user;
@@ -629,16 +641,18 @@ public class DataInitializer {
                             String role,
                             String displayName,
                             String ownerScope) {
-        UserAccount user = repository.findByUsernameAndTenantId(username, "tenant_default")
-                .orElseGet(() -> makeUser(id, username, "", role, displayName, ownerScope));
+        Optional<UserAccount> existing = repository.findByUsernameAndTenantId(username, seedTenantId);
+        UserAccount user = existing.orElseGet(() -> makeUser(id, username, "", role, displayName, ownerScope));
         user.setId(id);
         user.setUsername(username);
-        user.setPassword(encoder.encode(rawPassword));
+        if (!existing.isPresent()) {
+            user.setPassword(encoder.encode(rawPassword));
+        }
         user.setRole(role);
         user.setDisplayName(displayName);
         user.setOwnerScope(ownerScope);
         user.setEnabled(true);
-        user.setTenantId("tenant_default");
+        user.setTenantId(seedTenantId);
         user.setDepartment("DEFAULT");
         user.setDataScope("SELF");
         repository.save(user);
@@ -648,3 +662,4 @@ public class DataInitializer {
         return value == null || value.trim().isEmpty();
     }
 }
+

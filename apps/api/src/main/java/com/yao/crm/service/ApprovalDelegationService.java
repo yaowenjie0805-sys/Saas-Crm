@@ -1,9 +1,7 @@
 package com.yao.crm.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.ApprovalEvent;
-import com.yao.crm.entity.ApprovalInstance;
 import com.yao.crm.entity.ApprovalTask;
 import com.yao.crm.repository.ApprovalEventRepository;
 import com.yao.crm.repository.ApprovalInstanceRepository;
@@ -14,13 +12,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * 审批委托服务 - 国内特色功能
- * 支持审批任务委托、加签、转交等操作
- */
 @Service
 public class ApprovalDelegationService {
 
@@ -45,45 +44,49 @@ public class ApprovalDelegationService {
         this.notificationService = notificationService;
     }
 
-    /**
-     * 委托审批任务
-     */
     @Transactional(timeout = 30)
     public DelegationResult delegateTask(String taskId, String fromUserId, String toUserId, String reason) {
-        ApprovalTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        ApprovalTask task = requireTask(taskId);
+        return delegateTaskInternal(task, fromUserId, toUserId, reason);
+    }
 
-        // 验证审批人是否有权限
+    @Transactional(timeout = 30)
+    public DelegationResult delegateTask(
+            String tenantId, String taskId, String fromUserId, String toUserId, String reason) {
+        ApprovalTask task = requireTask(tenantId, taskId);
+        return delegateTaskInternal(task, fromUserId, toUserId, reason);
+    }
+
+    private DelegationResult delegateTaskInternal(
+            ApprovalTask task, String fromUserId, String toUserId, String reason) {
         if (!task.getAssigneeId().equals(fromUserId)) {
             throw new IllegalStateException("Only the assigned user can delegate this task");
         }
 
-        // 检查任务状态
         if (!"PENDING".equals(task.getStatus())) {
             throw new IllegalStateException("Cannot delegate a non-pending task");
         }
 
-        // 创建委托记录
         DelegationRecord delegation = new DelegationRecord();
         delegation.setDelegationId(UUID.randomUUID().toString());
-        delegation.setTaskId(taskId);
+        delegation.setTaskId(task.getId());
         delegation.setFromUserId(fromUserId);
         delegation.setToUserId(toUserId);
         delegation.setReason(reason);
         delegation.setDelegatedAt(LocalDateTime.now());
         delegation.setStatus("ACTIVE");
 
-        // 更新任务分配人
         String originalAssignee = task.getAssigneeId();
         task.setAssigneeId(toUserId);
         task.setDelegatedFrom(originalAssignee);
         task.setDelegatedAt(LocalDateTime.now());
         taskRepository.save(task);
 
-        // 记录委托事件
         ApprovalEvent event = new ApprovalEvent();
         event.setId(UUID.randomUUID().toString());
-        event.setTaskId(taskId);
+        event.setTenantId(task.getTenantId());
+        event.setInstanceId(task.getInstanceId());
+        event.setTaskId(task.getId());
         event.setEventType("DELEGATED");
         event.setActorId(fromUserId);
         event.setTargetId(toUserId);
@@ -91,33 +94,37 @@ public class ApprovalDelegationService {
         event.setCreatedAt(LocalDateTime.now());
         eventRepository.save(event);
 
-        // 发送通知给被委托人
         sendDelegationNotification(task, toUserId, fromUserId, reason);
 
-        log.info("Task {} delegated from {} to {}", taskId, fromUserId, toUserId);
+        log.info("Task {} delegated from {} to {}", task.getId(), fromUserId, toUserId);
 
         DelegationResult result = new DelegationResult();
         result.setSuccess(true);
-        result.setTaskId(taskId);
+        result.setTaskId(task.getId());
         result.setDelegationId(delegation.getDelegationId());
         result.setMessage("审批任务已委托给 " + toUserId);
-
         return result;
     }
 
-    /**
-     * 加签 - 审批时指定额外审批人
-     */
     @Transactional(timeout = 30)
     public AddSignResult addSign(String taskId, String approverId, String addSignUserId, String reason, String type) {
-        ApprovalTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        ApprovalTask task = requireTask(taskId);
+        return addSignInternal(task, approverId, addSignUserId, reason, type);
+    }
 
+    @Transactional(timeout = 30)
+    public AddSignResult addSign(
+            String tenantId, String taskId, String approverId, String addSignUserId, String reason, String type) {
+        ApprovalTask task = requireTask(tenantId, taskId);
+        return addSignInternal(task, approverId, addSignUserId, reason, type);
+    }
+
+    private AddSignResult addSignInternal(
+            ApprovalTask task, String approverId, String addSignUserId, String reason, String type) {
         if (!"PENDING".equals(task.getStatus())) {
             throw new IllegalStateException("Cannot add sign for a non-pending task");
         }
 
-        // 创建加签任务
         ApprovalTask addSignTask = new ApprovalTask();
         addSignTask.setId(UUID.randomUUID().toString());
         addSignTask.setInstanceId(task.getInstanceId());
@@ -125,17 +132,17 @@ public class ApprovalDelegationService {
         addSignTask.setAssigneeId(addSignUserId);
         addSignTask.setStatus("PENDING");
         addSignTask.setPriority(task.getPriority());
-        addSignTask.setSlaDeadline(LocalDateTime.now().plusHours(24)); // 默认24小时
+        addSignTask.setSlaDeadline(LocalDateTime.now().plusHours(24));
         addSignTask.setCreatedAt(LocalDateTime.now());
-        addSignTask.setAddSignType(type); // BEFORE 或 AFTER
-        addSignTask.setParentTaskId(taskId);
+        addSignTask.setAddSignType(type);
+        addSignTask.setParentTaskId(task.getId());
         addSignTask.setTenantId(task.getTenantId());
-
         taskRepository.save(addSignTask);
 
-        // 记录加签事件
         ApprovalEvent event = new ApprovalEvent();
         event.setId(UUID.randomUUID().toString());
+        event.setTenantId(addSignTask.getTenantId());
+        event.setInstanceId(addSignTask.getInstanceId());
         event.setTaskId(addSignTask.getId());
         event.setEventType("ADD_SIGN_" + type);
         event.setActorId(approverId);
@@ -144,28 +151,32 @@ public class ApprovalDelegationService {
         event.setCreatedAt(LocalDateTime.now());
         eventRepository.save(event);
 
-        // 发送加签通知
         sendAddSignNotification(addSignTask, approverId, reason);
 
-        log.info("Add sign task created: {} for user {}", addSignTask.getId(), addSignUserId);
+        log.info("Add-sign task {} created for user {}", addSignTask.getId(), addSignUserId);
 
         AddSignResult result = new AddSignResult();
         result.setSuccess(true);
         result.setAddSignTaskId(addSignTask.getId());
         result.setMessage("已成功加签给 " + addSignUserId);
-
         return result;
     }
 
-    /**
-     * 转交审批任务
-     * 与委托不同，转交后原审批人不再有权限查看
-     */
     @Transactional(timeout = 30)
     public TransferResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
-        ApprovalTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        ApprovalTask task = requireTask(taskId);
+        return transferTaskInternal(task, fromUserId, toUserId, reason);
+    }
 
+    @Transactional(timeout = 30)
+    public TransferResult transferTask(
+            String tenantId, String taskId, String fromUserId, String toUserId, String reason) {
+        ApprovalTask task = requireTask(tenantId, taskId);
+        return transferTaskInternal(task, fromUserId, toUserId, reason);
+    }
+
+    private TransferResult transferTaskInternal(
+            ApprovalTask task, String fromUserId, String toUserId, String reason) {
         if (!task.getAssigneeId().equals(fromUserId)) {
             throw new IllegalStateException("Only the assigned user can transfer this task");
         }
@@ -174,21 +185,21 @@ public class ApprovalDelegationService {
             throw new IllegalStateException("Cannot transfer a non-pending task");
         }
 
-        // 记录转交历史
-        List<String> transferHistory = task.getTransferHistory() != null ?
-                new ArrayList<>(Arrays.asList(task.getTransferHistory().split(","))) : new ArrayList<>();
-        transferHistory.add(fromUserId + ":" + LocalDateTime.now().toString());
+        List<String> transferHistory = task.getTransferHistory() != null
+                ? new ArrayList<>(Arrays.asList(task.getTransferHistory().split(",")))
+                : new ArrayList<>();
+        transferHistory.add(fromUserId + ":" + LocalDateTime.now());
 
-        // 更新任务
         task.setAssigneeId(toUserId);
         task.setTransferHistory(String.join(",", transferHistory));
         task.setTransferredAt(LocalDateTime.now());
         taskRepository.save(task);
 
-        // 记录转交事件
         ApprovalEvent event = new ApprovalEvent();
         event.setId(UUID.randomUUID().toString());
-        event.setTaskId(taskId);
+        event.setTenantId(task.getTenantId());
+        event.setInstanceId(task.getInstanceId());
+        event.setTaskId(task.getId());
         event.setEventType("TRANSFERRED");
         event.setActorId(fromUserId);
         event.setTargetId(toUserId);
@@ -196,26 +207,28 @@ public class ApprovalDelegationService {
         event.setCreatedAt(LocalDateTime.now());
         eventRepository.save(event);
 
-        // 发送转交通知
         sendTransferNotification(task, toUserId, fromUserId, reason);
 
-        log.info("Task {} transferred from {} to {}", taskId, fromUserId, toUserId);
+        log.info("Task {} transferred from {} to {}", task.getId(), fromUserId, toUserId);
 
         TransferResult result = new TransferResult();
         result.setSuccess(true);
-        result.setTaskId(taskId);
+        result.setTaskId(task.getId());
         result.setMessage("审批任务已转交给 " + toUserId);
-
         return result;
     }
 
-    /**
-     * 获取委托历史
-     */
     @Transactional(readOnly = true)
     public List<DelegationRecord> getDelegationHistory(String taskId) {
-        List<ApprovalEvent> events = eventRepository.findByTaskIdOrderByCreatedAtDesc(taskId);
+        return mapDelegationHistory(eventRepository.findByTaskIdOrderByCreatedAtDesc(taskId));
+    }
 
+    @Transactional(readOnly = true)
+    public List<DelegationRecord> getDelegationHistory(String tenantId, String taskId) {
+        return mapDelegationHistory(eventRepository.findByTaskIdAndTenantIdOrderByCreatedAtDesc(taskId, tenantId));
+    }
+
+    private List<DelegationRecord> mapDelegationHistory(List<ApprovalEvent> events) {
         return events.stream()
                 .filter(e -> "DELEGATED".equals(e.getEventType()))
                 .map(e -> {
@@ -232,17 +245,19 @@ public class ApprovalDelegationService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 获取转交历史
-     */
     @Transactional(readOnly = true)
     public List<TransferRecord> getTransferHistory(String taskId) {
-        ApprovalTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found"));
+        return mapTransferHistory(requireTask(taskId));
+    }
 
+    @Transactional(readOnly = true)
+    public List<TransferRecord> getTransferHistory(String tenantId, String taskId) {
+        return mapTransferHistory(requireTask(tenantId, taskId));
+    }
+
+    private List<TransferRecord> mapTransferHistory(ApprovalTask task) {
         List<TransferRecord> records = new ArrayList<>();
 
-        // 从任务中解析转交历史
         if (task.getTransferHistory() != null && !task.getTransferHistory().isEmpty()) {
             String[] entries = task.getTransferHistory().split(",");
             for (String entry : entries) {
@@ -250,7 +265,7 @@ public class ApprovalDelegationService {
                 if (parts.length >= 2) {
                     TransferRecord record = new TransferRecord();
                     record.setTransferId(UUID.randomUUID().toString());
-                    record.setTaskId(taskId);
+                    record.setTaskId(task.getId());
                     record.setFromUserId(parts[0]);
                     record.setTransferredAt(parts[1]);
                     records.add(record);
@@ -258,57 +273,64 @@ public class ApprovalDelegationService {
             }
         }
 
-        // 添加当前持有人
         TransferRecord current = new TransferRecord();
         current.setTransferId(UUID.randomUUID().toString());
-        current.setTaskId(taskId);
+        current.setTaskId(task.getId());
         current.setToUserId(task.getAssigneeId());
         current.setFromUserId(task.getDelegatedFrom());
-        current.setTransferredAt(task.getTransferredAt() != null ?
-                task.getTransferredAt().toString() : task.getCreatedAt().toString());
+        current.setTransferredAt(task.getTransferredAt() != null
+                ? task.getTransferredAt().toString()
+                : task.getCreatedAt().toString());
         records.add(current);
 
         return records;
     }
 
-    /**
-     * 撤回委托
-     */
     @Transactional(timeout = 30)
     public boolean recallDelegation(String delegationId, String userId) {
-        List<ApprovalEvent> events = eventRepository.findAll();
-        ApprovalEvent delegationEvent = events.stream()
-                .filter(e -> e.getId().equals(delegationId) && "DELEGATED".equals(e.getEventType()))
-                .findFirst()
+        ApprovalEvent delegationEvent = eventRepository
+                .findByIdAndEventType(delegationId, "DELEGATED")
                 .orElse(null);
+        return recallDelegationInternal(delegationEvent, userId);
+    }
 
+    @Transactional(timeout = 30)
+    public boolean recallDelegation(String tenantId, String delegationId, String userId) {
+        ApprovalEvent delegationEvent = eventRepository
+                .findByIdAndTenantIdAndEventType(delegationId, tenantId, "DELEGATED")
+                .orElse(null);
+        return recallDelegationInternal(delegationEvent, userId);
+    }
+
+    private boolean recallDelegationInternal(ApprovalEvent delegationEvent, String userId) {
         if (delegationEvent == null) {
             throw new IllegalArgumentException("Delegation not found");
         }
 
-        ApprovalTask task = taskRepository.findById(delegationEvent.getTaskId())
-                .orElseThrow(() -> new IllegalArgumentException("Task not found"));
+        ApprovalTask task;
+        if (isBlank(delegationEvent.getTenantId())) {
+            task = requireTask(delegationEvent.getTaskId());
+        } else {
+            task = requireTask(delegationEvent.getTenantId(), delegationEvent.getTaskId());
+        }
 
-        // 只能撤回自己的委托
         if (!delegationEvent.getActorId().equals(userId)) {
             throw new IllegalStateException("Only the delegator can recall the delegation");
         }
 
-        // 任务状态检查
         if (!"PENDING".equals(task.getStatus())) {
             throw new IllegalStateException("Cannot recall delegation for a non-pending task");
         }
 
-        // 恢复到原审批人
-        String originalUser = delegationEvent.getActorId();
-        task.setAssigneeId(originalUser);
+        task.setAssigneeId(delegationEvent.getActorId());
         task.setDelegatedFrom(null);
         task.setDelegatedAt(null);
         taskRepository.save(task);
 
-        // 记录撤回事件
         ApprovalEvent recallEvent = new ApprovalEvent();
         recallEvent.setId(UUID.randomUUID().toString());
+        recallEvent.setTenantId(task.getTenantId());
+        recallEvent.setInstanceId(task.getInstanceId());
         recallEvent.setTaskId(task.getId());
         recallEvent.setEventType("DELEGATION_RECALLED");
         recallEvent.setActorId(userId);
@@ -316,36 +338,28 @@ public class ApprovalDelegationService {
         recallEvent.setCreatedAt(LocalDateTime.now());
         eventRepository.save(recallEvent);
 
-        log.info("Delegation {} recalled for task {}", delegationId, task.getId());
-
+        log.info("Delegation {} recalled for task {}", delegationEvent.getId(), task.getId());
         return true;
     }
 
-    /**
-     * 获取可委托的用户列表
-     */
     @Transactional(readOnly = true)
     public List<Map<String, String>> getDelegatableUsers(String tenantId, String currentUserId) {
-        // 在实际实现中，应该从用户服务获取同部门或有审批权限的用户
-        // 这里返回模拟数据
         List<Map<String, String>> users = new ArrayList<>();
 
         Map<String, String> user1 = new HashMap<>();
         user1.put("userId", "manager_" + tenantId);
-        user1.put("userName", "部门经理");
-        user1.put("department", "管理部门");
+        user1.put("userName", "Department Manager");
+        user1.put("department", "Management");
         users.add(user1);
 
         Map<String, String> user2 = new HashMap<>();
         user2.put("userId", "director_" + tenantId);
-        user2.put("userName", "总监");
-        user2.put("department", "管理层");
+        user2.put("userName", "Director");
+        user2.put("department", "Management");
         users.add(user2);
 
         return users;
     }
-
-    // ========== 通知方法 ==========
 
     private void sendDelegationNotification(ApprovalTask task, String toUserId, String fromUserId, String reason) {
         try {
@@ -377,7 +391,7 @@ public class ApprovalDelegationService {
             notificationService.sendNotification(task.getAssigneeId(), "IN_APP", notificationData);
             notificationService.sendNotification(task.getAssigneeId(), "WECHAT_WORK", notificationData);
         } catch (Exception e) {
-            log.error("Failed to send add sign notification", e);
+            log.error("Failed to send add-sign notification", e);
         }
     }
 
@@ -399,7 +413,19 @@ public class ApprovalDelegationService {
         }
     }
 
-    // ========== 内部类 ==========
+    private ApprovalTask requireTask(String taskId) {
+        return taskRepository.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    }
+
+    private ApprovalTask requireTask(String tenantId, String taskId) {
+        return taskRepository.findByIdAndTenantId(taskId, tenantId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
 
     public static class DelegationRecord {
         private String delegationId;
@@ -410,7 +436,6 @@ public class ApprovalDelegationService {
         private LocalDateTime delegatedAt;
         private String status;
 
-        // Getters and Setters
         public String getDelegationId() { return delegationId; }
         public void setDelegationId(String delegationId) { this.delegationId = delegationId; }
         public String getTaskId() { return taskId; }
@@ -434,7 +459,6 @@ public class ApprovalDelegationService {
         private String toUserId;
         private String transferredAt;
 
-        // Getters and Setters
         public String getTransferId() { return transferId; }
         public void setTransferId(String transferId) { this.transferId = transferId; }
         public String getTaskId() { return taskId; }

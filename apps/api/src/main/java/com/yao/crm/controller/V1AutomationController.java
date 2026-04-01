@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @RestController
@@ -107,16 +108,11 @@ public class V1AutomationController extends BaseApiController {
             return ResponseEntity.badRequest().body(errorBody(request, "bad_request", msg(request, "bad_request"), null));
         }
         String tenantId = currentTenant(request);
-        AutomationRule row = null;
-        for (AutomationRule candidate : ruleRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)) {
-            if (normalizedId.equals(candidate.getId())) {
-                row = candidate;
-                break;
-            }
-        }
-        if (row == null) {
+        Optional<AutomationRule> optional = ruleRepository.findByIdAndTenantId(normalizedId, tenantId);
+        if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "automation_rule_not_found", msg(request, "automation_rule_not_found"), null));
         }
+        AutomationRule row = optional.get();
         if (!isBlank(payload.getName())) row.setName(payload.getName().trim());
         if (!isBlank(payload.getTriggerType())) {
             String triggerType = normalize(payload.getTriggerType());

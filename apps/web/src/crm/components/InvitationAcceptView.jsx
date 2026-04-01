@@ -4,7 +4,7 @@ import { api } from '../shared'
 function InvitationAcceptView({ lang, setLang, t, onBackToLogin }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), [])
   const tokenFromUrl = params.get('token') || ''
-  const tenantFromUrl = params.get('tenantId') || localStorage.getItem('crm_last_tenant') || 'tenant_default'
+  const tenantFromUrl = params.get('tenantId') || localStorage.getItem('crm_last_tenant') || ''
   const [form, setForm] = useState({ tenantId: tenantFromUrl, token: tokenFromUrl, password: '', confirmPassword: '', displayName: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

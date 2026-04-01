@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -80,7 +81,7 @@ class V1ReportControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(reportService).overviewByTenantCached(
-                "tenant_default",
+                TENANT_TEST,
                 "alice",
                 "ANALYST",
                 LocalDate.of(2026, 3, 1),
@@ -130,7 +131,7 @@ class V1ReportControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", role);
         request.setAttribute("authUsername", "alice");
-        request.setAttribute("authTenantId", "tenant_default");
+        request.setAttribute("authTenantId", TENANT_TEST);
         return request;
     }
 }

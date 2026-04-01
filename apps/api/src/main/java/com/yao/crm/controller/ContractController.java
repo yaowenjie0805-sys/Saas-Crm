@@ -9,7 +9,6 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -70,7 +69,7 @@ public class ContractController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                CollectionsUtil.setOf("customerId", "contractNo", "title", "amount", "status", "owner", "signDate", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("customerId", "contractNo", "title", "amount", "status", "owner", "signDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -102,7 +101,6 @@ public class ContractController extends BaseApiController {
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
             return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
         };
 
         Page<ContractRecord> result = contractRepository.findAll(spec, pageable);
@@ -161,7 +159,7 @@ public class ContractController extends BaseApiController {
         }
 
         ContractRecord saved = contractRepository.save(contract);
-        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "CONTRACT", saved.getId(), saved.getContractNo());
+        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "CONTRACT", saved.getId(), saved.getContractNo(), tenantId);
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -226,7 +224,7 @@ public class ContractController extends BaseApiController {
         if (patch.getOwner() != null && !isSalesScoped(request)) contract.setOwner(patch.getOwner().trim());
 
         ContractRecord saved = contractRepository.save(contract);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTRACT", saved.getId(), "Updated contract");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTRACT", saved.getId(), "Updated contract", tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -246,10 +244,9 @@ public class ContractController extends BaseApiController {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contract_not_found", "NOT_FOUND", null));
         }
 
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTRACT", normalizedId, "Deleted contract");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTRACT", normalizedId, "Deleted contract", tenantId);
         return ResponseEntity.noContent().build();
     }
-
 
     private String newContractNo() {
         return "CT-" + System.currentTimeMillis();

@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.WorkflowConnection;
 import com.yao.crm.entity.WorkflowDefinition;
@@ -20,11 +22,11 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * 工作流执行引擎单元测试
+ * 鐎规悶鍎扮紞鏂棵规担鐟扳挃閻炴稑鑻槐鈺呭箼鎼粹€崇闁稿繐鍟粊瀵告嫚?
  */
 @ExtendWith(MockitoExtension.class)
 class WorkflowExecutionServiceTest {
-    private static final String TENANT_ID = "tenant_1";
+    private static final String TENANT_ID = TENANT_TEST;
 
     @Mock
     private WorkflowDefinitionRepository workflowRepository;
@@ -72,7 +74,7 @@ class WorkflowExecutionServiceTest {
         when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(workflowRepository.save(any())).thenReturn(workflow);
         when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        doNothing().when(executionService).executeAsync(anyString());
+        doNothing().when(executionService).executeAsync(anyString(), anyString());
 
         // When
         WorkflowExecution execution = executionService.startExecution(
@@ -140,7 +142,8 @@ class WorkflowExecutionServiceTest {
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(nodeRepository.findByWorkflowIdAndNodeType(workflowId, "TRIGGER"))
                 .thenReturn(Collections.singletonList(triggerNode));
-        when(nodeRepository.findById(triggerNodeId)).thenReturn(Optional.of(triggerNode));
+        when(nodeRepository.findAllById(Collections.singletonList(triggerNodeId)))
+                .thenReturn(Collections.singletonList(triggerNode));
         when(connectionRepository.findBySourceNodeId(triggerNodeId))
                 .thenReturn(Collections.emptyList());
 
@@ -149,6 +152,7 @@ class WorkflowExecutionServiceTest {
 
         // Then
         verify(executionRepository, atLeastOnce()).save(any());
+        verify(nodeRepository).findAllById(Collections.singletonList(triggerNodeId));
     }
 
     @Test
@@ -215,7 +219,7 @@ class WorkflowExecutionServiceTest {
         when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(workflowRepository.save(any())).thenReturn(workflow);
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        doNothing().when(executionService).executeAsync(anyString());
+        doNothing().when(executionService).executeAsync(anyString(), anyString());
 
         // When
         WorkflowExecution newExecution = executionService.retryExecution(TENANT_ID, oldExecutionId);
@@ -355,3 +359,4 @@ class WorkflowExecutionServiceTest {
         return execution;
     }
 }
+

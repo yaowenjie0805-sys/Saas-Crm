@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.yao.crm.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,7 +66,7 @@ class ReportAggregationServiceTest {
     @DisplayName("shouldReturnCorrectAggregateStructure_whenAggregateWithoutScope")
     void shouldReturnCorrectAggregateStructure_whenAggregateWithoutScope() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         when(customerRepository.countByTenantId(tenantId)).thenReturn(10L);
         when(opportunityRepository.countByTenantId(tenantId)).thenReturn(5L);
         when(opportunityRepository.countByTenantIdAndProgressGte(tenantId, 80)).thenReturn(2L);
@@ -114,7 +116,7 @@ class ReportAggregationServiceTest {
     @DisplayName("shouldReturnEmptyOverview_whenAggregateWithEmptyOwners")
     void shouldReturnEmptyOverview_whenAggregateWithEmptyOwners() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         Set<String> emptyOwners = new HashSet<String>();
 
         // Act
@@ -132,7 +134,7 @@ class ReportAggregationServiceTest {
     @DisplayName("shouldFilterByOwners_whenAggregateWithScope")
     void shouldFilterByOwners_whenAggregateWithScope() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         Set<String> owners = new HashSet<String>(Arrays.asList("owner1", "owner2"));
 
         when(customerRepository.countByTenantIdAndOwnerIn(tenantId, owners)).thenReturn(5L);
@@ -176,7 +178,7 @@ class ReportAggregationServiceTest {
     @DisplayName("shouldReturnEmptyOverview_whenAllRepositoriesReturnZero")
     void shouldReturnEmptyOverview_whenAllRepositoriesReturnZero() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         when(customerRepository.countByTenantId(tenantId)).thenReturn(0L);
         when(opportunityRepository.countByTenantId(tenantId)).thenReturn(0L);
         when(opportunityRepository.countByTenantIdAndProgressGte(tenantId, 80)).thenReturn(0L);
@@ -214,7 +216,7 @@ class ReportAggregationServiceTest {
     @DisplayName("shouldCalculateCorrectRates_whenValidData")
     void shouldCalculateCorrectRates_whenValidData() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         // 10 opportunities, 8 with progress >= 80 -> winRate = 80.0
         when(customerRepository.countByTenantId(tenantId)).thenReturn(100L);
         when(opportunityRepository.countByTenantId(tenantId)).thenReturn(10L);
@@ -294,7 +296,7 @@ class ReportAggregationServiceTest {
     @DisplayName("shouldHandleNullRepositoryResults_whenAggregateWithoutScope")
     void shouldHandleNullRepositoryResults_whenAggregateWithoutScope() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         when(customerRepository.countByTenantId(tenantId)).thenReturn(0L);
         when(opportunityRepository.countByTenantId(tenantId)).thenReturn(0L);
         when(opportunityRepository.countByTenantIdAndProgressGte(tenantId, 80)).thenReturn(0L);
@@ -320,3 +322,4 @@ class ReportAggregationServiceTest {
         assertEquals(0L, summary.get("orderPaymentReceived"));
     }
 }
+

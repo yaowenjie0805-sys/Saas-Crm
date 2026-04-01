@@ -55,7 +55,7 @@ public class UserInvitation {
 
     @PrePersist
     public void prePersist() {
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (role == null || role.trim().isEmpty()) role = "SALES";
         if (department == null || department.trim().isEmpty()) department = "DEFAULT";
         if (dataScope == null || dataScope.trim().isEmpty()) dataScope = "SELF";

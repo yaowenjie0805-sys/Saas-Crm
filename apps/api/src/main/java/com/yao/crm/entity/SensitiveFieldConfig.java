@@ -55,7 +55,7 @@ public class SensitiveFieldConfig {
         if (visibleCharsStart == null) visibleCharsStart = 3;
         if (visibleCharsEnd == null) visibleCharsEnd = 4;
         if (maskChar == null || maskChar.trim().isEmpty()) maskChar = "*";
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

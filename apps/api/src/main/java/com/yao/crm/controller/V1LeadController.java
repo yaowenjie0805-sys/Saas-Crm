@@ -20,8 +20,6 @@ import com.yao.crm.service.LeadAutomationService;
 import com.yao.crm.service.LeadImportFailedRowsExportJobService;
 import com.yao.crm.service.LeadImportService;
 import com.yao.crm.service.ValueNormalizerService;
-import com.yao.crm.enums.LeadStatusEnum;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -42,7 +40,8 @@ import java.util.*;
 @RequestMapping("/api/v1/leads")
 public class V1LeadController extends BaseApiController {
 
-    private static final Set<String> CONVERT_ALLOWED_STATUSES = CollectionsUtil.setOf("NEW", "QUALIFIED", "NURTURING");
+    private static final Set<String> LEAD_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
+    private static final Set<String> CONVERT_ALLOWED_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING");
     private static final Set<String> IMPORT_CANCEL_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("PENDING", "RUNNING"));
     private static final Set<String> IMPORT_RETRY_ALLOWED_STATUSES = new LinkedHashSet<String>(Arrays.asList("FAILED", "CANCELED"));
 
@@ -108,7 +107,7 @@ public class V1LeadController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                CollectionsUtil.setOf("name", "company", "owner", "status", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("name", "company", "owner", "status", "createdAt", "updatedAt")),
                 "updatedAt"
         );
         final boolean salesScoped = isSalesScoped(request);
@@ -131,8 +130,7 @@ public class V1LeadController extends BaseApiController {
             if (salesScoped) {
                 predicates.add(cb.equal(cb.lower(root.get("owner")), ownerScope.toLowerCase(Locale.ROOT)));
             }
-            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
         Page<Lead> result = leadRepository.findAll(spec, pageable);
         Map<String, Object> body = new LinkedHashMap<>();
@@ -154,7 +152,7 @@ public class V1LeadController extends BaseApiController {
         }
         String tenantId = normalize(currentTenant(request));
         Lead lead = new Lead();
-        lead.setId(idGenerator.generate("ld"));
+        lead.setId(newId("ld"));
         try {
             applyPayload(request, lead, payload, true);
         } catch (IllegalArgumentException ex) {
@@ -255,7 +253,7 @@ public class V1LeadController extends BaseApiController {
         if (isBlank(owner)) owner = currentUser(request);
 
         Customer customer = new Customer();
-        customer.setId(idGenerator.generate("c"));
+        customer.setId(newId("c"));
         customer.setName(isBlank(lead.getCompany()) ? lead.getName() : lead.getCompany());
         customer.setOwner(owner);
         customer.setTag("Lead Converted");
@@ -265,7 +263,7 @@ public class V1LeadController extends BaseApiController {
         customer = customerRepository.save(customer);
 
         Contact contact = new Contact();
-        contact.setId(idGenerator.generate("ct"));
+        contact.setId(newId("ct"));
         contact.setCustomerId(customer.getId());
         contact.setName(isBlank(payload == null ? null : payload.getContactName()) ? lead.getName() : payload.getContactName().trim());
         contact.setTitle(isBlank(payload == null ? null : payload.getContactTitle()) ? "Decision Maker" : payload.getContactTitle().trim());
@@ -276,7 +274,7 @@ public class V1LeadController extends BaseApiController {
         contact = contactRepository.save(contact);
 
         Opportunity opportunity = new Opportunity();
-        opportunity.setId(idGenerator.generate("o"));
+        opportunity.setId(newId("o"));
         opportunity.setStage(valueNormalizerService.normalizeOpportunityStage(isBlank(payload == null ? null : payload.getOpportunityStage()) ? "Lead" : payload.getOpportunityStage().trim()));
         opportunity.setCount(1);
         opportunity.setAmount(0L);
@@ -356,7 +354,7 @@ public class V1LeadController extends BaseApiController {
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("action", "create");
             details.put("tenantId", tenantId);
-            details.put("allowedConcurrentStatuses", new ArrayList<String>() { { add("PENDING"); add("RUNNING"); } });
+            details.put("allowedConcurrentStatuses", List.of("PENDING", "RUNNING"));
             return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), details));
         }
     }
@@ -598,7 +596,7 @@ public class V1LeadController extends BaseApiController {
         lead.setSource(isBlank(payload.getSource()) ? null : payload.getSource().trim());
 
         String status = isBlank(payload.getStatus()) ? (creating ? "NEW" : lead.getStatus()) : payload.getStatus().trim().toUpperCase(Locale.ROOT);
-        if (!LeadStatusEnum.isValid(status)) {
+        if (!LEAD_STATUSES.contains(status)) {
             throw new IllegalArgumentException("invalid_lead_status");
         }
         if (!creating && !canTransitLeadStatus(lead.getStatus(), status)) {
@@ -705,4 +703,7 @@ public class V1LeadController extends BaseApiController {
         return out;
     }
 
+    private String newId(String prefix) {
+        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
+    }
 }

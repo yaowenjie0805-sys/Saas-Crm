@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -60,12 +61,12 @@ class V1NotificationJobControllerTest {
         NotificationJob job = new NotificationJob();
         job.setId("job-1");
         job.setStatus("SUCCESS");
-        when(notificationJobService.retry("tenant-1", "job-1")).thenReturn(job);
+        when(notificationJobService.retry(TENANT_TEST, "job-1")).thenReturn(job);
 
         ResponseEntity<?> response = controller.retry(request, " job-1 ");
 
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-        verify(notificationJobService).retry("tenant-1", "job-1");
+        verify(notificationJobService).retry(TENANT_TEST, "job-1");
     }
 
     @Test
@@ -78,21 +79,22 @@ class V1NotificationJobControllerTest {
         summary.put("skipped", 1);
         summary.put("notFound", 0);
         summary.put("forbidden", 0);
-        when(notificationJobService.batchRetryByIds("tenant-1", Arrays.asList("job-1", "job-2"))).thenReturn(summary);
+        when(notificationJobService.batchRetryByIds(TENANT_TEST, Arrays.asList("job-1", "job-2"))).thenReturn(summary);
 
         ResponseEntity<?> response = controller.batchRetry(request, payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(notificationJobService).batchRetryByIds("tenant-1", Arrays.asList("job-1", "job-2"));
+        verify(notificationJobService).batchRetryByIds(TENANT_TEST, Arrays.asList("job-1", "job-2"));
     }
 
     @Test
     void listJobsShouldUseAllForBlankStatusAndClampPaging() {
-        when(notificationJobService.listJobsPaged("tenant-1", "ALL", 1, 1)).thenReturn(Collections.emptyMap());
+        when(notificationJobService.listJobsPaged(TENANT_TEST, "ALL", 1, 1)).thenReturn(Collections.emptyMap());
 
         ResponseEntity<?> response = controller.listJobs(request, "   ", 0, 0);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(notificationJobService).listJobsPaged("tenant-1", "ALL", 1, 1);
+        verify(notificationJobService).listJobsPaged(TENANT_TEST, "ALL", 1, 1);
     }
 }
+

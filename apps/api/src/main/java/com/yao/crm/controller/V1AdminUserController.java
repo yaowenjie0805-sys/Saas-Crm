@@ -9,7 +9,6 @@ import com.yao.crm.repository.UserInvitationRepository;
 import com.yao.crm.security.LoginRiskService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,8 +21,8 @@ import java.util.*;
 @RequestMapping("/api/v1/admin/users")
 public class V1AdminUserController extends BaseApiController {
 
-    private static final Set<String> ROLES = CollectionsUtil.setOf("ADMIN", "MANAGER", "SALES", "ANALYST");
-    private static final Set<String> DATA_SCOPES = CollectionsUtil.setOf("SELF", "DEPARTMENT", "GLOBAL");
+    private static final Set<String> ROLES = Set.of("ADMIN", "MANAGER", "SALES", "ANALYST");
+    private static final Set<String> DATA_SCOPES = Set.of("SELF", "DEPARTMENT", "GLOBAL");
 
     private final UserAccountRepository userAccountRepository;
     private final UserInvitationRepository userInvitationRepository;
@@ -73,8 +72,8 @@ public class V1AdminUserController extends BaseApiController {
             return badRequest(request, "id_required");
         }
         String tenantId = currentTenant(request);
-        Optional<UserAccount> optional = userAccountRepository.findById(userId);
-        if (!optional.isPresent() || !tenantId.equals(optional.get().getTenantId())) {
+        Optional<UserAccount> optional = userAccountRepository.findByIdAndTenantId(userId, tenantId);
+        if (!optional.isPresent()) {
             return notFound(request, "user_not_found");
         }
 
@@ -159,12 +158,12 @@ public class V1AdminUserController extends BaseApiController {
             return badRequest(request, "id_required");
         }
         String tenantId = currentTenant(request);
-        Optional<UserAccount> optional = userAccountRepository.findById(userId);
-        if (!optional.isPresent() || !tenantId.equals(optional.get().getTenantId())) {
+        Optional<UserAccount> optional = userAccountRepository.findByIdAndTenantId(userId, tenantId);
+        if (!optional.isPresent()) {
             return notFound(request, "user_not_found");
         }
         UserAccount user = optional.get();
-        loginRiskService.clearUser(user.getUsername());
+        loginRiskService.clearUser(user.getTenantId(), user.getUsername());
         auditLogService.record(currentUser(request), currentRole(request), "UNLOCK", "USER", user.getId(), "Unlocked user in v1 admin API", tenantId);
         return ResponseEntity.ok(successWithFields(request, "user_unlocked", toView(user)));
     }
@@ -179,8 +178,8 @@ public class V1AdminUserController extends BaseApiController {
         out.put("department", isBlank(user.getDepartment()) ? "" : user.getDepartment());
         out.put("dataScope", isBlank(user.getDataScope()) ? "SELF" : user.getDataScope());
         out.put("enabled", Boolean.TRUE.equals(user.getEnabled()));
-        out.put("locked", loginRiskService.isUserLocked(user.getUsername()));
-        out.put("lockRemainingSeconds", loginRiskService.remainingUserSeconds(user.getUsername()));
+        out.put("locked", loginRiskService.isUserLocked(user.getTenantId(), user.getUsername()));
+        out.put("lockRemainingSeconds", loginRiskService.remainingUserSeconds(user.getTenantId(), user.getUsername()));
         return out;
     }
 

@@ -7,11 +7,14 @@ import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
+
 @Component
 public class SecurityStartupValidator {
     private static final Logger log = LoggerFactory.getLogger(SecurityStartupValidator.class);
+    private static final String DEFAULT_AUTH_TOKEN_SECRET = "crm-secret-change-me";
     
-    @Value("${auth.token.secret:}")
+    @Value("${auth.token.secret:crm-secret-change-me}")
     private String tokenSecret;
     
     @Value("${spring.profiles.active:dev}")
@@ -41,14 +44,24 @@ public class SecurityStartupValidator {
     }
     
     private void validateJwtSecret() {
-        if (tokenSecret == null || tokenSecret.isEmpty() || 
-            "crm-secret-change-me".equals(tokenSecret)) {
-            if ("prod".equals(activeProfile) || "production".equals(activeProfile)) {
-                log.error("SECURITY CRITICAL: AUTH_TOKEN_SECRET is using default value in production! Application should be reconfigured.");
-                throw new IllegalStateException("AUTH_TOKEN_SECRET must be changed from default value in production environment");
-            } else {
-                log.warn("SECURITY WARNING: AUTH_TOKEN_SECRET is using default value. This is acceptable for development only.");
-            }
+        String normalizedSecret = tokenSecret == null ? "" : tokenSecret.trim();
+        boolean isBlankSecret = normalizedSecret.isEmpty();
+        boolean isDefaultSecret = DEFAULT_AUTH_TOKEN_SECRET.equals(normalizedSecret);
+
+        if (isBlankSecret) {
+            log.error("SECURITY CRITICAL: AUTH_TOKEN_SECRET is blank (null/empty/whitespace). Set AUTH_TOKEN_SECRET to a non-blank value.");
+            throw new IllegalStateException("AUTH_TOKEN_SECRET must be configured and non-blank in all environments");
+        }
+
+        if (!isDefaultSecret) {
+            return;
+        }
+
+        if (isProductionProfileActive()) {
+            log.error("SECURITY CRITICAL: AUTH_TOKEN_SECRET is using default value '{}' in production! Set AUTH_TOKEN_SECRET to a non-default value.", DEFAULT_AUTH_TOKEN_SECRET);
+            throw new IllegalStateException("AUTH_TOKEN_SECRET must not use default value in production environment");
+        } else {
+            log.warn("SECURITY WARNING: AUTH_TOKEN_SECRET is using default value '{}'. This is risky even in non-production and may cause login 500/signature failures.", DEFAULT_AUTH_TOKEN_SECRET);
         }
     }
     
@@ -101,11 +114,25 @@ public class SecurityStartupValidator {
         
         // Check for default guest password
         if ("guest".equals(rabbitmqPassword)) {
-            if ("prod".equals(activeProfile) || "production".equals(activeProfile)) {
+            if (isProductionProfileActive()) {
                 log.warn("SECURITY WARNING: RabbitMQ is using default 'guest' password in production environment.");
             } else {
                 log.warn("SECURITY WARNING: RabbitMQ is using default 'guest' password. This is acceptable for development only.");
             }
         }
+    }
+
+    private boolean isProductionProfileActive() {
+        if (activeProfile == null) {
+            return false;
+        }
+        String[] profiles = activeProfile.split(",");
+        for (String profile : profiles) {
+            String normalized = profile == null ? "" : profile.trim().toLowerCase(Locale.ROOT);
+            if ("prod".equals(normalized) || "production".equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

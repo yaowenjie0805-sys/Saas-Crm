@@ -27,7 +27,6 @@ public class TokenService {
     private static final int MAX_TOKEN_LENGTH = 4096;
     private static final int MAX_JSON_LENGTH = 2048;
     private static final long MAX_EXPIRY_FUTURE_MILLIS = 30L * 24 * 60 * 60 * 1000; // 30 days
-
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
@@ -117,10 +116,10 @@ public class TokenService {
     private final long ttlMillis;
 
     public TokenService(
-            @Value("${auth.token.secret:crm-secret-change-me}") String secret,
+            @Value("${auth.token.secret:crm-secret-change-me}") String configuredSecret,
             @Value("${auth.token.ttl-ms:86400000}") long ttlMillis
     ) {
-        this.secret = secret;
+        this.secret = resolveSecret(configuredSecret);
         this.ttlMillis = ttlMillis;
     }
 
@@ -280,6 +279,12 @@ public class TokenService {
             mac.init(keySpec);
             byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
             return base64UrlEncode(digest);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(
+                    "Failed to sign token: invalid auth.token.secret configuration. "
+                            + "Set AUTH_TOKEN_SECRET to a non-empty secret value.",
+                    ex
+            );
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to sign token", ex);
         }
@@ -302,5 +307,15 @@ public class TokenService {
             return null;
         }
         return value.trim();
+    }
+
+    private static String resolveSecret(String configuredSecret) {
+        if (configuredSecret == null || configuredSecret.trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Invalid auth.token.secret configuration: value is empty. "
+                            + "Set AUTH_TOKEN_SECRET to a non-empty secret value."
+            );
+        }
+        return configuredSecret.trim();
     }
 }

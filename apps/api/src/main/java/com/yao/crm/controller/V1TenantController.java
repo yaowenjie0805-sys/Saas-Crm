@@ -7,7 +7,6 @@ import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.repository.UserAccountRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,8 +27,8 @@ import java.util.Set;
 @RequestMapping("/api/v1")
 public class V1TenantController extends BaseApiController {
 
-    private static final Set<String> MARKET_PROFILES = CollectionsUtil.setOf("CN", "GLOBAL");
-    private static final Set<String> APPROVAL_MODES = CollectionsUtil.setOf("STRICT", "STAGE_GATE");
+    private static final Set<String> MARKET_PROFILES = Set.of("CN", "GLOBAL");
+    private static final Set<String> APPROVAL_MODES = Set.of("STRICT", "STAGE_GATE");
 
     private final TenantRepository tenantRepository;
     private final UserAccountRepository userAccountRepository;

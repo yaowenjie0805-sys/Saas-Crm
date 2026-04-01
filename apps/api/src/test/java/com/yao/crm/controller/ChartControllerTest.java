@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,7 +32,7 @@ class ChartControllerTest {
     void deleteTemplateShouldReturnNoContentWithoutBody() {
         ChartController controller = new ChartController(mock(ChartService.class));
 
-        ResponseEntity<?> response = controller.deleteTemplate("tenant-1", "template-1");
+        ResponseEntity<?> response = controller.deleteTemplate(TENANT_TEST, "template-1");
 
         assertEquals(204, response.getStatusCodeValue());
         assertNull(response.getBody());
@@ -64,7 +65,7 @@ class ChartControllerTest {
         ChartController controller = new ChartController(mock(ChartService.class));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
-                controller.deleteTemplate("tenant-1", "   "));
+                controller.deleteTemplate(TENANT_TEST, "   "));
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
     }
@@ -73,7 +74,7 @@ class ChartControllerTest {
     void getTemplateShouldTrimIdInResponse() {
         ChartController controller = new ChartController(mock(ChartService.class));
 
-        ResponseEntity<?> response = controller.getTemplate("tenant-1", "  template-1  ");
+        ResponseEntity<?> response = controller.getTemplate(TENANT_TEST, "  template-1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("template-1", ((java.util.Map<?, ?>) response.getBody()).get("id"));
@@ -85,7 +86,7 @@ class ChartControllerTest {
         ChartTemplateUpdateRequest request = new ChartTemplateUpdateRequest();
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
-                controller.updateTemplate("tenant-1", "   ", request));
+                controller.updateTemplate(TENANT_TEST, "   ", request));
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
     }
@@ -97,7 +98,7 @@ class ChartControllerTest {
 
         controller.getChartData("  tenant-1  ", "CUSTOMERS", null, null, null, null);
 
-        verify(chartService).getChartData(eq("tenant-1"), eq("CUSTOMERS"), anyMap());
+        verify(chartService).getChartData(eq(TENANT_TEST), eq("CUSTOMERS"), anyMap());
     }
 
     @Test
@@ -112,11 +113,11 @@ class ChartControllerTest {
         ResponseEntity<ChartTemplate> response = controller.createTemplate("  tenant-1  ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("tenant-1", response.getBody().getTenantId());
+        assertEquals(TENANT_TEST, response.getBody().getTenantId());
 
         ArgumentCaptor<ChartTemplate> captor = ArgumentCaptor.forClass(ChartTemplate.class);
         verify(chartService).createTemplate(captor.capture());
-        assertEquals("tenant-1", captor.getValue().getTenantId());
+        assertEquals(TENANT_TEST, captor.getValue().getTenantId());
     }
 
     @Test
@@ -127,20 +128,20 @@ class ChartControllerTest {
         ChartTemplate systemTemplate = new ChartTemplate();
         systemTemplate.setId("system-1");
         ChartTemplate tenantTemplate = new ChartTemplate();
-        tenantTemplate.setId("tenant-1");
+        tenantTemplate.setId(TENANT_TEST);
 
         List<ChartTemplate> systemTemplates = new ArrayList<>();
         systemTemplates.add(systemTemplate);
         List<ChartTemplate> tenantTemplates = new ArrayList<>();
         tenantTemplates.add(tenantTemplate);
 
-        when(chartService.getSystemTemplates("tenant-1")).thenReturn(systemTemplates);
-        when(chartService.getTemplates("tenant-1", null)).thenReturn(tenantTemplates);
+        when(chartService.getSystemTemplates(TENANT_TEST)).thenReturn(systemTemplates);
+        when(chartService.getTemplates(TENANT_TEST, null)).thenReturn(tenantTemplates);
 
         ResponseEntity<List<ChartTemplate>> response = controller.getTemplates(" tenant-1 ", null, true);
 
-        verify(chartService).getSystemTemplates("tenant-1");
-        verify(chartService).getTemplates("tenant-1", null);
+        verify(chartService).getSystemTemplates(TENANT_TEST);
+        verify(chartService).getTemplates(TENANT_TEST, null);
         assertEquals(1, systemTemplates.size());
         assertSame(systemTemplate, systemTemplates.get(0));
         assertEquals(2, response.getBody().size());
@@ -149,3 +150,4 @@ class ChartControllerTest {
         assertTrue(response.getBody() != systemTemplates);
     }
 }
+

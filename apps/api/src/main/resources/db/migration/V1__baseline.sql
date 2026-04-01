@@ -20,12 +20,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
   enabled BOOLEAN NOT NULL,
   tenant_id VARCHAR(64) NOT NULL,
   department VARCHAR(80),
-  data_scope VARCHAR(30),
-  created_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
-  created_by VARCHAR(80),
-  last_modified_by VARCHAR(80),
-  deleted BOOLEAN NOT NULL DEFAULT FALSE
+  data_scope VARCHAR(30)
 );
 
 CREATE TABLE IF NOT EXISTS user_invitations (

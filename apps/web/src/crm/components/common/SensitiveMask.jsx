@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { api } from '../../shared'
 
 /**
  * 敏感字段脱敏显示组件 - 国内特色
@@ -166,13 +167,8 @@ export function SensitiveFieldConfigPanel() {
   const loadConfigs = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/v2/permissions/sensitive-fields', {
-        headers: { 'X-Tenant-Id': 'tenant_default' },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setConfigs(data.configs || [])
-      }
+      const data = await api('/v2/permissions/sensitive-fields')
+      setConfigs(data.configs || [])
     } catch (error) {
       console.error('Load configs error:', error)
     } finally {
@@ -183,12 +179,8 @@ export function SensitiveFieldConfigPanel() {
   // 保存配置
   const handleSave = async (entityType, fieldName, maskType) => {
     try {
-      await fetch('/api/v2/permissions/sensitive-fields', {
+      await api('/v2/permissions/sensitive-fields', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tenant-Id': 'tenant_default',
-        },
         body: JSON.stringify({ entityType, fieldName, maskType }),
       })
       await loadConfigs()

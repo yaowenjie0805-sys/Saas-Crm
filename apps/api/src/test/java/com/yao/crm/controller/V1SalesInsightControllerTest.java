@@ -26,8 +26,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -83,7 +85,7 @@ class V1SalesInsightControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authUsername", "alice");
-        request.setAttribute("authTenantId", "tenant_default");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
@@ -125,22 +127,26 @@ class V1SalesInsightControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void workbenchTodayShouldTrimFiltersAndUseInclusiveDayBoundaries() {
-        when(dashboardMetricsCacheService.getOrLoad(eq("tenant_default"), eq("workbench-today"), anyString(), any()))
+        when(dashboardMetricsCacheService.getOrLoad(eq(TENANT_TEST), eq("workbench-today"), anyString(), any()))
                 .thenAnswer(invocation -> {
                     Supplier<Map<String, Object>> loader = invocation.getArgument(3);
                     return new DashboardMetricsCacheService.CachedValue<Map<String, Object>>(loader.get(), false, "LOCAL", false);
                 });
-        when(taskRepository.countByTenantIdAndDoneFalseAndUpdatedAtBetween(eq("tenant_default"), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(taskRepository.countByTenantIdAndDoneFalseAndUpdatedAtBetween(eq(TENANT_TEST), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(0L);
-        when(taskRepository.findTop200ByTenantIdAndDoneAndUpdatedAtBetweenOrderByUpdatedAtDesc(eq("tenant_default"), eq(false), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(taskRepository.findTop200ByTenantIdAndDoneAndUpdatedAtBetweenOrderByUpdatedAtDesc(eq(TENANT_TEST), eq(false), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
-        when(followUpRepository.findByTenantIdAndCreatedAtBetween(eq("tenant_default"), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(followUpRepository.findByTenantIdAndCreatedAtBetween(eq(TENANT_TEST), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
-        when(contractRecordRepository.findByTenantIdAndCreatedAtBetween(eq("tenant_default"), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(contractRecordRepository.findByTenantIdAndCreatedAtBetween(eq(TENANT_TEST), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
-        when(approvalInstanceRepository.findByTenantIdOrderByCreatedAtDesc("tenant_default"))
+        when(approvalInstanceRepository.findByTenantIdAndStatusInAndUpdatedAtBetweenOrderByCreatedAtDesc(
+                eq(TENANT_TEST),
+                anyCollection(),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
-        when(paymentRecordRepository.findByTenantIdAndCreatedAtBetween(eq("tenant_default"), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(paymentRecordRepository.findByTenantIdAndCreatedAtBetween(eq(TENANT_TEST), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.workbenchToday(
@@ -154,7 +160,7 @@ class V1SalesInsightControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(taskRepository).countByTenantIdAndDoneFalseAndUpdatedAtBetween(
-                "tenant_default",
+                TENANT_TEST,
                 LocalDateTime.of(2026, 3, 1, 0, 0, 0),
                 LocalDateTime.of(2026, 3, 31, 23, 59, 59)
         );
@@ -182,32 +188,32 @@ class V1SalesInsightControllerTest {
         Customer customer = new Customer();
         customer.setId("c_1");
         customer.setOwner("alice");
-        when(customerRepository.findByIdAndTenantId("c_1", "tenant_default")).thenReturn(Optional.of(customer));
-        when(dashboardMetricsCacheService.getOrLoad(eq("tenant_default"), eq("customer-timeline"), anyString(), any()))
+        when(customerRepository.findByIdAndTenantId("c_1", TENANT_TEST)).thenReturn(Optional.of(customer));
+        when(dashboardMetricsCacheService.getOrLoad(eq(TENANT_TEST), eq("customer-timeline"), anyString(), any()))
                 .thenAnswer(invocation -> new DashboardMetricsCacheService.CachedValue<Object>(Collections.emptyList(), false, "LOCAL", false));
 
         ResponseEntity<?> response = controller.customerTimeline(request, "  c_1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(customerRepository).findByIdAndTenantId("c_1", "tenant_default");
+        verify(customerRepository).findByIdAndTenantId("c_1", TENANT_TEST);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("c_1", body.get("customerId"));
     }
 
     @Test
     void customerTimelineShouldTrimTenantBeforeLookup() {
-        request.setAttribute("authTenantId", "  tenant_default  ");
+        request.setAttribute("authTenantId", "  " + TENANT_TEST + "  ");
         Customer customer = new Customer();
         customer.setId("c_1");
         customer.setOwner("alice");
-        when(customerRepository.findByIdAndTenantId("c_1", "tenant_default")).thenReturn(Optional.of(customer));
-        when(dashboardMetricsCacheService.getOrLoad(eq("tenant_default"), eq("customer-timeline"), anyString(), any()))
+        when(customerRepository.findByIdAndTenantId("c_1", TENANT_TEST)).thenReturn(Optional.of(customer));
+        when(dashboardMetricsCacheService.getOrLoad(eq(TENANT_TEST), eq("customer-timeline"), anyString(), any()))
                 .thenAnswer(invocation -> new DashboardMetricsCacheService.CachedValue<Object>(Collections.emptyList(), false, "LOCAL", false));
 
         ResponseEntity<?> response = controller.customerTimeline(request, "c_1");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(customerRepository).findByIdAndTenantId("c_1", "tenant_default");
+        verify(customerRepository).findByIdAndTenantId("c_1", TENANT_TEST);
     }
 
     @Test
@@ -215,19 +221,20 @@ class V1SalesInsightControllerTest {
     void opportunityTimelineShouldTrimPathIdBeforeLookup() {
         Opportunity opportunity = new Opportunity();
         opportunity.setId("o_1");
-        opportunity.setTenantId("tenant_default");
+        opportunity.setTenantId(TENANT_TEST);
         opportunity.setOwner("alice");
         when(opportunityRepository.findById("o_1")).thenReturn(Optional.of(opportunity));
-        when(quoteRepository.findByTenantIdAndOpportunityId("tenant_default", "o_1")).thenReturn(Collections.emptyList());
-        when(orderRecordRepository.findByTenantIdAndOpportunityId("tenant_default", "o_1")).thenReturn(Collections.emptyList());
-        when(approvalInstanceRepository.findByTenantIdOrderByCreatedAtDesc("tenant_default")).thenReturn(Collections.emptyList());
-        when(dashboardMetricsCacheService.getOrLoad(eq("tenant_default"), eq("opportunity-timeline"), anyString(), any()))
+        when(quoteRepository.findByTenantIdAndOpportunityId(TENANT_TEST, "o_1")).thenReturn(Collections.emptyList());
+        when(orderRecordRepository.findByTenantIdAndOpportunityId(TENANT_TEST, "o_1")).thenReturn(Collections.emptyList());
+        when(dashboardMetricsCacheService.getOrLoad(eq(TENANT_TEST), eq("opportunity-timeline"), anyString(), any()))
                 .thenAnswer(invocation -> new DashboardMetricsCacheService.CachedValue<Object>(Collections.emptyList(), false, "LOCAL", false));
 
         ResponseEntity<?> response = controller.opportunityTimeline(request, "  o_1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(opportunityRepository).findById("o_1");
+        verify(approvalInstanceRepository, never())
+                .findByTenantIdAndBizTypeIgnoreCaseAndBizIdInOrderByCreatedAtDesc(anyString(), anyString(), any());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("o_1", body.get("opportunityId"));
     }

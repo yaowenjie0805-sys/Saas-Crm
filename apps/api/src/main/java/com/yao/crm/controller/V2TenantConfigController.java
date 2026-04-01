@@ -4,7 +4,6 @@ import com.yao.crm.dto.request.TenantConfigPatchRequest;
 import com.yao.crm.entity.Tenant;
 import com.yao.crm.repository.TenantRepository;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -13,8 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -26,9 +23,8 @@ import java.util.Set;
 @RequestMapping("/api/v2")
 public class V2TenantConfigController extends BaseApiController {
 
-    private static final Set<String> MARKET_PROFILES = CollectionsUtil.setOf("CN", "GLOBAL");
-    private static final Set<String> APPROVAL_MODES = CollectionsUtil.setOf("STRICT", "STAGE_GATE");
-
+    private static final Set<String> MARKET_PROFILES = Set.of("CN", "GLOBAL");
+    private static final Set<String> APPROVAL_MODES = Set.of("STRICT", "STAGE_GATE");
     private final TenantRepository tenantRepository;
 
     public V2TenantConfigController(TenantRepository tenantRepository, I18nService i18nService) {

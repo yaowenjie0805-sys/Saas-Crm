@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -83,7 +85,7 @@ class ReportExportServiceTest {
     @DisplayName("shouldExportCsvInChinese_whenLanguageIsZh")
     void shouldExportCsvInChinese_whenLanguageIsZh() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         LocalDate fromDate = LocalDate.of(2026, 1, 1);
         LocalDate toDate = LocalDate.of(2026, 1, 31);
         String role = "ADMIN";
@@ -100,18 +102,18 @@ class ReportExportServiceTest {
 
         // Assert
         assertNotNull(csv);
-        assertTrue(csv.contains("分组,字段,值")); // Chinese header
-        assertTrue(csv.contains("筛选")); // filter in Chinese
-        assertTrue(csv.contains("汇总")); // summary in Chinese
-        assertTrue(csv.contains("开始")); // from in Chinese
-        assertTrue(csv.contains("结束")); // to in Chinese
+        assertTrue(csv.contains("\u5206\u7EC4,\u5B57\u6BB5,\u503C")); // Chinese header
+        assertTrue(csv.contains("\u7B5B\u9009")); // filter in Chinese
+        assertTrue(csv.contains("\u6C47\u603B")); // summary in Chinese
+        assertTrue(csv.contains("\u5F00\u59CB")); // from in Chinese
+        assertTrue(csv.contains("\u7ED3\u675F")); // to in Chinese
     }
 
     @Test
     @DisplayName("shouldExportCsvInEnglish_whenLanguageIsEn")
     void shouldExportCsvInEnglish_whenLanguageIsEn() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         LocalDate fromDate = LocalDate.of(2026, 1, 1);
         LocalDate toDate = LocalDate.of(2026, 1, 31);
         String role = "USER";
@@ -131,14 +133,14 @@ class ReportExportServiceTest {
         assertTrue(csv.contains("section,key,value")); // English header
         assertTrue(csv.contains("filter"));
         assertTrue(csv.contains("summary"));
-        assertFalse(csv.contains("分组")); // No Chinese
+        assertFalse(csv.contains("\u5206\u7EC4")); // No Chinese
     }
 
     @Test
     @DisplayName("shouldHandleNullDates_whenExportingCsv")
     void shouldHandleNullDates_whenExportingCsv() {
         // Arrange
-        String tenantId = "tenant-1";
+        String tenantId = TENANT_TEST;
         LocalDate fromDate = null;
         LocalDate toDate = null;
         String role = "USER";
@@ -279,3 +281,4 @@ class ReportExportServiceTest {
         return report;
     }
 }
+

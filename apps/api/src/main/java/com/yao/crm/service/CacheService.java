@@ -6,7 +6,11 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -57,14 +61,23 @@ public class CacheService {
     }
 
     /**
-     * 获取缓存值
+     * 获取缓存值（多级缓存：本地缓存 -> Redis）
      */
     public <T> Optional<T> get(String key, Class<T> type) {
+        String normalizedKey = normalizeKey(key);
+        Optional<T> localValue = getLocalByNormalizedKey(normalizedKey, type);
+        if (localValue.isPresent()) {
+            log.debug("Local cache hit: {}", key);
+            return localValue;
+        }
+
         try {
-            String value = redisTemplate.opsForValue().get(PREFIX + key);
+            String value = redisTemplate.opsForValue().get(normalizedKey);
             if (value != null) {
-                log.debug("Cache hit: {}", key);
-                return Optional.of(objectMapper.readValue(value, type));
+                log.debug("Redis cache hit: {}", key);
+                T result = objectMapper.readValue(value, type);
+                setLocalByNormalizedKey(normalizedKey, result, DEFAULT_TTL);
+                return Optional.of(result);
             }
         } catch (Exception e) {
             log.warn("Failed to get cache: {}", key, e);
@@ -73,16 +86,32 @@ public class CacheService {
     }
 
     /**
-     * 获取缓存值（支持泛型）
+     * 获取缓存值（支持泛型，多级缓存：本地缓存 -> Redis）
      */
     public <T> Optional<T> get(String key, java.lang.reflect.Type type) {
-        try {
-            String value = redisTemplate.opsForValue().get(PREFIX + key);
-            if (value != null) {
-                log.debug("Cache hit: {}", key);
-                // Java 8 兼容：使用 JavaType 代替 TypeReference.forType()
+        String normalizedKey = normalizeKey(key);
+        Optional<Object> localValue = getLocalByNormalizedKey(normalizedKey, Object.class);
+        if (localValue.isPresent()) {
+            try {
+                String json = objectMapper.writeValueAsString(localValue.get());
                 com.fasterxml.jackson.databind.JavaType javaType = objectMapper.getTypeFactory().constructType(type);
-                return Optional.of(objectMapper.readValue(value, javaType));
+                T result = objectMapper.readValue(json, javaType);
+                log.debug("Local cache hit: {}", key);
+                return Optional.of(result);
+            } catch (Exception e) {
+                log.warn("Failed to deserialize local cache: {}", key, e);
+                localCache.invalidate(normalizedKey);
+            }
+        }
+
+        try {
+            String value = redisTemplate.opsForValue().get(normalizedKey);
+            if (value != null) {
+                log.debug("Redis cache hit: {}", key);
+                com.fasterxml.jackson.databind.JavaType javaType = objectMapper.getTypeFactory().constructType(type);
+                T result = objectMapper.readValue(value, javaType);
+                setLocalByNormalizedKey(normalizedKey, result, DEFAULT_TTL);
+                return Optional.of(result);
             }
         } catch (Exception e) {
             log.warn("Failed to get cache: {}", key, e);
@@ -103,7 +132,7 @@ public class CacheService {
     public void set(String key, Object value, Duration ttl) {
         try {
             String json = objectMapper.writeValueAsString(value);
-            redisTemplate.opsForValue().set(PREFIX + key, json, ttl);
+            redisTemplate.opsForValue().set(normalizeKey(key), json, ttl);
             log.debug("Cache set: {} (TTL: {})", key, ttl);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize cache value: {}", key, e);
@@ -114,39 +143,23 @@ public class CacheService {
      * 设置本地缓存
      */
     public void setLocal(String key, Object value, Duration ttl) {
-        try {
-            String json = objectMapper.writeValueAsString(value);
-            localCache.put(key, new CacheEntry(json, System.currentTimeMillis() + ttl.toMillis()));
-        } catch (Exception e) {
-            log.error("Failed to set local cache: {}", key, e);
-        }
+        setLocalByNormalizedKey(normalizeKey(key), value, ttl);
     }
 
     /**
      * 获取本地缓存
      */
     public <T> Optional<T> getLocal(String key, Class<T> type) {
-        CacheEntry entry = localCache.getIfPresent(key);
-        if (entry != null) {
-            if (entry.isExpired()) {
-                localCache.invalidate(key); // 清理过期条目
-                return Optional.empty();
-            }
-            try {
-                return Optional.of(objectMapper.readValue(entry.getValue(), type));
-            } catch (Exception e) {
-                log.warn("Failed to get local cache: {}", key, e);
-            }
-        }
-        return Optional.empty();
+        return getLocalByNormalizedKey(normalizeKey(key), type);
     }
 
     /**
      * 删除缓存
      */
     public void delete(String key) {
-        redisTemplate.delete(PREFIX + key);
-        localCache.invalidate(key);
+        String normalizedKey = normalizeKey(key);
+        redisTemplate.delete(normalizedKey);
+        localCache.invalidate(normalizedKey);
         log.debug("Cache deleted: {}", key);
     }
 
@@ -154,11 +167,12 @@ public class CacheService {
      * 删除匹配前缀的所有缓存
      */
     public void deleteByPrefix(String prefix) {
-        Set<String> keys = redisTemplate.keys(PREFIX + prefix + "*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
+        Set<String> prefixVariants = collectPrefixVariants(prefix);
+        for (String variant : prefixVariants) {
+            deleteKeysByPattern(variant + "*");
         }
-        localCache.asMap().keySet().removeIf(k -> k.startsWith(prefix));
+        localCache.asMap().keySet().removeIf(key ->
+            prefixVariants.stream().anyMatch(key::startsWith));
         log.debug("Cache deleted by prefix: {}", prefix);
     }
 
@@ -166,7 +180,8 @@ public class CacheService {
      * 检查缓存是否存在
      */
     public boolean exists(String key) {
-        Boolean exists = redisTemplate.hasKey(PREFIX + key);
+        String normalizedKey = normalizeKey(key);
+        Boolean exists = redisTemplate.hasKey(normalizedKey);
         return exists != null && exists;
     }
 
@@ -343,10 +358,7 @@ public class CacheService {
      * 清除所有缓存
      */
     public void invalidateAll() {
-        Set<String> keys = redisTemplate.keys(PREFIX + "*");
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
+        deleteKeysByPattern(PREFIX + "*");
         localCache.invalidateAll();
         log.info("Invalidated all caches");
     }
@@ -358,8 +370,7 @@ public class CacheService {
         Map<String, Object> stats = new HashMap<>();
 
         try {
-            Set<String> keys = redisTemplate.keys(PREFIX + "*");
-            stats.put("redisKeyCount", keys != null ? keys.size() : 0);
+            stats.put("redisKeyCount", countKeysByPattern(PREFIX + "*"));
             stats.put("localCacheSize", localCache.estimatedSize());
             stats.put("localCacheKeys", new ArrayList<>(localCache.asMap().keySet()));
             
@@ -373,6 +384,118 @@ public class CacheService {
         }
 
         return stats;
+    }
+
+    private <T> Optional<T> getLocalByNormalizedKey(String normalizedKey, Class<T> type) {
+        CacheEntry entry = localCache.getIfPresent(normalizedKey);
+        if (entry != null) {
+            if (entry.isExpired()) {
+                localCache.invalidate(normalizedKey);
+                return Optional.empty();
+            }
+            try {
+                return Optional.of(objectMapper.readValue(entry.getValue(), type));
+            } catch (Exception e) {
+                log.warn("Failed to get local cache: {}", normalizedKey, e);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private void setLocalByNormalizedKey(String normalizedKey, Object value, Duration ttl) {
+        try {
+            String json = objectMapper.writeValueAsString(value);
+            localCache.put(normalizedKey, new CacheEntry(json, System.currentTimeMillis() + ttl.toMillis()));
+        } catch (Exception e) {
+            log.error("Failed to set local cache: {}", normalizedKey, e);
+        }
+    }
+
+    private String normalizeKey(String key) {
+        return PREFIX + stripGlobalPrefix(key);
+    }
+
+    private String stripGlobalPrefix(String raw) {
+        if (raw == null) {
+            throw new IllegalArgumentException("Cache key cannot be null");
+        }
+        String trimmed = raw;
+        while (trimmed.startsWith(PREFIX)) {
+            trimmed = trimmed.substring(PREFIX.length());
+        }
+        return trimmed;
+    }
+
+    private Set<String> collectPrefixVariants(String prefix) {
+        String base = stripGlobalPrefix(prefix);
+        Set<String> variants = new LinkedHashSet<>();
+        String current = PREFIX + base;
+        int maxDepth = 3;
+        for (int i = 0; i < maxDepth; i++) {
+            variants.add(current);
+            current = PREFIX + current;
+        }
+        return variants;
+    }
+
+    private void deleteKeysByPattern(String pattern) {
+        redisTemplate.execute((RedisCallback<Void>) connection -> {
+            ScanOptions scanOptions = ScanOptions.scanOptions()
+                .match(pattern)
+                .count(500)
+                .build();
+            List<byte[]> batch = new ArrayList<>();
+            final int batchSize = 200;
+            Cursor<byte[]> cursor = null;
+            try {
+                cursor = connection.scan(scanOptions);
+                while (cursor.hasNext()) {
+                    byte[] keyBytes = cursor.next();
+                    if (keyBytes == null) {
+                        continue;
+                    }
+                    batch.add(keyBytes);
+                    if (batch.size() >= batchSize) {
+                        connection.del(batch.toArray(new byte[0][]));
+                        batch.clear();
+                    }
+                }
+            } finally {
+                if (cursor != null) {
+                    cursor.close();
+                }
+            }
+            if (!batch.isEmpty()) {
+                connection.del(batch.toArray(new byte[0][]));
+            }
+            return null;
+        });
+    }
+
+    private long countKeysByPattern(String pattern) {
+        Long keyCount = redisTemplate.execute((RedisCallback<Long>) connection -> {
+            ScanOptions scanOptions = ScanOptions.scanOptions()
+                .match(pattern)
+                .count(500)
+                .build();
+            Cursor<byte[]> cursor = null;
+            long count = 0L;
+            try {
+                cursor = connection.scan(scanOptions);
+                while (cursor != null && cursor.hasNext()) {
+                    byte[] keyBytes = cursor.next();
+                    if (keyBytes != null) {
+                        count++;
+                    }
+                }
+            } finally {
+                if (cursor != null) {
+                    cursor.close();
+                }
+            }
+            return count;
+        });
+        return keyCount != null ? keyCount : 0L;
     }
 
     /**

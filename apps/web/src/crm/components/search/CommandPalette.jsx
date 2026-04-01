@@ -19,6 +19,16 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
   const searchDomain = useAppStore(selectSearchDomainSlice)
   const searchHistory = searchDomain?.data?.history || []
   const flatResults = useMemo(() => flattenSearchResults(results), [results])
+  const resultIndexMap = useMemo(() => {
+    const indexMap = new Map()
+    flatResults.forEach((item, index) => {
+      const key = buildResultIndexKey(item.type, item.id)
+      if (!indexMap.has(key)) {
+        indexMap.set(key, index)
+      }
+    })
+    return indexMap
+  }, [flatResults])
 
   const cancelSearchRequest = useCallback(() => {
     searchAbortControllerRef.current?.abort()
@@ -228,9 +238,7 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
                     {getTypeLabel(type)} ({safeItems.length})
                   </div>
                   {safeItems.map((item) => {
-                    const globalIndex = flatResults.findIndex(
-                      (r) => r.id === item.id && r.type === type
-                    )
+                    const globalIndex = resultIndexMap.get(buildResultIndexKey(type, item.id)) ?? -1
                     return (
                       <div
                         key={`${type}-${item.id}`}
@@ -253,7 +261,7 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
                           </div>
                         </div>
                         <div className="text-xs text-gray-400">
-                          #{globalIndex + 1}
+                          {globalIndex >= 0 ? `#${globalIndex + 1}` : '-'}
                         </div>
                       </div>
                     )
@@ -304,6 +312,10 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
 export function clampSelectedIndex(selectedIndex, flatResultsLength) {
   if (flatResultsLength <= 0) return 0
   return Math.min(Math.max(selectedIndex, 0), flatResultsLength - 1)
+}
+
+function buildResultIndexKey(type, id) {
+  return `${type ?? ''}:${id ?? ''}`
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.Customer;
 import com.yao.crm.repository.ContactRepository;
@@ -70,7 +72,7 @@ class DataImportServiceTest {
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DataImportService.ImportJobResult result =
-                service.createImportJob("tenant_1", "user123", "Customer", inputStream, "test.csv", "csv");
+                service.createImportJob(TENANT_TEST, "user123", "Customer", inputStream, "test.csv", "csv");
 
         assertNotNull(result.getJobId());
         assertEquals("COMPLETED", result.getStatus());
@@ -94,7 +96,7 @@ class DataImportServiceTest {
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         DataImportService.ImportJobResult completed =
-                service.createImportJob("tenant_1", "user123", "Customer", inputStream, "test.csv", "csv");
+                service.createImportJob(TENANT_TEST, "user123", "Customer", inputStream, "test.csv", "csv");
 
         Object completedContext = getImportJobs().get(completed.getJobId());
         assertNotNull(completedContext);
@@ -102,7 +104,7 @@ class DataImportServiceTest {
         setField(completedContext, "status", DataImportService.ImportJobStatus.COMPLETED);
 
         DataImportService.ImportJobResult active =
-                service.createImportJob("tenant_1", "user123", "Customer",
+                service.createImportJob(TENANT_TEST, "user123", "Customer",
                         new ByteArrayInputStream(csvContent.getBytes(StandardCharsets.UTF_8)), "test.csv", "csv");
         Object activeContext = getImportJobs().get(active.getJobId());
         assertNotNull(activeContext);
@@ -142,3 +144,4 @@ class DataImportServiceTest {
         return field.get(service);
     }
 }
+

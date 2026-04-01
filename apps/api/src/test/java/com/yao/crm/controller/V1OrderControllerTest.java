@@ -33,6 +33,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -87,7 +88,7 @@ class V1OrderControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager-1");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
@@ -119,15 +120,15 @@ class V1OrderControllerTest {
         OrderRecord row = new OrderRecord();
         row.setId("ord-1");
         row.setStatus("DRAFT");
-        row.setTenantId("tenant-1");
-        when(orderRecordRepository.findByIdAndTenantId("ord-1", "tenant-1")).thenReturn(Optional.of(row));
-        when(commerceFacadeService.resolveOrderApprovalMode(row, "tenant-1")).thenReturn("STRICT");
+        row.setTenantId(TENANT_TEST);
+        when(orderRecordRepository.findByIdAndTenantId("ord-1", TENANT_TEST)).thenReturn(Optional.of(row));
+        when(commerceFacadeService.resolveOrderApprovalMode(row, TENANT_TEST)).thenReturn("STRICT");
         when(orderRecordRepository.save(any(OrderRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ResponseEntity<?> response = controller.confirmOrder(request, "  ord-1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(orderRecordRepository).findByIdAndTenantId("ord-1", "tenant-1");
+        verify(orderRecordRepository).findByIdAndTenantId("ord-1", TENANT_TEST);
         assertEquals("CONFIRMED", row.getStatus());
     }
 
@@ -137,9 +138,9 @@ class V1OrderControllerTest {
         OrderRecord row = new OrderRecord();
         row.setId("ord-2");
         row.setStatus("CONFIRMED");
-        row.setTenantId("tenant-1");
+        row.setTenantId(TENANT_TEST);
         row.setQuoteId("");
-        when(orderRecordRepository.findByIdAndTenantId("ord-2", "tenant-1")).thenReturn(Optional.of(row));
+        when(orderRecordRepository.findByIdAndTenantId("ord-2", TENANT_TEST)).thenReturn(Optional.of(row));
 
         ResponseEntity<?> response = controller.confirmOrder(request, "  ord-2  ");
 
@@ -157,14 +158,14 @@ class V1OrderControllerTest {
 
         when(commerceFacadeService.normalizeStatusOrBlank(eq(" confirmed "), anySet())).thenReturn("CONFIRMED");
         when(commerceFacadeService.normalizePageSize(10)).thenReturn(10);
-        when(commerceFacadeService.findOrders(eq("tenant-1"), eq("CONFIRMED"), eq("opp-1"), anyCollection(), any(Pageable.class)))
+        when(commerceFacadeService.findOrders(eq(TENANT_TEST), eq("CONFIRMED"), eq("opp-1"), anyCollection(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
 
         ResponseEntity<?> response = controller.listOrders(request, " confirmed ", "  opp-1  ", 1, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         ArgumentCaptor<Collection<String>> ownersCaptor = ArgumentCaptor.forClass(Collection.class);
-        verify(commerceFacadeService).findOrders(eq("tenant-1"), eq("CONFIRMED"), eq("opp-1"), ownersCaptor.capture(), any(Pageable.class));
+        verify(commerceFacadeService).findOrders(eq(TENANT_TEST), eq("CONFIRMED"), eq("opp-1"), ownersCaptor.capture(), any(Pageable.class));
         LinkedHashSet<String> owners = new LinkedHashSet<>(ownersCaptor.getValue());
         assertEquals(new LinkedHashSet<>(Arrays.asList("alice", "team-a")), owners);
     }
@@ -173,12 +174,12 @@ class V1OrderControllerTest {
     void createOrderShouldNormalizeOwnerStatusAndOpportunityBeforeSave() {
         Customer customer = new Customer();
         customer.setId("cus-1");
-        customer.setTenantId("tenant-1");
+        customer.setTenantId(TENANT_TEST);
         Opportunity opportunity = new Opportunity();
         opportunity.setId("opp-1");
-        opportunity.setTenantId("tenant-1");
-        when(customerRepository.findById("cus-1")).thenReturn(Optional.of(customer));
-        when(opportunityRepository.findById("opp-1")).thenReturn(Optional.of(opportunity));
+        opportunity.setTenantId(TENANT_TEST);
+        when(customerRepository.findByIdAndTenantId("cus-1", TENANT_TEST)).thenReturn(Optional.of(customer));
+        when(opportunityRepository.findByIdAndTenantId("opp-1", TENANT_TEST)).thenReturn(Optional.of(opportunity));
         when(orderRecordRepository.save(any(OrderRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderCreateRequest payload = new OrderCreateRequest();
@@ -200,5 +201,31 @@ class V1OrderControllerTest {
         assertEquals("CONFIRMED", saved.getStatus());
         assertEquals(123L, saved.getAmount());
         assertTrue(saved.getOrderNo().startsWith("ORD-"));
+        verify(auditLogService).record(
+                eq("manager-1"),
+                eq("MANAGER"),
+                eq("CREATE"),
+                eq("ORDER"),
+                anyString(),
+                eq("Create order"),
+                eq(TENANT_TEST)
+        );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void createOrderShouldReturnCustomerNotFoundWhenTenantMismatch() {
+        when(customerRepository.findByIdAndTenantId("cus-1", TENANT_TEST)).thenReturn(Optional.empty());
+
+        OrderCreateRequest payload = new OrderCreateRequest();
+        payload.setCustomerId("cus-1");
+
+        ResponseEntity<?> response = controller.createOrder(request, payload);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("customer_not_found", body.get("code"));
+        verify(orderRecordRepository, never()).save(any(OrderRecord.class));
     }
 }
+

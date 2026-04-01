@@ -35,7 +35,7 @@ public class DashboardCacheInvalidationInterceptor implements HandlerInterceptor
         Object tenantAttr = request.getAttribute("authTenantId");
         String tenantId = tenantAttr == null ? request.getHeader("X-Tenant-Id") : String.valueOf(tenantAttr);
         if (tenantId == null || tenantId.trim().isEmpty()) {
-            tenantId = "tenant_default";
+            return;
         }
         String domain = resolveDomain(uri);
         dashboardMetricsCacheService.evictDomain(tenantId, domain);

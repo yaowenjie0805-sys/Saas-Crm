@@ -41,9 +41,7 @@ public class SearchIndex {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) {
-            tenantId = "tenant_default";
-        }
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         updatedAt = now;
     }
 

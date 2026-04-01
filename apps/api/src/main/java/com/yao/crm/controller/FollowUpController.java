@@ -9,7 +9,6 @@ import com.yao.crm.repository.FollowUpRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -69,7 +68,7 @@ public class FollowUpController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                CollectionsUtil.setOf("customerId", "author", "summary", "channel", "result", "nextActionDate", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("customerId", "author", "summary", "channel", "result", "nextActionDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -98,7 +97,6 @@ public class FollowUpController extends BaseApiController {
                 predicates.add(cb.or(selfAuthor, scopeAuthor));
             }
             return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
         };
 
         Page<FollowUp> result = followUpRepository.findAll(spec, pageable);
@@ -146,7 +144,7 @@ public class FollowUpController extends BaseApiController {
         }
 
         FollowUp saved = followUpRepository.save(followUp);
-        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "FOLLOW_UP", saved.getId(), saved.getSummary());
+        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "FOLLOW_UP", saved.getId(), saved.getSummary(), tenantId);
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -200,7 +198,7 @@ public class FollowUpController extends BaseApiController {
         }
 
         FollowUp saved = followUpRepository.save(followUp);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "FOLLOW_UP", saved.getId(), "Updated follow-up");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "FOLLOW_UP", saved.getId(), "Updated follow-up", tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -227,7 +225,7 @@ public class FollowUpController extends BaseApiController {
         if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "follow_up_not_found", "NOT_FOUND", null));
         }
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "FOLLOW_UP", normalizedId, "Deleted follow-up");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "FOLLOW_UP", normalizedId, "Deleted follow-up", tenantId);
         return ResponseEntity.noContent().build();
     }
 
@@ -235,7 +233,6 @@ public class FollowUpController extends BaseApiController {
         Optional<Customer> customer = customerRepository.findByIdAndTenantId(customerId, currentTenant(request));
         return customer.isPresent() && ownerMatchesScope(request, customer.get().getOwner());
     }
-
 
     private LocalDate parseNextActionDateOrNull(HttpServletRequest request, String value) {
         String normalized = normalizeRequired(value);

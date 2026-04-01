@@ -79,7 +79,7 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>compile</scope>
+            <scope>test</scope>
         </dependency>
         <!-- springdoc-openapi for API documentation -->
         <dependency>
@@ -93,11 +93,11 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.2.3</version>
         </dependency>
-        <!-- Caffeine cache (2.9.x is the last version supporting Java 8) -->
+        <!-- Caffeine cache for Java 11+ -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
-            <version>2.9.3</version>
+            <version>3.1.8</version>
         </dependency>
         <!-- Lombok for reducing boilerplate -->
         <dependency>

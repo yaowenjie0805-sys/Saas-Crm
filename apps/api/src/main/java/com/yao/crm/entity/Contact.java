@@ -56,7 +56,7 @@ public class Contact {
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) createdAt = now;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         updatedAt = now;
     }
 

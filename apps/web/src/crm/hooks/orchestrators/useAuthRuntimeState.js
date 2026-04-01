@@ -9,7 +9,7 @@ export function useAuthRuntimeState() {
     crudErrors: { lead: '', customer: '', opportunity: '', followUp: '', contact: '', contract: '', payment: '' },
     crudFieldErrors: { lead: {}, customer: {}, opportunity: {}, followUp: {}, contact: {}, contract: {}, payment: {} },
     loginForm: () => ({
-      tenantId: localStorage.getItem('crm_last_tenant') || 'tenant_default',
+      tenantId: localStorage.getItem('crm_last_tenant') || '',
       username: '',
       password: '',
       mfaCode: '',

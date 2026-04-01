@@ -3,62 +3,61 @@ package com.yao.crm.service;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
 @Service
 public class ValueNormalizerService {
 
-    private static final Map<String, String> CUSTOMER_STATUS_MAP = new HashMap<String, String>() { {
-        put("ACTIVE", "Active");
-        put("PENDING", "Pending");
-        put("INACTIVE", "Inactive");
-        put("NEGOTIATING", "Active");
-        put("QUOTATION_PENDING", "Pending");
-        put("FIRST_CONTACT", "Pending");
-        put("PROPOSAL_REVIEW", "Active");
-    } };
+    private static final Map<String, String> CUSTOMER_STATUS_MAP = Map.ofEntries(
+            Map.entry("ACTIVE", "Active"),
+            Map.entry("PENDING", "Pending"),
+            Map.entry("INACTIVE", "Inactive"),
+            Map.entry("NEGOTIATING", "Active"),
+            Map.entry("QUOTATION_PENDING", "Pending"),
+            Map.entry("FIRST_CONTACT", "Pending"),
+            Map.entry("PROPOSAL_REVIEW", "Active")
+    );
 
-    private static final Map<String, String> OPPORTUNITY_STAGE_MAP = new HashMap<String, String>() { {
-        put("LEAD", "Lead");
-        put("QUALIFIED", "Qualified");
-        put("PROPOSAL", "Proposal");
-        put("NEGOTIATION", "Negotiation");
-        put("CLOSED_WON", "Closed Won");
-        put("CLOSED_LOST", "Closed Lost");
-        put("LEAD_COLLECTION", "Lead");
-        put("INITIAL_CONTACT", "Lead");
-        put("PROPOSAL_FOLLOW_UP", "Proposal");
-        put("BUSINESS_NEGOTIATION", "Negotiation");
-    } };
+    private static final Map<String, String> OPPORTUNITY_STAGE_MAP = Map.ofEntries(
+            Map.entry("LEAD", "Lead"),
+            Map.entry("QUALIFIED", "Qualified"),
+            Map.entry("PROPOSAL", "Proposal"),
+            Map.entry("NEGOTIATION", "Negotiation"),
+            Map.entry("CLOSED_WON", "Closed Won"),
+            Map.entry("CLOSED_LOST", "Closed Lost"),
+            Map.entry("LEAD_COLLECTION", "Lead"),
+            Map.entry("INITIAL_CONTACT", "Lead"),
+            Map.entry("PROPOSAL_FOLLOW_UP", "Proposal"),
+            Map.entry("BUSINESS_NEGOTIATION", "Negotiation")
+    );
 
-    private static final Map<String, String> CONTRACT_STATUS_MAP = new HashMap<String, String>() { {
-        put("DRAFT", "Draft");
-        put("SIGNED", "Signed");
-    } };
+    private static final Map<String, String> CONTRACT_STATUS_MAP = Map.of(
+            "DRAFT", "Draft",
+            "SIGNED", "Signed"
+    );
 
-    private static final Map<String, String> PAYMENT_STATUS_MAP = new HashMap<String, String>() { {
-        put("PENDING", "Pending");
-        put("RECEIVED", "Received");
-        put("OVERDUE", "Overdue");
-    } };
+    private static final Map<String, String> PAYMENT_STATUS_MAP = Map.of(
+            "PENDING", "Pending",
+            "RECEIVED", "Received",
+            "OVERDUE", "Overdue"
+    );
 
-    private static final Map<String, String> PAYMENT_METHOD_MAP = new HashMap<String, String>() { {
-        put("BANK", "Bank");
-        put("BANK_TRANSFER", "Bank");
-        put("TRANSFER", "Transfer");
-        put("CASH", "Cash");
-        put("CARD", "Card");
-    } };
+    private static final Map<String, String> PAYMENT_METHOD_MAP = Map.of(
+            "BANK", "Bank",
+            "BANK_TRANSFER", "Bank",
+            "TRANSFER", "Transfer",
+            "CASH", "Cash",
+            "CARD", "Card"
+    );
 
-    private static final Map<String, String> FOLLOWUP_CHANNEL_MAP = new HashMap<String, String>() { {
-        put("PHONE", "Phone");
-        put("EMAIL", "Email");
-        put("WECHAT", "WeChat");
-        put("VISIT", "Visit");
-        put("MEETING", "Meeting");
-    } };
+    private static final Map<String, String> FOLLOWUP_CHANNEL_MAP = Map.of(
+            "PHONE", "Phone",
+            "EMAIL", "Email",
+            "WECHAT", "WeChat",
+            "VISIT", "Visit",
+            "MEETING", "Meeting"
+    );
 
     public String normalizeContractStatus(String value) {
         return normalizeByMap(value, CONTRACT_STATUS_MAP);

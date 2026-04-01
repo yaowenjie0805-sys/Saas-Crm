@@ -10,7 +10,6 @@ import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
@@ -32,7 +31,7 @@ import java.util.*;
 @Validated
 public class V1QuoteController extends CommerceControllerSupport {
 
-    private static final Set<String> QUOTE_STATUSES = CollectionsUtil.setOf(
+    private static final Set<String> QUOTE_STATUSES = Set.of(
             "DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "ACCEPTED", "EXPIRED", "CANCELED"
     );
 
@@ -105,7 +104,7 @@ public class V1QuoteController extends CommerceControllerSupport {
         String normalizedOpportunityId = normalizeId(opportunityId);
         int normalizedSize = commerceFacadeService.normalizePageSize(size);
         Pageable pageable = buildPageable(page, normalizedSize, "updatedAt", "desc",
-                CollectionsUtil.setOf("createdAt", "updatedAt", "quoteNo", "status", "totalAmount"), "updatedAt");
+                Set.of("createdAt", "updatedAt", "quoteNo", "status", "totalAmount"), "updatedAt");
         Collection<String> scopedOwners = null;
         if (isSalesScoped(request)) {
             Set<String> ownerSet = new LinkedHashSet<String>();
@@ -130,7 +129,7 @@ public class V1QuoteController extends CommerceControllerSupport {
         }
         String tenantId = currentTenant(request);
         Quote row = new Quote();
-        row.setId(idGenerator.generate("qt"));
+        row.setId(newId("qt"));
         row.setTenantId(tenantId);
         row.setQuoteNo(generateNo("QUO"));
         String validate = applyQuotePayload(request, row, payload, true);
@@ -246,7 +245,7 @@ public class V1QuoteController extends CommerceControllerSupport {
                 Product product = productsById.get(productId);
                 if (product == null) continue;
                 QuoteItem item = new QuoteItem();
-                item.setId(idGenerator.generate("qti"));
+                item.setId(newId("qti"));
                 item.setTenantId(tenantId);
                 item.setQuoteId(normalizedId);
                 item.setProductId(productId);
@@ -358,7 +357,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             return ResponseEntity.status(409).body(errorBody(request, "quote_not_accepted", msg(request, "quote_not_accepted"), null));
         }
         OrderRecord order = new OrderRecord();
-        order.setId(idGenerator.generate("ord"));
+        order.setId(newId("ord"));
         order.setTenantId(tenantId);
         order.setOrderNo(generateNo("ORD"));
         order.setCustomerId(quote.getCustomerId());
@@ -458,7 +457,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             snapshotJson = "{\"quoteId\":\"" + normalizedId + "\"}";
         }
         QuoteVersion row = new QuoteVersion();
-        row.setId(idGenerator.generate("qtv"));
+        row.setId(newId("qtv"));
         row.setTenantId(tenantId);
         row.setQuoteId(normalizedId);
         row.setVersionNo(nextVersion);
@@ -551,12 +550,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         String customerId = normalizeId(payload.getCustomerId());
         if (creating && isBlank(customerId)) return "quote_customer_required";
         if (!isBlank(customerId)) {
-            if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
+            if (!customerRepository.findByIdAndTenantId(customerId, row.getTenantId()).isPresent()) return "customer_not_found";
             row.setCustomerId(customerId);
         }
         String opportunityId = normalizeId(payload.getOpportunityId());
         if (!isBlank(opportunityId)) {
-            if (!belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) return "opportunity_not_found";
+            if (!opportunityRepository.findByIdAndTenantId(opportunityId, row.getTenantId()).isPresent()) return "opportunity_not_found";
             row.setOpportunityId(opportunityId);
         }
         if (payload.getOwner() != null) {
@@ -581,12 +580,12 @@ public class V1QuoteController extends CommerceControllerSupport {
         String customerId = normalizeId(payload.getCustomerId());
         if (creating && isBlank(customerId)) return "quote_customer_required";
         if (!isBlank(customerId)) {
-            if (!belongsToTenant(customerRepository.findById(customerId).orElse(null), row.getTenantId())) return "customer_not_found";
+            if (!customerRepository.findByIdAndTenantId(customerId, row.getTenantId()).isPresent()) return "customer_not_found";
             row.setCustomerId(customerId);
         }
         String opportunityId = normalizeId(payload.getOpportunityId());
         if (!isBlank(opportunityId)) {
-            if (!belongsToTenant(opportunityRepository.findById(opportunityId).orElse(null), row.getTenantId())) return "opportunity_not_found";
+            if (!opportunityRepository.findByIdAndTenantId(opportunityId, row.getTenantId()).isPresent()) return "opportunity_not_found";
             row.setOpportunityId(opportunityId);
         }
         if (payload.getOwner() != null) {
@@ -625,7 +624,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             return null;
         }
         ApprovalInstance instance = new ApprovalInstance();
-        instance.setId(idGenerator.generate("api"));
+        instance.setId(newId("api"));
         instance.setTenantId(tenantId);
         instance.setTemplateId(selected.getId());
         instance.setTemplateVersion(selected.getVersion());
@@ -643,7 +642,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             String roleItem = isBlank(r) ? "" : r.trim().toUpperCase(Locale.ROOT);
             if (roleItem.isEmpty()) continue;
             ApprovalTask task = new ApprovalTask();
-            task.setId(idGenerator.generate("aptk"));
+            task.setId(newId("aptk"));
             task.setTenantId(tenantId);
             task.setInstanceId(instance.getId());
             task.setApproverRole(roleItem);
@@ -654,7 +653,7 @@ public class V1QuoteController extends CommerceControllerSupport {
             approvalTaskRepository.save(task);
 
             ApprovalEvent event = new ApprovalEvent();
-            event.setId(idGenerator.generate("apev"));
+            event.setId(newId("apev"));
             event.setTenantId(tenantId);
             event.setInstanceId(instance.getId());
             event.setTaskId(task.getId());
@@ -667,7 +666,7 @@ public class V1QuoteController extends CommerceControllerSupport {
         }
 
         ApprovalEvent submitEvent = new ApprovalEvent();
-        submitEvent.setId(idGenerator.generate("apev"));
+        submitEvent.setId(newId("apev"));
         submitEvent.setTenantId(tenantId);
         submitEvent.setInstanceId(instance.getId());
         submitEvent.setTaskId(null);

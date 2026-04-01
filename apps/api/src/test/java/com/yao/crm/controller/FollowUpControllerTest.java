@@ -21,6 +21,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -56,30 +57,30 @@ class FollowUpControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
     void deleteFollowUpShouldDeleteWithinTenantAndReturnNoContent() {
-        when(followUpRepository.deleteByIdAndTenantId("fu-1", "tenant-1")).thenReturn(1L);
+        when(followUpRepository.deleteByIdAndTenantId("fu-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteFollowUp(request, "fu-1");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(followUpRepository).deleteByIdAndTenantId("fu-1", "tenant-1");
+        verify(followUpRepository).deleteByIdAndTenantId("fu-1", TENANT_TEST);
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("FOLLOW_UP"), eq("fu-1"), anyString());
     }
 
     @Test
     void deleteFollowUpShouldTrimIdBeforeTenantScopedDelete() {
-        when(followUpRepository.deleteByIdAndTenantId("fu-1", "tenant-1")).thenReturn(1L);
+        when(followUpRepository.deleteByIdAndTenantId("fu-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteFollowUp(request, "  fu-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(followUpRepository).deleteByIdAndTenantId("fu-1", "tenant-1");
+        verify(followUpRepository).deleteByIdAndTenantId("fu-1", TENANT_TEST);
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("FOLLOW_UP"), eq("fu-1"), anyString());
     }
 
@@ -105,13 +106,13 @@ class FollowUpControllerTest {
 
     @Test
     void deleteFollowUpShouldReturnNotFoundWhenTenantScopedDeleteAffectsZeroRows() {
-        when(followUpRepository.deleteByIdAndTenantId("fu-1", "tenant-1")).thenReturn(0L);
+        when(followUpRepository.deleteByIdAndTenantId("fu-1", TENANT_TEST)).thenReturn(0L);
 
         ResponseEntity<?> response = controller.deleteFollowUp(request, "fu-1");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(followUpRepository).deleteByIdAndTenantId("fu-1", "tenant-1");
+        verify(followUpRepository).deleteByIdAndTenantId("fu-1", TENANT_TEST);
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
@@ -124,14 +125,14 @@ class FollowUpControllerTest {
 
         Customer customer = new Customer();
         customer.setId("cust-1");
-        customer.setTenantId("tenant-1");
+        customer.setTenantId(TENANT_TEST);
         customer.setOwner("manager");
-        when(customerRepository.findByIdAndTenantId("cust-1", "tenant-1")).thenReturn(Optional.of(customer));
+        when(customerRepository.findByIdAndTenantId("cust-1", TENANT_TEST)).thenReturn(Optional.of(customer));
 
         ResponseEntity<?> response = controller.createFollowUp(request, payload);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        verify(customerRepository).findByIdAndTenantId("cust-1", "tenant-1");
+        verify(customerRepository).findByIdAndTenantId("cust-1", TENANT_TEST);
         verify(followUpRepository, never()).save(any(FollowUp.class));
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
@@ -143,21 +144,22 @@ class FollowUpControllerTest {
         request.setAttribute("authOwnerScope", "sales-scope");
         FollowUp followUp = new FollowUp();
         followUp.setId("fu-1");
-        followUp.setTenantId("tenant-1");
+        followUp.setTenantId(TENANT_TEST);
         followUp.setCustomerId("cust-1");
         Customer customer = new Customer();
         customer.setId("cust-1");
-        customer.setTenantId("tenant-1");
+        customer.setTenantId(TENANT_TEST);
         customer.setOwner("another-owner");
-        when(followUpRepository.findByIdAndTenantId("fu-1", "tenant-1")).thenReturn(Optional.of(followUp));
-        when(customerRepository.findByIdAndTenantId("cust-1", "tenant-1")).thenReturn(Optional.of(customer));
+        when(followUpRepository.findByIdAndTenantId("fu-1", TENANT_TEST)).thenReturn(Optional.of(followUp));
+        when(customerRepository.findByIdAndTenantId("cust-1", TENANT_TEST)).thenReturn(Optional.of(customer));
 
         ResponseEntity<?> response = controller.deleteFollowUp(request, "fu-1");
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        verify(followUpRepository).findByIdAndTenantId("fu-1", "tenant-1");
-        verify(customerRepository).findByIdAndTenantId("cust-1", "tenant-1");
-        verify(followUpRepository, never()).deleteByIdAndTenantId("fu-1", "tenant-1");
+        verify(followUpRepository).findByIdAndTenantId("fu-1", TENANT_TEST);
+        verify(customerRepository).findByIdAndTenantId("cust-1", TENANT_TEST);
+        verify(followUpRepository, never()).deleteByIdAndTenantId("fu-1", TENANT_TEST);
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
+

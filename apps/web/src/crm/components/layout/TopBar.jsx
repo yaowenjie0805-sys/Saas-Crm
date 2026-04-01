@@ -70,6 +70,7 @@ function TopBar({
             data-testid="topbar-search-clear"
             onClick={() => {
               setSearchQuery('')
+              onSearchSubmit?.('')
               searchInputRef.current?.focus()
             }}
           >

@@ -13,7 +13,6 @@ import com.yao.crm.repository.PaymentRecordRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -81,7 +80,7 @@ public class PaymentController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                CollectionsUtil.setOf("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("customerId", "contractId", "orderId", "amount", "status", "method", "owner", "receivedDate", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -108,7 +107,6 @@ public class PaymentController extends BaseApiController {
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
             return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
         };
 
         Page<PaymentRecord> result = paymentRepository.findAll(spec, pageable);
@@ -195,7 +193,7 @@ public class PaymentController extends BaseApiController {
         }
 
         PaymentRecord saved = paymentRepository.save(payment);
-        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "PAYMENT", saved.getId(), saved.getContractId());
+        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "PAYMENT", saved.getId(), saved.getContractId(), tenantId);
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -285,7 +283,7 @@ public class PaymentController extends BaseApiController {
         if (patch.getRemark() != null) payment.setRemark(patch.getRemark());
 
         PaymentRecord saved = paymentRepository.save(payment);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PAYMENT", saved.getId(), "Updated payment");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PAYMENT", saved.getId(), "Updated payment", tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -303,10 +301,9 @@ public class PaymentController extends BaseApiController {
         if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "payment_not_found", "NOT_FOUND", null));
         }
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "PAYMENT", normalizedId, "Deleted payment");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "PAYMENT", normalizedId, "Deleted payment", tenantId);
         return ResponseEntity.noContent().build();
     }
-
 
     private LocalDate parseDateOrNull(HttpServletRequest request, String value) {
         String normalized = normalizeRequired(value);

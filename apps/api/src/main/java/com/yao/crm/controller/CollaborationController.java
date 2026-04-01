@@ -117,8 +117,13 @@ public class CollaborationController {
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> deleteComment(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String commentId,
             @RequestParam(required = false) String userId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String normalizedCommentId = normalizeRequiredValue(commentId);
         if (normalizedCommentId == null) {
             return ResponseEntity.badRequest().build();
@@ -129,7 +134,7 @@ public class CollaborationController {
             return ResponseEntity.badRequest().build();
         }
 
-        boolean deleted = collaborationService.deleteComment(normalizedCommentId, currentUser);
+        boolean deleted = collaborationService.deleteComment(normalizedTenantId, normalizedCommentId, currentUser);
         return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
@@ -139,8 +144,13 @@ public class CollaborationController {
     @PostMapping("/comments/{commentId}/like")
     public ResponseEntity<?> likeComment(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String commentId,
             @RequestParam(required = false) String userId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String normalizedCommentId = normalizeRequiredValue(commentId);
         if (normalizedCommentId == null) {
             return ResponseEntity.badRequest().build();
@@ -151,7 +161,7 @@ public class CollaborationController {
             return ResponseEntity.badRequest().build();
         }
 
-        boolean isLiked = collaborationService.likeComment(normalizedCommentId, currentUser);
+        boolean isLiked = collaborationService.likeComment(normalizedTenantId, normalizedCommentId, currentUser);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("isLiked", isLiked);
@@ -164,8 +174,13 @@ public class CollaborationController {
     @PutMapping("/comments/{commentId}")
     public ResponseEntity<?> editComment(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String commentId,
             @RequestBody EditCommentRequest editRequest) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String normalizedCommentId = normalizeRequiredValue(commentId);
         if (normalizedCommentId == null) {
             return ResponseEntity.badRequest().build();
@@ -177,6 +192,7 @@ public class CollaborationController {
         }
 
         Comment comment = collaborationService.editComment(
+                normalizedTenantId,
                 normalizedCommentId,
                 currentUser,
                 editRequest.newContent
@@ -408,8 +424,13 @@ public class CollaborationController {
      */
     @PostMapping("/teams/{teamId}/members")
     public ResponseEntity<?> addTeamMember(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String teamId,
             @RequestBody AddMemberRequest request) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String normalizedTeamId = normalizeRequiredValue(teamId);
         if (normalizedTeamId == null) {
             return ResponseEntity.badRequest().build();
@@ -420,7 +441,7 @@ public class CollaborationController {
             return ResponseEntity.badRequest().build();
         }
 
-        Team team = collaborationService.addTeamMember(normalizedTeamId, normalizedUserId, request.role);
+        Team team = collaborationService.addTeamMember(normalizedTenantId, normalizedTeamId, normalizedUserId, request.role);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("team", team);
@@ -431,8 +452,13 @@ public class CollaborationController {
      */
     @DeleteMapping("/teams/{teamId}/members/{userId}")
     public ResponseEntity<?> removeTeamMember(
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String teamId,
             @PathVariable String userId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String normalizedTeamId = normalizeRequiredValue(teamId);
         if (normalizedTeamId == null) {
             return ResponseEntity.badRequest().build();
@@ -443,7 +469,7 @@ public class CollaborationController {
             return ResponseEntity.badRequest().build();
         }
 
-        Team team = collaborationService.removeTeamMember(normalizedTeamId, normalizedUserId);
+        Team team = collaborationService.removeTeamMember(normalizedTenantId, normalizedTeamId, normalizedUserId);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("team", team);
@@ -457,8 +483,14 @@ public class CollaborationController {
     @PostMapping("/approval/tasks/{taskId}/delegate")
     public ResponseEntity<?> delegateTask(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String taskId,
             @RequestBody DelegateRequest request) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         String normalizedTaskId = normalizeRequiredValue(taskId);
         if (normalizedTaskId == null) {
             return ResponseEntity.badRequest().build();
@@ -470,6 +502,7 @@ public class CollaborationController {
         }
 
         ApprovalDelegationService.DelegationResult result = delegationService.delegateTask(
+                normalizedTenantId,
                 normalizedTaskId,
                 currentUser,
                 request.toUserId,
@@ -488,8 +521,14 @@ public class CollaborationController {
     @PostMapping("/approval/tasks/{taskId}/add-sign")
     public ResponseEntity<?> addSign(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String taskId,
             @RequestBody AddSignRequest request) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         String normalizedTaskId = normalizeRequiredValue(taskId);
         if (normalizedTaskId == null) {
             return ResponseEntity.badRequest().build();
@@ -501,6 +540,7 @@ public class CollaborationController {
         }
 
         ApprovalDelegationService.AddSignResult result = delegationService.addSign(
+                normalizedTenantId,
                 normalizedTaskId,
                 currentUser,
                 request.addSignUserId,
@@ -520,8 +560,14 @@ public class CollaborationController {
     @PostMapping("/approval/tasks/{taskId}/transfer")
     public ResponseEntity<?> transferTask(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String taskId,
             @RequestBody TransferRequest request) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         String normalizedTaskId = normalizeRequiredValue(taskId);
         if (normalizedTaskId == null) {
             return ResponseEntity.badRequest().build();
@@ -533,6 +579,7 @@ public class CollaborationController {
         }
 
         ApprovalDelegationService.TransferResult result = delegationService.transferTask(
+                normalizedTenantId,
                 normalizedTaskId,
                 currentUser,
                 request.toUserId,
@@ -549,14 +596,21 @@ public class CollaborationController {
      * 闁兼儳鍢茶ぐ鍥ㄦ叏閺冣偓婢ь參宕㈤崱妤€钑?
      */
     @GetMapping("/approval/tasks/{taskId}/delegations")
-    public ResponseEntity<?> getDelegationHistory(@PathVariable String taskId) {
+    public ResponseEntity<?> getDelegationHistory(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String taskId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         String normalizedTaskId = normalizeRequiredValue(taskId);
         if (normalizedTaskId == null) {
             return ResponseEntity.badRequest().build();
         }
 
         List<ApprovalDelegationService.DelegationRecord> history =
-                delegationService.getDelegationHistory(normalizedTaskId);
+                delegationService.getDelegationHistory(normalizedTenantId, normalizedTaskId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -568,14 +622,21 @@ public class CollaborationController {
      * 闁兼儳鍢茶ぐ鍥ㄦ姜椤戞寧鍞夐柛妯烘瑜?
      */
     @GetMapping("/approval/tasks/{taskId}/transfers")
-    public ResponseEntity<?> getTransferHistory(@PathVariable String taskId) {
+    public ResponseEntity<?> getTransferHistory(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @PathVariable String taskId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         String normalizedTaskId = normalizeRequiredValue(taskId);
         if (normalizedTaskId == null) {
             return ResponseEntity.badRequest().build();
         }
 
         List<ApprovalDelegationService.TransferRecord> history =
-                delegationService.getTransferHistory(normalizedTaskId);
+                delegationService.getTransferHistory(normalizedTenantId, normalizedTaskId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -589,8 +650,14 @@ public class CollaborationController {
     @PostMapping("/approval/delegations/{delegationId}/recall")
     public ResponseEntity<?> recallDelegation(
             HttpServletRequest httpRequest,
+            @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String delegationId,
             @RequestParam String userId) {
+        String normalizedTenantId = normalizeRequiredValue(tenantId);
+        if (normalizedTenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
         String normalizedDelegationId = normalizeRequiredValue(delegationId);
         if (normalizedDelegationId == null) {
             return ResponseEntity.badRequest().build();
@@ -601,7 +668,7 @@ public class CollaborationController {
             return ResponseEntity.badRequest().build();
         }
 
-        boolean recalled = delegationService.recallDelegation(normalizedDelegationId, currentUser);
+        boolean recalled = delegationService.recallDelegation(normalizedTenantId, normalizedDelegationId, currentUser);
         Map<String, Object> result = new HashMap<>();
         result.put("success", recalled);
         return ResponseEntity.ok(result);

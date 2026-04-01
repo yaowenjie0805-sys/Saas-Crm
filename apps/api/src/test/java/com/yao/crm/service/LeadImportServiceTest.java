@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.dto.LeadImportChunkMessage;
 import com.yao.crm.entity.Lead;
@@ -107,108 +109,108 @@ class LeadImportServiceTest {
     @Test
     void shouldCacheDedupeKeysAcrossChunksAndRejectDuplicatesWithoutRepeatingScan() throws Exception {
         LeadImportJob job = newJob("job-1");
-        LeadImportJobChunk chunk1 = newChunk("chunk-1", "tenant-1", "job-1", 1);
-        LeadImportJobChunk chunk2 = newChunk("chunk-2", "tenant-1", "job-1", 2);
+        LeadImportJobChunk chunk1 = newChunk("chunk-1", TENANT_TEST, "job-1", 1);
+        LeadImportJobChunk chunk2 = newChunk("chunk-2", TENANT_TEST, "job-1", 2);
 
-        when(jobRepository.findByIdAndTenantId("job-1", "tenant-1")).thenReturn(Optional.of(job));
+        when(jobRepository.findByIdAndTenantId("job-1", TENANT_TEST)).thenReturn(Optional.of(job));
         when(jobRepository.findById("job-1")).thenReturn(Optional.of(job));
         when(jobRepository.save(any(LeadImportJob.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo("tenant-1", "job-1", 1)).thenReturn(Optional.of(chunk1));
-        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo("tenant-1", "job-1", 2)).thenReturn(Optional.of(chunk2));
+        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo(TENANT_TEST, "job-1", 1)).thenReturn(Optional.of(chunk1));
+        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo(TENANT_TEST, "job-1", 2)).thenReturn(Optional.of(chunk2));
         when(chunkRepository.save(any(LeadImportJobChunk.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(chunkRepository.countByTenantIdAndJobId("tenant-1", "job-1")).thenReturn(2L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-1", "PROCESSED")).thenReturn(1L, 2L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-1", "FAILED")).thenReturn(0L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-1", "CANCELED")).thenReturn(0L);
-        when(leadRepository.findDedupeKeysByTenantId(eq("tenant-1"), any(Pageable.class)))
+        when(chunkRepository.countByTenantIdAndJobId(TENANT_TEST, "job-1")).thenReturn(2L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-1", "PROCESSED")).thenReturn(1L, 2L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-1", "FAILED")).thenReturn(0L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-1", "CANCELED")).thenReturn(0L);
+        when(leadRepository.findDedupeKeysByTenantId(eq(TENANT_TEST), any(Pageable.class)))
                 .thenReturn(new PageImpl<Object[]>(Collections.<Object[]>emptyList(), PageRequest.of(0, 500), 0));
         when(leadRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
-        when(leadAssignmentService.assignOwnerForTenant("tenant-1")).thenReturn("");
+        when(leadAssignmentService.assignOwnerForTenant(TENANT_TEST)).thenReturn("");
 
-        service.consumeLeadImportChunk(chunkMessage("tenant-1", "job-1", 1,
+        service.consumeLeadImportChunk(chunkMessage(TENANT_TEST, "job-1", 1,
                 Arrays.asList("Alice,Acme,0101234567,alice@example.com,web,,NEW"), "req-1"));
 
-        assertTrue(getDedupeCacheMap().containsKey("tenant-1|job-1"));
+        assertTrue(getDedupeCacheMap().containsKey(TENANT_TEST + "|job-1"));
 
-        service.consumeLeadImportChunk(chunkMessage("tenant-1", "job-1", 2,
+        service.consumeLeadImportChunk(chunkMessage(TENANT_TEST, "job-1", 2,
                 Arrays.asList("Alice,Acme,0101234567,alice@example.com,web,,NEW"), "req-2"));
 
-        verify(leadRepository, times(1)).findDedupeKeysByTenantId(eq("tenant-1"), any(Pageable.class));
+        verify(leadRepository, times(1)).findDedupeKeysByTenantId(eq(TENANT_TEST), any(Pageable.class));
         verify(itemRepository, times(1)).save(any(LeadImportJobItem.class));
         verify(leadRepository, times(1)).saveAll(anyList());
         verify(leadRepository, never()).save(any(Lead.class));
         assertEquals("PARTIAL_SUCCESS", job.getStatus());
-        assertFalse(getDedupeCacheMap().containsKey("tenant-1|job-1"));
+        assertFalse(getDedupeCacheMap().containsKey(TENANT_TEST + "|job-1"));
     }
 
     @Test
     void shouldReuseCachedDedupeKeysAcrossChunksAndCleanUpAfterSuccess() throws Exception {
         LeadImportJob job = newJob("job-2");
-        LeadImportJobChunk chunk1 = newChunk("chunk-1", "tenant-1", "job-2", 1);
-        LeadImportJobChunk chunk2 = newChunk("chunk-2", "tenant-1", "job-2", 2);
+        LeadImportJobChunk chunk1 = newChunk("chunk-1", TENANT_TEST, "job-2", 1);
+        LeadImportJobChunk chunk2 = newChunk("chunk-2", TENANT_TEST, "job-2", 2);
 
-        when(jobRepository.findByIdAndTenantId("job-2", "tenant-1")).thenReturn(Optional.of(job));
+        when(jobRepository.findByIdAndTenantId("job-2", TENANT_TEST)).thenReturn(Optional.of(job));
         when(jobRepository.findById("job-2")).thenReturn(Optional.of(job));
         when(jobRepository.save(any(LeadImportJob.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo("tenant-1", "job-2", 1)).thenReturn(Optional.of(chunk1));
-        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo("tenant-1", "job-2", 2)).thenReturn(Optional.of(chunk2));
+        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo(TENANT_TEST, "job-2", 1)).thenReturn(Optional.of(chunk1));
+        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo(TENANT_TEST, "job-2", 2)).thenReturn(Optional.of(chunk2));
         when(chunkRepository.save(any(LeadImportJobChunk.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(chunkRepository.countByTenantIdAndJobId("tenant-1", "job-2")).thenReturn(2L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-2", "PROCESSED")).thenReturn(1L, 2L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-2", "FAILED")).thenReturn(0L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-2", "CANCELED")).thenReturn(0L);
-        when(leadRepository.findDedupeKeysByTenantId(eq("tenant-1"), any(Pageable.class)))
+        when(chunkRepository.countByTenantIdAndJobId(TENANT_TEST, "job-2")).thenReturn(2L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-2", "PROCESSED")).thenReturn(1L, 2L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-2", "FAILED")).thenReturn(0L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-2", "CANCELED")).thenReturn(0L);
+        when(leadRepository.findDedupeKeysByTenantId(eq(TENANT_TEST), any(Pageable.class)))
                 .thenReturn(new PageImpl<Object[]>(Collections.<Object[]>emptyList(), PageRequest.of(0, 500), 0));
         when(leadRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
-        when(leadAssignmentService.assignOwnerForTenant("tenant-1")).thenReturn("");
+        when(leadAssignmentService.assignOwnerForTenant(TENANT_TEST)).thenReturn("");
 
-        service.consumeLeadImportChunk(chunkMessage("tenant-1", "job-2", 1,
+        service.consumeLeadImportChunk(chunkMessage(TENANT_TEST, "job-2", 1,
                 Arrays.asList("Alice,Acme,0101234567,alice@example.com,web,,NEW"), "req-1"));
-        assertTrue(getDedupeCacheMap().containsKey("tenant-1|job-2"));
+        assertTrue(getDedupeCacheMap().containsKey(TENANT_TEST + "|job-2"));
 
-        service.consumeLeadImportChunk(chunkMessage("tenant-1", "job-2", 2,
+        service.consumeLeadImportChunk(chunkMessage(TENANT_TEST, "job-2", 2,
                 Arrays.asList("Bob,Acme,0101234568,bob@example.com,web,,NEW"), "req-2"));
 
-        verify(leadRepository, times(1)).findDedupeKeysByTenantId(eq("tenant-1"), any(Pageable.class));
+        verify(leadRepository, times(1)).findDedupeKeysByTenantId(eq(TENANT_TEST), any(Pageable.class));
         verify(itemRepository, never()).save(any(LeadImportJobItem.class));
         verify(leadRepository, times(2)).saveAll(anyList());
         assertEquals("SUCCESS", job.getStatus());
-        assertFalse(getDedupeCacheMap().containsKey("tenant-1|job-2"));
+        assertFalse(getDedupeCacheMap().containsKey(TENANT_TEST + "|job-2"));
     }
 
     @Test
     void shouldDropPendingDedupeKeysAfterChunkFailureSoRetryCanProceed() throws Exception {
         LeadImportJob job = newJob("job-3");
-        LeadImportJobChunk chunk = newChunk("chunk-1", "tenant-1", "job-3", 1);
+        LeadImportJobChunk chunk = newChunk("chunk-1", TENANT_TEST, "job-3", 1);
 
-        when(jobRepository.findByIdAndTenantId("job-3", "tenant-1")).thenReturn(Optional.of(job));
+        when(jobRepository.findByIdAndTenantId("job-3", TENANT_TEST)).thenReturn(Optional.of(job));
         when(jobRepository.findById("job-3")).thenReturn(Optional.of(job));
         when(jobRepository.save(any(LeadImportJob.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo("tenant-1", "job-3", 1)).thenReturn(Optional.of(chunk));
+        when(chunkRepository.findByTenantIdAndJobIdAndChunkNo(TENANT_TEST, "job-3", 1)).thenReturn(Optional.of(chunk));
         when(chunkRepository.save(any(LeadImportJobChunk.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(chunkRepository.countByTenantIdAndJobId("tenant-1", "job-3")).thenReturn(2L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-3", "PROCESSED")).thenReturn(0L, 1L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-3", "FAILED")).thenReturn(1L, 0L);
-        when(chunkRepository.countByTenantIdAndJobIdAndStatus("tenant-1", "job-3", "CANCELED")).thenReturn(0L);
-        when(leadRepository.findDedupeKeysByTenantId(eq("tenant-1"), any(Pageable.class)))
+        when(chunkRepository.countByTenantIdAndJobId(TENANT_TEST, "job-3")).thenReturn(2L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-3", "PROCESSED")).thenReturn(0L, 1L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-3", "FAILED")).thenReturn(1L, 0L);
+        when(chunkRepository.countByTenantIdAndJobIdAndStatus(TENANT_TEST, "job-3", "CANCELED")).thenReturn(0L);
+        when(leadRepository.findDedupeKeysByTenantId(eq(TENANT_TEST), any(Pageable.class)))
                 .thenReturn(new PageImpl<Object[]>(Collections.<Object[]>emptyList(), PageRequest.of(0, 500), 0));
         when(leadRepository.saveAll(anyList()))
                 .thenThrow(new RuntimeException("chunk save failure"))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(leadAssignmentService.assignOwnerForTenant("tenant-1")).thenReturn("");
+        when(leadAssignmentService.assignOwnerForTenant(TENANT_TEST)).thenReturn("");
 
         String dedupeKey = dedupeKey("Alice", "Acme", "0101234567", "alice@example.com");
 
-        service.consumeLeadImportChunk(chunkMessage("tenant-1", "job-3", 1,
+        service.consumeLeadImportChunk(chunkMessage(TENANT_TEST, "job-3", 1,
                 Arrays.asList("Alice,Acme,0101234567,alice@example.com,web,,NEW"), "req-1"));
 
-        assertFalse(cacheContainsKey("tenant-1", "job-3", dedupeKey));
+        assertFalse(cacheContainsKey(TENANT_TEST, "job-3", dedupeKey));
         verify(itemRepository, never()).save(any(LeadImportJobItem.class));
 
-        service.consumeLeadImportChunk(chunkMessage("tenant-1", "job-3", 1,
+        service.consumeLeadImportChunk(chunkMessage(TENANT_TEST, "job-3", 1,
                 Arrays.asList("Alice,Acme,0101234567,alice@example.com,web,,NEW"), "req-2"));
 
-        assertTrue(cacheContainsKey("tenant-1", "job-3", dedupeKey));
+        assertTrue(cacheContainsKey(TENANT_TEST, "job-3", dedupeKey));
         verify(leadRepository, times(2)).saveAll(anyList());
     }
 
@@ -216,17 +218,17 @@ class LeadImportServiceTest {
     void shouldNotChangeJobStatusWhenRetryHasNoPendingChunks() {
         LeadImportJob job = newJob("job-4");
         job.setStatus("FAILED");
-        LeadImportJobChunk chunk = newChunk("chunk-1", "tenant-1", "job-4", 1);
+        LeadImportJobChunk chunk = newChunk("chunk-1", TENANT_TEST, "job-4", 1);
         chunk.setStatus("PROCESSED");
 
-        when(jobRepository.findByIdAndTenantId("job-4", "tenant-1")).thenReturn(Optional.of(job));
-        when(jobRepository.countByTenantIdAndStatusIn(eq("tenant-1"), anyList())).thenReturn(0L);
-        when(chunkRepository.findByTenantIdAndJobIdOrderByChunkNoAsc("tenant-1", "job-4"))
+        when(jobRepository.findByIdAndTenantId("job-4", TENANT_TEST)).thenReturn(Optional.of(job));
+        when(jobRepository.countByTenantIdAndStatusIn(eq(TENANT_TEST), anyList())).thenReturn(0L);
+        when(chunkRepository.findByTenantIdAndJobIdOrderByChunkNoAsc(TENANT_TEST, "job-4"))
                 .thenReturn(Collections.singletonList(chunk));
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
-                () -> service.retryJob("tenant-1", "job-4", "operator-1", "req-1")
+                () -> service.retryJob(TENANT_TEST, "job-4", "operator-1", "req-1")
         );
 
         assertEquals("lead_import_retry_no_pending_chunks", ex.getMessage());
@@ -258,7 +260,7 @@ class LeadImportServiceTest {
     private LeadImportJob newJob(String jobId) {
         LeadImportJob job = new LeadImportJob();
         job.setId(jobId);
-        job.setTenantId("tenant-1");
+        job.setTenantId(TENANT_TEST);
         job.setStatus("RUNNING");
         job.setTotalRows(2);
         job.setProcessedRows(0);
@@ -295,3 +297,4 @@ class LeadImportServiceTest {
         return message;
     }
 }
+

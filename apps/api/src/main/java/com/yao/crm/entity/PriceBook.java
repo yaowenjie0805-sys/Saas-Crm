@@ -46,7 +46,7 @@ public class PriceBook {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "ACTIVE";
         if (currency == null || currency.trim().isEmpty()) currency = "CNY";
         if (isDefault == null) isDefault = false;
@@ -82,4 +82,3 @@ public class PriceBook {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
-

@@ -7,11 +7,12 @@ import { api, apiDownload, apiUpload, STORAGE_KEYS } from '../shared';
  * 使用 shared.js 的 api 函数统一管理 headers 和请求去重
  */
 export function useApi() {
-  const [loading, setLoading] = useState(false);
+  const [activeRequests, setActiveRequests] = useState(0);
   const [error, setError] = useState(null);
+  const loading = activeRequests > 0;
 
   const request = useCallback(async (url, options = {}) => {
-    setLoading(true);
+    setActiveRequests((count) => count + 1);
     setError(null);
 
     try {
@@ -23,7 +24,7 @@ export function useApi() {
       setError(err.message);
       throw err;
     } finally {
-      setLoading(false);
+      setActiveRequests((count) => (count > 0 ? count - 1 : 0));
     }
   }, []);
 

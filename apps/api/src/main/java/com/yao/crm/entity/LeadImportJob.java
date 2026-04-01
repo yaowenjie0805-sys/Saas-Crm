@@ -64,7 +64,7 @@ public class LeadImportJob {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "PENDING";
         if (totalRows == null || totalRows < 0) totalRows = 0;
         if (successCount == null || successCount < 0) successCount = 0;

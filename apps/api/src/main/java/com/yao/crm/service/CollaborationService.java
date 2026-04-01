@@ -10,6 +10,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -54,6 +58,15 @@ public class CollaborationService {
                                 String authorId, String authorName, String content,
                                 String parentCommentId, Map<String, Object> metadata) {
         // 解析提及
+        String resolvedEntityType = entityType;
+        String resolvedEntityId = entityId;
+        if (parentCommentId != null) {
+            Comment parentComment = commentRepository.findByIdAndTenantId(parentCommentId, tenantId)
+                    .orElseThrow(() -> new IllegalArgumentException("Parent comment not found"));
+            resolvedEntityType = parentComment.getEntityType();
+            resolvedEntityId = parentComment.getEntityId();
+        }
+
         List<String> mentions = extractMentions(content);
         List<String> tags = extractTags(content);
 
@@ -61,8 +74,8 @@ public class CollaborationService {
         Comment comment = new Comment();
         comment.setId(UUID.randomUUID().toString());
         comment.setTenantId(tenantId);
-        comment.setEntityType(entityType);
-        comment.setEntityId(entityId);
+        comment.setEntityType(resolvedEntityType);
+        comment.setEntityId(resolvedEntityId);
         comment.setAuthorId(authorId);
         comment.setAuthorName(authorName);
         comment.setContent(content);
@@ -92,7 +105,7 @@ public class CollaborationService {
 
         // 更新父评论的回复数（原子操作避免竞态条件）
         if (parentCommentId != null) {
-            commentRepository.incrementReplyCount(parentCommentId);
+            commentRepository.incrementReplyCount(parentCommentId, tenantId);
         }
 
         // 发送提及通知
@@ -101,7 +114,7 @@ public class CollaborationService {
         // 发送评论通知给实体负责人
         sendCommentNotifications(comment);
 
-        log.info("Comment added: {} for {} {}", comment.getId(), entityType, entityId);
+        log.info("Comment added: {} for {} {}", comment.getId(), resolvedEntityType, resolvedEntityId);
 
         return comment;
     }
@@ -112,7 +125,7 @@ public class CollaborationService {
     @Transactional(timeout = 30)
     public Comment replyToComment(String tenantId, String parentCommentId,
                                   String authorId, String authorName, String content) {
-        Comment parentComment = commentRepository.findById(parentCommentId)
+        Comment parentComment = commentRepository.findByIdAndTenantId(parentCommentId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Parent comment not found"));
 
         return addComment(
@@ -131,8 +144,8 @@ public class CollaborationService {
      * 删除评论
      */
     @Transactional(timeout = 30)
-    public boolean deleteComment(String commentId, String userId) {
-        Comment comment = commentRepository.findById(commentId)
+    public boolean deleteComment(String tenantId, String commentId, String userId) {
+        Comment comment = commentRepository.findByIdAndTenantId(commentId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
 
         // 只能删除自己的评论
@@ -142,7 +155,7 @@ public class CollaborationService {
 
         // 更新父评论的回复数（原子操作避免竞态条件）
         if (comment.getParentCommentId() != null) {
-            commentRepository.decrementReplyCount(comment.getParentCommentId());
+            commentRepository.decrementReplyCount(comment.getParentCommentId(), tenantId);
         }
 
         commentRepository.delete(comment);
@@ -155,8 +168,8 @@ public class CollaborationService {
      * 点赞评论
      */
     @Transactional(timeout = 30)
-    public boolean likeComment(String commentId, String userId) {
-        Comment comment = commentRepository.findById(commentId)
+    public boolean likeComment(String tenantId, String commentId, String userId) {
+        Comment comment = commentRepository.findByIdAndTenantId(commentId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
 
         // 解析现有点赞
@@ -184,8 +197,8 @@ public class CollaborationService {
      * 编辑评论
      */
     @Transactional(timeout = 30)
-    public Comment editComment(String commentId, String userId, String newContent) {
-        Comment comment = commentRepository.findById(commentId)
+    public Comment editComment(String tenantId, String commentId, String userId, String newContent) {
+        Comment comment = commentRepository.findByIdAndTenantId(commentId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
 
         if (!comment.getAuthorId().equals(userId)) {
@@ -226,70 +239,52 @@ public class CollaborationService {
     /**
      * 获取实体的评论列表
      */
+    /**
+     * 鑾峰彇瀹炰綋鐨勮瘎璁哄垪琛?
+     */
     public CommentListResult getComments(String tenantId, String entityType, String entityId,
                                         int page, int size, boolean includeReplies) {
-        List<Comment> allComments = commentRepository.findByTenantIdAndEntityTypeAndEntityId(
-                tenantId, entityType, entityId);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Comment> topLevelPage = commentRepository
+                .findByTenantIdAndEntityTypeAndEntityIdAndParentCommentIdIsNull(
+                        tenantId, entityType, entityId, pageable);
+        List<Comment> pagedComments = topLevelPage.getContent();
 
-        // 只获取顶级评论（没有父评论）
-        List<Comment> topLevelComments = allComments.stream()
-                .filter(c -> c.getParentCommentId() == null)
-                .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        if (includeReplies && !pagedComments.isEmpty()) {
+            List<String> parentIds = pagedComments.stream()
+                    .map(Comment::getId)
+                    .collect(Collectors.toList());
+            List<Comment> replies = commentRepository
+                    .findByTenantIdAndEntityTypeAndEntityIdAndParentCommentIdInOrderByCreatedAtDesc(
+                            tenantId, entityType, entityId, parentIds);
+            Map<String, List<Comment>> repliesByParent = replies.stream()
+                    .collect(Collectors.groupingBy(Comment::getParentCommentId, LinkedHashMap::new, Collectors.toList()));
 
-        // 分页
-        int start = page * size;
-        int end = Math.min(start + size, topLevelComments.size());
-        List<Comment> pagedComments = start < topLevelComments.size() ?
-                topLevelComments.subList(start, end) : Collections.emptyList();
-
-        // 如果需要包含回复
-        if (includeReplies) {
-            Map<String, List<Comment>> repliesMap = new HashMap<>();
-            for (Comment comment : allComments) {
-                if (comment.getParentCommentId() != null) {
-                    repliesMap.computeIfAbsent(comment.getParentCommentId(), k -> new ArrayList<>())
-                            .add(comment);
-                }
-            }
-
-            // 为每个顶级评论填充回复
-            for (Comment comment : pagedComments) {
-                comment.setReplies(repliesMap.getOrDefault(comment.getId(), Collections.emptyList()));
+            for (Comment topLevel : pagedComments) {
+                topLevel.setReplies(repliesByParent.getOrDefault(topLevel.getId(), Collections.emptyList()));
             }
         }
 
         CommentListResult result = new CommentListResult();
+        long totalTopLevel = commentRepository.countTopLevelComments(tenantId, entityType, entityId);
         result.setComments(pagedComments);
-        result.setTotal(topLevelComments.size());
+        result.setTotal((int) Math.min(totalTopLevel, Integer.MAX_VALUE));
         result.setPage(page);
         result.setSize(size);
-        result.setTotalPages((int) Math.ceil((double) topLevelComments.size() / size));
+        result.setTotalPages(topLevelPage.getTotalPages());
 
         return result;
     }
 
     /**
-     * 获取@提及我的评论
+     * 鑾峰彇@鎻愬強鎴戠殑璇勮
      */
     public List<Comment> getMentions(String tenantId, String userId, int page, int size) {
-        List<Comment> allMentions = commentRepository.findByTenantId(tenantId).stream()
-                .filter(c -> {
-                    if (c.getMentions() == null) return false;
-                    return c.getMentions().contains(userId);
-                })
-                .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
-                .collect(Collectors.toList());
-
-        int start = page * size;
-        int end = Math.min(start + size, allMentions.size());
-
-        return start < allMentions.size() ? allMentions.subList(start, end) : Collections.emptyList();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return commentRepository.findByTenantIdAndMentionsContaining(tenantId, userId, pageable)
+                .getContent();
     }
 
-    /**
-     * 获取我参与的讨论（评论过的实体）
-     */
     public List<DiscussionSummary> getMyDiscussions(String tenantId, String userId, int limit) {
         List<Comment> myComments = commentRepository.findByTenantIdAndAuthorId(tenantId, userId);
 
@@ -332,24 +327,15 @@ public class CollaborationService {
     /**
      * 搜索评论
      */
+    /**
+     * 鎼滅储璇勮鍐呭
+     */
     public List<Comment> searchComments(String tenantId, String keyword, int page, int size) {
-        List<Comment> allComments = commentRepository.findByTenantIdAndEntityType(tenantId, "ALL");
-
-        List<Comment> matched = allComments.stream()
-                .filter(c -> c.getContent() != null &&
-                        c.getContent().toLowerCase().contains(keyword.toLowerCase()))
-                .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
-                .collect(Collectors.toList());
-
-        int start = page * size;
-        int end = Math.min(start + size, matched.size());
-
-        return start < matched.size() ? matched.subList(start, end) : Collections.emptyList();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return commentRepository.findByTenantIdAndContentIgnoreCaseContaining(tenantId, keyword, pageable)
+                .getContent();
     }
 
-    /**
-     * 获取评论统计
-     */
     public CommentStatistics getStatistics(String tenantId, String entityType, String entityId) {
         List<Comment> comments = commentRepository.findByTenantIdAndEntityTypeAndEntityId(
                 tenantId, entityType, entityId);
@@ -393,8 +379,8 @@ public class CollaborationService {
      * 添加团队成员
      */
     @Transactional(timeout = 30)
-    public Team addTeamMember(String teamId, String userId, String role) {
-        Team team = teamRepository.findById(teamId)
+    public Team addTeamMember(String tenantId, String teamId, String userId, String role) {
+        Team team = teamRepository.findByIdAndTenantId(teamId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));
 
         Set<String> members = new HashSet<>(Set.of(team.getMemberIds().split(",")));
@@ -411,8 +397,8 @@ public class CollaborationService {
      * 移除团队成员
      */
     @Transactional(timeout = 30)
-    public Team removeTeamMember(String teamId, String userId) {
-        Team team = teamRepository.findById(teamId)
+    public Team removeTeamMember(String tenantId, String teamId, String userId) {
+        Team team = teamRepository.findByIdAndTenantId(teamId, tenantId)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found"));
 
         Set<String> members = new HashSet<>(Set.of(team.getMemberIds().split(",")));

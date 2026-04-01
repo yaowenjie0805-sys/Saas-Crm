@@ -13,7 +13,9 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -38,7 +40,7 @@ class V1AutomationControllerTest {
     void patchRuleShouldRejectBlankTriggerExprWhenProvided() {
         MockHttpServletRequest request = authedRequest("ADMIN");
         AutomationRule existing = existingRule("ar_1");
-        when(ruleRepository.findByTenantIdOrderByCreatedAtDesc("tenant_default")).thenReturn(Collections.singletonList(existing));
+        when(ruleRepository.findByIdAndTenantId("ar_1", TENANT_TEST)).thenReturn(Optional.of(existing));
 
         V1AutomationRulePatchRequest payload = new V1AutomationRulePatchRequest();
         payload.setTriggerExpr("   ");
@@ -56,7 +58,7 @@ class V1AutomationControllerTest {
     void patchRuleShouldTrimIdBeforeLookup() {
         MockHttpServletRequest request = authedRequest("MANAGER");
         AutomationRule existing = existingRule("ar_1");
-        when(ruleRepository.findByTenantIdOrderByCreatedAtDesc("tenant_default")).thenReturn(Collections.singletonList(existing));
+        when(ruleRepository.findByIdAndTenantId("ar_1", TENANT_TEST)).thenReturn(Optional.of(existing));
         when(ruleRepository.save(any(AutomationRule.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         V1AutomationRulePatchRequest payload = new V1AutomationRulePatchRequest();
@@ -74,7 +76,7 @@ class V1AutomationControllerTest {
     private AutomationRule existingRule(String id) {
         AutomationRule rule = new AutomationRule();
         rule.setId(id);
-        rule.setTenantId("tenant_default");
+        rule.setTenantId(TENANT_TEST);
         rule.setName("Name");
         rule.setTriggerType("LEAD_CREATED");
         rule.setTriggerExpr("{\"expr\":1}");
@@ -88,7 +90,7 @@ class V1AutomationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", role);
         request.setAttribute("authUsername", "alice");
-        request.setAttribute("authTenantId", "tenant_default");
+        request.setAttribute("authTenantId", TENANT_TEST);
         return request;
     }
 }

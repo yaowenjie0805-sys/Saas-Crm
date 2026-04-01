@@ -57,9 +57,6 @@ public class CorsConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/api/health/**", "/api/actuator/**");
         
         // 限流和认证拦截器：仅需要认证的路径
-        registry.addInterceptor(rateLimitInterceptor)
-                .addPathPatterns("/api/**");
-        
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
@@ -70,6 +67,9 @@ public class CorsConfig implements WebMvcConfigurer {
                         "/api/health/**",
                         "/api/actuator/**"
                 );
+
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/**");
         
         registry.addInterceptor(dashboardCacheInvalidationInterceptor)
                 .addPathPatterns("/api/**")

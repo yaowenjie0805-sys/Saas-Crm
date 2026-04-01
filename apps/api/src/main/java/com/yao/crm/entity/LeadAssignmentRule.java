@@ -40,7 +40,7 @@ public class LeadAssignmentRule {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (enabled == null) enabled = true;
         if (rrCursor == null || rrCursor < 0) rrCursor = 0;
         if (createdAt == null) createdAt = now;

@@ -1,11 +1,13 @@
 package com.yao.crm.controller;
 
 import com.yao.crm.security.TraceIdInterceptor;
+import com.yao.crm.security.TenantRequirementMode;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.StringUtils;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
@@ -20,6 +22,8 @@ import java.util.Map;
 import java.util.Set;
 
 abstract class BaseApiController {
+    private static final Logger log = LoggerFactory.getLogger(BaseApiController.class);
+    private static final String TENANT_FALLBACK_LOGGED_ATTR = "tenantFallbackLogged";
     protected static final String DATE_FORMAT_ISO = "yyyy-MM-dd";
     protected static final String DATE_FORMAT_DMY = "dd/MM/yyyy";
     protected static final String DATE_FORMAT_MDY = "MM-dd-yyyy";
@@ -45,7 +49,7 @@ abstract class BaseApiController {
     }
 
     protected boolean isBlank(String s) {
-        return StringUtils.isBlank(s);
+        return s == null || s.trim().isEmpty();
     }
 
     protected boolean hasAnyRole(HttpServletRequest request, String... roles) {
@@ -82,14 +86,25 @@ abstract class BaseApiController {
 
     protected String currentTenant(HttpServletRequest request) {
         Object tenant = request.getAttribute("authTenantId");
-        if (tenant == null || isBlank(String.valueOf(tenant))) {
-            String headerTenant = request.getHeader("X-Tenant-Id");
-            if (!isBlank(headerTenant)) {
-                return headerTenant.trim();
-            }
-            return "tenant_default";
+        if (tenant != null && !isBlank(String.valueOf(tenant))) {
+            return String.valueOf(tenant);
         }
-        return String.valueOf(tenant);
+        String headerTenant = request.getHeader("X-Tenant-Id");
+        if (!isBlank(headerTenant)) {
+            return headerTenant.trim();
+        }
+        throw new IllegalArgumentException("tenant_header_required");
+    }
+
+    private boolean isTenantScopedApiPath(HttpServletRequest request) {
+        String path = request == null ? "" : String.valueOf(request.getRequestURI() == null ? "" : request.getRequestURI()).trim();
+        return path.startsWith("/api/v1/") || path.startsWith("/api/v2/");
+    }
+
+    private boolean hasAuthenticatedContext(HttpServletRequest request) {
+        return request.getAttribute("authPrincipal") != null
+                || !isBlank(String.valueOf(request.getAttribute("authUsername") == null ? "" : request.getAttribute("authUsername")))
+                || !isBlank(String.valueOf(request.getAttribute("authRole") == null ? "" : request.getAttribute("authRole")));
     }
 
     protected boolean isSalesScoped(HttpServletRequest request) {

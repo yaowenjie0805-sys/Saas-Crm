@@ -60,7 +60,7 @@ public class Product {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "ACTIVE";
         if (currency == null || currency.trim().isEmpty()) currency = "CNY";
         if (standardPrice == null) standardPrice = 0L;
@@ -109,4 +109,3 @@ public class Product {
         this.standardPrice = price != null ? price.longValue() : 0L;
     }
 }
-

@@ -13,12 +13,19 @@ export function useGlobalSearchBridge({
   setNotice,
   t,
 }) {
+  const resetToFirstPage = (...handlers) => {
+    handlers.forEach((handler) => {
+      if (typeof handler === 'function') handler(1)
+    })
+  }
+
   return useCallback((rawQuery) => {
     const query = String(rawQuery || '').trim()
     const isEmpty = query.length === 0
     const translated = typeof t === 'function' ? t : (key) => String(key || '')
 
     if (activePage === 'customers') {
+      resetToFirstPage(customers?.onCustomerPageChange, customers?.onPageChange, customers?.setCustomerPage)
       startTransition(() => {
         customers?.setCustomerQ?.(query)
       })
@@ -28,6 +35,7 @@ export function useGlobalSearchBridge({
     }
 
     if (activePage === 'quotes') {
+      resetToFirstPage(commerce?.quotes?.setPage, commerce?.quotes?.onPageChange, commerce?.quotes?.pagination?.onPageChange)
       startTransition(() => {
         commerce?.quotes?.setOwnerFilter?.(query)
       })
@@ -37,6 +45,7 @@ export function useGlobalSearchBridge({
     }
 
     if (activePage === 'orders') {
+      resetToFirstPage(commerce?.orders?.setPage, commerce?.orders?.onPageChange, commerce?.orders?.pagination?.onPageChange)
       startTransition(() => {
         commerce?.orders?.setOwnerFilter?.(query)
       })
@@ -46,6 +55,7 @@ export function useGlobalSearchBridge({
     }
 
     if (activePage === 'leads') {
+      resetToFirstPage(leads?.onLeadPageChange, leads?.onPageChange, leads?.setLeadPage)
       startTransition(() => {
         leads?.setLeadQ?.(query)
       })

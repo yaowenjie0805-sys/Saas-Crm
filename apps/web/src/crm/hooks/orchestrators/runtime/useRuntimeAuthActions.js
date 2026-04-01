@@ -75,11 +75,14 @@ export function useRuntimeAuthActions({
     e.preventDefault()
     logoutGuardRef.current = false
     setLoginError('')
+    const tenantId = loginForm.tenantId?.trim() || ''
     const nextErrors = validateSso()
+    if (!tenantId) {
+      nextErrors.tenantId = t('fieldRequired')
+    }
     setFormErrors((p) => ({ ...p, sso: nextErrors }))
     if (Object.keys(nextErrors).length > 0) return
     try {
-      const tenantId = loginForm.tenantId.trim() || localStorage.getItem('crm_last_tenant') || 'tenant_default'
       saveAuth(
         await api(
           '/auth/sso/login',

@@ -49,7 +49,14 @@ export const PAGE_DOMAIN_PRELOADERS = {
   salesAutomation: () => Promise.resolve(),
 }
 
-export const REFRESH_REASONS = new Set(['topbar_refresh', 'panel_action', 'workbench_jump', 'sidebar_nav'])
+export const REFRESH_REASONS = new Set([
+  'topbar_refresh',
+  'topbar_search',
+  'topbar_search_clear',
+  'panel_action',
+  'workbench_jump',
+  'sidebar_nav',
+])
 
 export const PAGE_DOMAIN_MAP = {
   dashboard: 'workbench',

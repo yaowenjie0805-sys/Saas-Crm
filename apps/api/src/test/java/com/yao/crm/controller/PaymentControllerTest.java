@@ -20,6 +20,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -71,40 +72,40 @@ class PaymentControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
     void deletePaymentShouldDeleteWithinTenantAndReturnNoContent() {
-        when(paymentRepository.deleteByIdAndTenantId("pay-1", "tenant-1")).thenReturn(1L);
+        when(paymentRepository.deleteByIdAndTenantId("pay-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deletePayment(request, "pay-1");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         assertNull(response.getBody());
-        verify(paymentRepository, times(1)).deleteByIdAndTenantId("pay-1", "tenant-1");
+        verify(paymentRepository, times(1)).deleteByIdAndTenantId("pay-1", TENANT_TEST);
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("PAYMENT"), eq("pay-1"), anyString());
     }
 
     @Test
     void deletePaymentShouldTrimIdBeforeTenantScopedDelete() {
-        when(paymentRepository.deleteByIdAndTenantId("pay-1", "tenant-1")).thenReturn(1L);
+        when(paymentRepository.deleteByIdAndTenantId("pay-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deletePayment(request, "  pay-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(paymentRepository).deleteByIdAndTenantId("pay-1", "tenant-1");
+        verify(paymentRepository).deleteByIdAndTenantId("pay-1", TENANT_TEST);
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("PAYMENT"), eq("pay-1"), anyString());
     }
 
     @Test
     void deletePaymentShouldReturnNotFoundWhenTenantScopedDeleteAffectsZeroRows() {
-        when(paymentRepository.deleteByIdAndTenantId("pay-1", "tenant-1")).thenReturn(0L);
+        when(paymentRepository.deleteByIdAndTenantId("pay-1", TENANT_TEST)).thenReturn(0L);
 
         ResponseEntity<?> response = controller.deletePayment(request, "pay-1");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(paymentRepository, times(1)).deleteByIdAndTenantId("pay-1", "tenant-1");
+        verify(paymentRepository, times(1)).deleteByIdAndTenantId("pay-1", TENANT_TEST);
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
@@ -129,13 +130,14 @@ class PaymentControllerTest {
 
     @Test
     void updatePaymentShouldTrimIdBeforeTenantScopedLookup() {
-        when(paymentRepository.findByIdAndTenantId("pay-1", "tenant-1")).thenReturn(Optional.empty());
+        when(paymentRepository.findByIdAndTenantId("pay-1", TENANT_TEST)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.updatePayment(request, "  pay-1  ", new UpdatePaymentRequest());
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(paymentRepository).findByIdAndTenantId("pay-1", "tenant-1");
+        verify(paymentRepository).findByIdAndTenantId("pay-1", TENANT_TEST);
         verify(paymentRepository, never()).save(org.mockito.ArgumentMatchers.any());
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
+

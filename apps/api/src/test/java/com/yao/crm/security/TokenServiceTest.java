@@ -1,5 +1,7 @@
 package com.yao.crm.security;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +36,7 @@ class TokenServiceTest {
     @Test
     @DisplayName("shouldCreateTokenWithAllParams_whenValidInputs")
     void shouldCreateTokenWithAllParams_whenValidInputs() {
-        String token = tokenService.createToken("testuser", "USER", "owner-1", "tenant-1", true);
+        String token = tokenService.createToken("testuser", "USER", "owner-1", TENANT_TEST, true);
 
         assertNotNull(token);
         assertTrue(token.contains("."));
@@ -43,7 +45,7 @@ class TokenServiceTest {
     @Test
     @DisplayName("shouldVerifyValidToken_whenTokenIsValid")
     void shouldVerifyValidToken_whenTokenIsValid() {
-        String token = tokenService.createToken("testuser", "USER", "owner-1", "tenant-1", true);
+        String token = tokenService.createToken("testuser", "USER", "owner-1", TENANT_TEST, true);
 
         AuthPrincipal principal = tokenService.verify(token);
 
@@ -51,7 +53,7 @@ class TokenServiceTest {
         assertEquals("testuser", principal.getUsername());
         assertEquals("USER", principal.getRole());
         assertEquals("owner-1", principal.getOwnerScope());
-        assertEquals("tenant-1", principal.getTenantId());
+        assertEquals(TENANT_TEST, principal.getTenantId());
         assertTrue(principal.isMfaVerified());
     }
 
@@ -108,7 +110,7 @@ class TokenServiceTest {
     @Test
     @DisplayName("shouldHandleEmptyOwnerScope")
     void shouldHandleEmptyOwnerScope() {
-        String token = tokenService.createToken("testuser", "USER", "", "tenant-1", false);
+        String token = tokenService.createToken("testuser", "USER", "", TENANT_TEST, false);
 
         AuthPrincipal principal = tokenService.verify(token);
 
@@ -130,8 +132,8 @@ class TokenServiceTest {
     @Test
     @DisplayName("shouldSetMfaVerifiedCorrectly")
     void shouldSetMfaVerifiedCorrectly() {
-        String tokenWithMfa = tokenService.createToken("testuser", "USER", "owner-1", "tenant-1", true);
-        String tokenWithoutMfa = tokenService.createToken("testuser", "USER", "owner-1", "tenant-1", false);
+        String tokenWithMfa = tokenService.createToken("testuser", "USER", "owner-1", TENANT_TEST, true);
+        String tokenWithoutMfa = tokenService.createToken("testuser", "USER", "owner-1", TENANT_TEST, false);
 
         AuthPrincipal withMfa = tokenService.verify(tokenWithMfa);
         AuthPrincipal withoutMfa = tokenService.verify(tokenWithoutMfa);
@@ -232,6 +234,30 @@ class TokenServiceTest {
     }
 
     @Test
+    @DisplayName("shouldThrowHelpfulException_whenConfiguredSecretIsBlank")
+    void shouldThrowHelpfulException_whenConfiguredSecretIsBlank() {
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> new TokenService("   ", 86400000L)
+        );
+
+        assertTrue(exception.getMessage().contains("auth.token.secret"));
+        assertTrue(exception.getMessage().contains("AUTH_TOKEN_SECRET"));
+    }
+
+    @Test
+    @DisplayName("shouldThrowHelpfulException_whenConfiguredSecretIsNull")
+    void shouldThrowHelpfulException_whenConfiguredSecretIsNull() {
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> new TokenService(null, 86400000L)
+        );
+
+        assertTrue(exception.getMessage().contains("auth.token.secret"));
+        assertTrue(exception.getMessage().contains("AUTH_TOKEN_SECRET"));
+    }
+
+    @Test
     @DisplayName("shouldNotDefaultTenantForLegacyTokenWithoutTenantSegment")
     void shouldNotDefaultTenantForLegacyTokenWithoutTenantSegment() throws Exception {
         long exp = System.currentTimeMillis() + 60000;
@@ -260,3 +286,4 @@ class TokenServiceTest {
         return builder.toString();
     }
 }
+

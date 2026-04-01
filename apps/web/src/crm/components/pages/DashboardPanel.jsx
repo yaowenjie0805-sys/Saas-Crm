@@ -3,10 +3,12 @@ import StatsSection from './dashboard/StatsSection'
 import WorkbenchSection from './dashboard/WorkbenchSection'
 import ReportsSection from './dashboard/ReportsSection'
 import ReportExportJobsSection from './dashboard/ReportExportJobsSection'
+import AiFollowUpSummarySection from './dashboard/AiFollowUpSummarySection'
 import { formatStatValue, translateRole, translateStatLabel } from '../../shared'
 
 function DashboardPanel({
   activePage,
+  apiContext,
   refreshPage,
   stats,
   reports,
@@ -84,6 +86,7 @@ function DashboardPanel({
             trackWorkbenchEvent={trackWorkbenchEvent}
             t={t}
           />
+          <AiFollowUpSummarySection t={t} apiContext={apiContext} />
         </>
       )}
 

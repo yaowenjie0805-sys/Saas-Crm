@@ -16,6 +16,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,7 +63,7 @@ class V2TenantConfigControllerTest {
     void getTenantConfigShouldReturnNotFoundWithTenantNotFoundCode() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authTenantId", "  tenant-a  ");
-        when(tenantRepository.findById("tenant-a")).thenReturn(Optional.empty());
+        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.getTenantConfig(request);
 
@@ -80,11 +81,11 @@ class V2TenantConfigControllerTest {
         request.setAttribute("authTenantId", "  tenant-a  ");
 
         Tenant tenant = new Tenant();
-        tenant.setId("tenant-a");
+        tenant.setId(TENANT_TEST);
         tenant.setMarketProfile("CN");
         tenant.setApprovalMode("STRICT");
         tenant.setChannelsJson("[\"WECOM\"]");
-        when(tenantRepository.findById("tenant-a")).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(tenant));
         when(tenantRepository.save(any(Tenant.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         TenantConfigPatchRequest payload = new TenantConfigPatchRequest();
@@ -107,11 +108,11 @@ class V2TenantConfigControllerTest {
     void patchTenantConfigShouldRejectInvalidMarketProfile() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
-        request.setAttribute("authTenantId", "tenant-a");
+        request.setAttribute("authTenantId", TENANT_TEST);
 
         Tenant tenant = new Tenant();
-        tenant.setId("tenant-a");
-        when(tenantRepository.findById("tenant-a")).thenReturn(Optional.of(tenant));
+        tenant.setId(TENANT_TEST);
+        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(tenant));
 
         TenantConfigPatchRequest payload = new TenantConfigPatchRequest();
         payload.setMarketProfile(" apac ");
@@ -124,3 +125,4 @@ class V2TenantConfigControllerTest {
         verify(tenantRepository, never()).save(any(Tenant.class));
     }
 }
+

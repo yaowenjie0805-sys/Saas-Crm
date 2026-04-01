@@ -20,6 +20,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -52,29 +53,29 @@ class ContactControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
     void deleteContactShouldDeleteWithinTenantAndReturnNoContent() {
-        when(contactRepository.deleteByIdAndTenantId("ct-1", "tenant-1")).thenReturn(1L);
+        when(contactRepository.deleteByIdAndTenantId("ct-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteContact(request, "ct-1");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(contactRepository).deleteByIdAndTenantId("ct-1", "tenant-1");
+        verify(contactRepository).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTACT"), eq("ct-1"), anyString());
     }
 
     @Test
     void deleteContactShouldTrimIdBeforeTenantScopedDelete() {
-        when(contactRepository.deleteByIdAndTenantId("ct-1", "tenant-1")).thenReturn(1L);
+        when(contactRepository.deleteByIdAndTenantId("ct-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteContact(request, "  ct-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(contactRepository).deleteByIdAndTenantId("ct-1", "tenant-1");
+        verify(contactRepository).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTACT"), eq("ct-1"), anyString());
     }
@@ -106,13 +107,13 @@ class ContactControllerTest {
     void updateContactShouldTrimIdAndCustomerIdBeforeRepositoryCalls() {
         Contact existing = new Contact();
         existing.setId("ct-1");
-        existing.setTenantId("tenant-1");
+        existing.setTenantId(TENANT_TEST);
         existing.setOwner("manager");
         Customer customer = new Customer();
         customer.setId("cust-2");
         customer.setOwner("manager");
-        when(contactRepository.findByIdAndTenantId("ct-1", "tenant-1")).thenReturn(Optional.of(existing));
-        when(customerRepository.findByIdAndTenantId("cust-2", "tenant-1")).thenReturn(Optional.of(customer));
+        when(contactRepository.findByIdAndTenantId("ct-1", TENANT_TEST)).thenReturn(Optional.of(existing));
+        when(customerRepository.findByIdAndTenantId("cust-2", TENANT_TEST)).thenReturn(Optional.of(customer));
         when(contactRepository.save(any(Contact.class))).thenAnswer(invocation -> invocation.getArgument(0));
         UpdateContactRequest patch = new UpdateContactRequest();
         patch.setCustomerId("  cust-2  ");
@@ -120,8 +121,8 @@ class ContactControllerTest {
         ResponseEntity<?> response = controller.updateContact(request, "  ct-1  ", patch);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(contactRepository).findByIdAndTenantId("ct-1", "tenant-1");
-        verify(customerRepository).findByIdAndTenantId("cust-2", "tenant-1");
+        verify(contactRepository).findByIdAndTenantId("ct-1", TENANT_TEST);
+        verify(customerRepository).findByIdAndTenantId("cust-2", TENANT_TEST);
         ArgumentCaptor<Contact> savedContact = ArgumentCaptor.forClass(Contact.class);
         verify(contactRepository).save(savedContact.capture());
         assertEquals("cust-2", savedContact.getValue().getCustomerId());
@@ -132,16 +133,16 @@ class ContactControllerTest {
     void updateContactShouldReturnBadRequestForBlankPatchedCustomerId() {
         Contact existing = new Contact();
         existing.setId("ct-1");
-        existing.setTenantId("tenant-1");
+        existing.setTenantId(TENANT_TEST);
         existing.setOwner("manager");
-        when(contactRepository.findByIdAndTenantId("ct-1", "tenant-1")).thenReturn(Optional.of(existing));
+        when(contactRepository.findByIdAndTenantId("ct-1", TENANT_TEST)).thenReturn(Optional.of(existing));
         UpdateContactRequest patch = new UpdateContactRequest();
         patch.setCustomerId("   ");
 
         ResponseEntity<?> response = controller.updateContact(request, "  ct-1  ", patch);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        verify(contactRepository).findByIdAndTenantId("ct-1", "tenant-1");
+        verify(contactRepository).findByIdAndTenantId("ct-1", TENANT_TEST);
         verify(customerRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(contactRepository, never()).save(any(Contact.class));
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
@@ -149,12 +150,12 @@ class ContactControllerTest {
 
     @Test
     void deleteContactShouldReturnNotFoundWhenTenantScopedDeleteAffectsZeroRows() {
-        when(contactRepository.deleteByIdAndTenantId("ct-1", "tenant-1")).thenReturn(0L);
+        when(contactRepository.deleteByIdAndTenantId("ct-1", TENANT_TEST)).thenReturn(0L);
 
         ResponseEntity<?> response = controller.deleteContact(request, "ct-1");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(contactRepository).deleteByIdAndTenantId("ct-1", "tenant-1");
+        verify(contactRepository).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
@@ -166,15 +167,16 @@ class ContactControllerTest {
         request.setAttribute("authOwnerScope", "sales-scope");
         Contact contact = new Contact();
         contact.setId("ct-1");
-        contact.setTenantId("tenant-1");
+        contact.setTenantId(TENANT_TEST);
         contact.setOwner("another-owner");
-        when(contactRepository.findByIdAndTenantId("ct-1", "tenant-1")).thenReturn(Optional.of(contact));
+        when(contactRepository.findByIdAndTenantId("ct-1", TENANT_TEST)).thenReturn(Optional.of(contact));
 
         ResponseEntity<?> response = controller.deleteContact(request, "ct-1");
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        verify(contactRepository).findByIdAndTenantId("ct-1", "tenant-1");
-        verify(contactRepository, never()).deleteByIdAndTenantId("ct-1", "tenant-1");
+        verify(contactRepository).findByIdAndTenantId("ct-1", TENANT_TEST);
+        verify(contactRepository, never()).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
+

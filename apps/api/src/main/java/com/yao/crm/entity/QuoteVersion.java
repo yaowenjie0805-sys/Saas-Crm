@@ -42,7 +42,7 @@ public class QuoteVersion {
     @PrePersist
     public void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (versionNo == null || versionNo < 1) versionNo = 1;
         if (status == null || status.trim().isEmpty()) status = "DRAFT";
         if (totalAmount == null) totalAmount = 0L;
@@ -69,4 +69,3 @@ public class QuoteVersion {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
-

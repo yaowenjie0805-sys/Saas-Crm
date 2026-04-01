@@ -173,26 +173,47 @@ public class NotificationJobService {
         int notFound = 0;
         int forbidden = 0;
         if (jobIds != null) {
+            List<String> normalizedIds = new ArrayList<String>();
+            LinkedHashSet<String> uniqueIds = new LinkedHashSet<String>();
             for (String rawId : jobIds) {
                 String id = rawId == null ? "" : rawId.trim();
-                if (id.isEmpty()) { skipped++; continue; }
-                Optional<NotificationJob> optional = jobRepository.findById(id);
-                if (!optional.isPresent()) {
-                    notFound++;
-                    continue;
-                }
-                NotificationJob job = optional.get();
-                if (!tenantId.equals(job.getTenantId())) {
-                    forbidden++;
-                    continue;
-                }
-                if (!"FAILED".equalsIgnoreCase(job.getStatus())) {
+                if (id.isEmpty()) {
                     skipped++;
                     continue;
                 }
-                moveToRetry(job);
-                jobRepository.save(job);
-                succeeded++;
+                normalizedIds.add(id);
+                uniqueIds.add(id);
+            }
+            if (!uniqueIds.isEmpty()) {
+                List<NotificationJob> jobs = jobRepository.findAllById(uniqueIds);
+                Map<String, NotificationJob> jobsById = new HashMap<String, NotificationJob>();
+                for (NotificationJob job : jobs) {
+                    if (job != null && job.getId() != null) {
+                        jobsById.put(job.getId(), job);
+                    }
+                }
+                List<NotificationJob> toRetry = new ArrayList<NotificationJob>();
+                for (String id : normalizedIds) {
+                    NotificationJob job = jobsById.get(id);
+                    if (job == null) {
+                        notFound++;
+                        continue;
+                    }
+                    if (!tenantId.equals(job.getTenantId())) {
+                        forbidden++;
+                        continue;
+                    }
+                    if (!"FAILED".equalsIgnoreCase(job.getStatus())) {
+                        skipped++;
+                        continue;
+                    }
+                    moveToRetry(job);
+                    toRetry.add(job);
+                    succeeded++;
+                }
+                if (!toRetry.isEmpty()) {
+                    jobRepository.saveAll(toRetry);
+                }
             }
         }
         Map<String, Object> out = new LinkedHashMap<String, Object>();

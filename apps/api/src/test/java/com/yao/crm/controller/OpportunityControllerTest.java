@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -47,17 +48,17 @@ class OpportunityControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
     void deleteOpportunityShouldDeleteWithinTenantAndReturnNoContent() {
-        when(opportunityRepository.deleteByIdAndTenantId("opp-1", "tenant-1")).thenReturn(1L);
+        when(opportunityRepository.deleteByIdAndTenantId("opp-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteOpportunity(request, "opp-1");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(opportunityRepository).deleteByIdAndTenantId("opp-1", "tenant-1");
+        verify(opportunityRepository).deleteByIdAndTenantId("opp-1", TENANT_TEST);
         verify(opportunityRepository, never()).deleteById(anyString());
         verify(opportunityRepository, never()).existsByIdAndTenantId(anyString(), anyString());
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("OPPORTUNITY"), eq("opp-1"), anyString());
@@ -65,12 +66,12 @@ class OpportunityControllerTest {
 
     @Test
     void deleteOpportunityShouldTrimIdBeforeTenantScopedDelete() {
-        when(opportunityRepository.deleteByIdAndTenantId("opp-1", "tenant-1")).thenReturn(1L);
+        when(opportunityRepository.deleteByIdAndTenantId("opp-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteOpportunity(request, "  opp-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(opportunityRepository).deleteByIdAndTenantId("opp-1", "tenant-1");
+        verify(opportunityRepository).deleteByIdAndTenantId("opp-1", TENANT_TEST);
         verify(opportunityRepository, never()).deleteById(anyString());
         verify(opportunityRepository, never()).existsByIdAndTenantId(anyString(), anyString());
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("OPPORTUNITY"), eq("opp-1"), anyString());
@@ -78,12 +79,12 @@ class OpportunityControllerTest {
 
     @Test
     void deleteOpportunityShouldReturnNotFoundWhenTenantScopedDeleteAffectsZeroRows() {
-        when(opportunityRepository.deleteByIdAndTenantId("opp-1", "tenant-1")).thenReturn(0L);
+        when(opportunityRepository.deleteByIdAndTenantId("opp-1", TENANT_TEST)).thenReturn(0L);
 
         ResponseEntity<?> response = controller.deleteOpportunity(request, "opp-1");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(opportunityRepository).deleteByIdAndTenantId("opp-1", "tenant-1");
+        verify(opportunityRepository).deleteByIdAndTenantId("opp-1", TENANT_TEST);
         verify(opportunityRepository, never()).deleteById(anyString());
         verify(opportunityRepository, never()).existsByIdAndTenantId(anyString(), anyString());
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
@@ -115,3 +116,4 @@ class OpportunityControllerTest {
         verifyNoInteractions(opportunityRepository, auditLogService);
     }
 }
+

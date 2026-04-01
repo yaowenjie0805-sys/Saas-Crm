@@ -18,6 +18,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -54,40 +55,40 @@ class ContractControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
     void deleteContractShouldDeleteWithinTenantAndReturnNoContent() {
-        when(contractRepository.deleteByIdAndTenantId("cr-1", "tenant-1")).thenReturn(1L);
+        when(contractRepository.deleteByIdAndTenantId("cr-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteContract(request, "cr-1");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         assertNull(response.getBody());
-        verify(contractRepository, times(1)).deleteByIdAndTenantId("cr-1", "tenant-1");
+        verify(contractRepository, times(1)).deleteByIdAndTenantId("cr-1", TENANT_TEST);
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTRACT"), eq("cr-1"), anyString());
     }
 
     @Test
     void deleteContractShouldTrimIdBeforeTenantScopedDelete() {
-        when(contractRepository.deleteByIdAndTenantId("cr-1", "tenant-1")).thenReturn(1L);
+        when(contractRepository.deleteByIdAndTenantId("cr-1", TENANT_TEST)).thenReturn(1L);
 
         ResponseEntity<?> response = controller.deleteContract(request, "  cr-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(contractRepository).deleteByIdAndTenantId("cr-1", "tenant-1");
+        verify(contractRepository).deleteByIdAndTenantId("cr-1", TENANT_TEST);
         verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTRACT"), eq("cr-1"), anyString());
     }
 
     @Test
     void deleteContractShouldReturnNotFoundWhenTenantScopedDeleteAffectsZeroRows() {
-        when(contractRepository.deleteByIdAndTenantId("cr-1", "tenant-1")).thenReturn(0L);
+        when(contractRepository.deleteByIdAndTenantId("cr-1", TENANT_TEST)).thenReturn(0L);
 
         ResponseEntity<?> response = controller.deleteContract(request, "cr-1");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(contractRepository, times(1)).deleteByIdAndTenantId("cr-1", "tenant-1");
+        verify(contractRepository, times(1)).deleteByIdAndTenantId("cr-1", TENANT_TEST);
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
@@ -112,13 +113,14 @@ class ContractControllerTest {
 
     @Test
     void updateContractShouldTrimIdBeforeTenantScopedLookup() {
-        when(contractRepository.findByIdAndTenantId("cr-1", "tenant-1")).thenReturn(Optional.empty());
+        when(contractRepository.findByIdAndTenantId("cr-1", TENANT_TEST)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.updateContract(request, "  cr-1  ", new UpdateContractRequest());
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(contractRepository).findByIdAndTenantId("cr-1", "tenant-1");
+        verify(contractRepository).findByIdAndTenantId("cr-1", TENANT_TEST);
         verify(contractRepository, never()).save(org.mockito.ArgumentMatchers.any());
         verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
+

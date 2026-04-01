@@ -21,6 +21,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -68,13 +69,13 @@ class V1ReportDesignerControllerTest {
         MockHttpServletRequest request = authedRequest("ANALYST");
         ReportDesignerTemplate template = new ReportDesignerTemplate();
         template.setId("rpt_1");
-        template.setTenantId("tenant_default");
+        template.setTenantId(TENANT_TEST);
         template.setOwner("alice");
         template.setVisibility("TENANT");
         template.setDataset("CUSTOMERS");
         template.setVersion(2);
         template.setConfigJson("{}");
-        when(templateRepository.findByIdAndTenantId("rpt_1", "tenant_default")).thenReturn(Optional.of(template));
+        when(templateRepository.findByIdAndTenantId("rpt_1", TENANT_TEST)).thenReturn(Optional.of(template));
 
         V1ReportDesignerRunRequest payload = new V1ReportDesignerRunRequest();
         payload.setDataset("  invalid_dataset  ");
@@ -84,7 +85,7 @@ class V1ReportDesignerControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("report_dataset_invalid", body.get("code"));
-        verify(templateRepository).findByIdAndTenantId("rpt_1", "tenant_default");
+        verify(templateRepository).findByIdAndTenantId("rpt_1", TENANT_TEST);
         verifyNoInteractions(customerRepository, opportunityRepository, contractRecordRepository, paymentRecordRepository, leadRepository);
     }
 
@@ -105,7 +106,7 @@ class V1ReportDesignerControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", role);
         request.setAttribute("authUsername", "alice");
-        request.setAttribute("authTenantId", "tenant_default");
+        request.setAttribute("authTenantId", TENANT_TEST);
         return request;
     }
 }

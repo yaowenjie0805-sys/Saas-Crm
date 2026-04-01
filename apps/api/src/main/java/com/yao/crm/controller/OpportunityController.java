@@ -7,7 +7,6 @@ import com.yao.crm.repository.OpportunityRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,7 +47,7 @@ public class OpportunityController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                CollectionsUtil.setOf("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("title", "stage", "owner", "amount", "progress", "createdAt", "updatedAt")),
                 "updatedAt");
         org.springframework.data.domain.Page<Opportunity> result = opportunityRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
@@ -98,7 +97,6 @@ public class OpportunityController extends BaseApiController {
                 predicates.add(cb.equal(root.get("owner"), ownerScope));
             }
             return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
         };
 
         Page<Opportunity> result = opportunityRepository.findAll(spec, pageable);
@@ -138,7 +136,7 @@ public class OpportunityController extends BaseApiController {
         }
 
         Opportunity saved = opportunityRepository.save(opportunity);
-        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "OPPORTUNITY", saved.getId(), saved.getStage());
+        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "OPPORTUNITY", saved.getId(), saved.getStage(), currentTenant(request));
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -180,7 +178,7 @@ public class OpportunityController extends BaseApiController {
         }
 
         Opportunity saved = opportunityRepository.save(opportunity);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "OPPORTUNITY", saved.getId(), "Updated opportunity");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "OPPORTUNITY", saved.getId(), "Updated opportunity", tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -201,7 +199,7 @@ public class OpportunityController extends BaseApiController {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "opportunity_not_found", "NOT_FOUND", null));
         }
 
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "OPPORTUNITY", normalizedId, "Deleted opportunity");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "OPPORTUNITY", normalizedId, "Deleted opportunity", tenantId);
         return ResponseEntity.noContent().build();
     }
 }

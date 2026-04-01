@@ -14,7 +14,6 @@ import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.CommerceFacadeService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
@@ -34,8 +33,8 @@ import java.util.*;
 @Validated
 public class V1ProductController extends CommerceControllerSupport {
 
-    private static final Set<String> PRODUCT_STATUSES = CollectionsUtil.setOf("ACTIVE", "INACTIVE");
-    private static final Set<String> PRICE_BOOK_STATUSES = CollectionsUtil.setOf("ACTIVE", "INACTIVE");
+    private static final Set<String> PRODUCT_STATUSES = Set.of("ACTIVE", "INACTIVE");
+    private static final Set<String> PRICE_BOOK_STATUSES = Set.of("ACTIVE", "INACTIVE");
 
     private final ProductRepository productRepository;
     private final PriceBookRepository priceBookRepository;
@@ -79,7 +78,7 @@ public class V1ProductController extends CommerceControllerSupport {
             return ResponseEntity.badRequest().body(errorBody(request, "product_status_invalid", msg(request, "product_status_invalid"), null));
         }
         Pageable pageable = buildPageable(page, normalizedSize, "updatedAt", "desc",
-                CollectionsUtil.setOf("createdAt", "updatedAt", "name", "code"), "updatedAt");
+                Set.of("createdAt", "updatedAt", "name", "code"), "updatedAt");
         Page<Product> result = isBlank(normalizedStatus)
                 ? productRepository.findByTenantId(tenantId, pageable)
                 : productRepository.findByTenantIdAndStatus(tenantId, normalizedStatus, pageable);
@@ -93,7 +92,7 @@ public class V1ProductController extends CommerceControllerSupport {
         }
         String tenantId = currentTenant(request);
         Product product = new Product();
-        product.setId(idGenerator.generate("prd"));
+        product.setId(newId("prd"));
         product.setTenantId(tenantId);
         String validate = applyProductPayload(product, payload, true);
         if (!isBlank(validate)) {
@@ -155,7 +154,7 @@ public class V1ProductController extends CommerceControllerSupport {
             return ResponseEntity.badRequest().body(errorBody(request, "price_book_status_invalid", msg(request, "price_book_status_invalid"), null));
         }
         Pageable pageable = buildPageable(page, normalizedSize, "updatedAt", "desc",
-                CollectionsUtil.setOf("createdAt", "updatedAt", "name", "status"), "updatedAt");
+                Set.of("createdAt", "updatedAt", "name", "status"), "updatedAt");
         Page<PriceBook> result = commerceFacadeService.findPriceBooks(tenantId, normalizedStatus, pageable);
         return ResponseEntity.ok(successWithFields(request, "price_books_listed", pageBody(result, page, normalizedSize)));
     }
@@ -167,7 +166,7 @@ public class V1ProductController extends CommerceControllerSupport {
         }
         String tenantId = currentTenant(request);
         PriceBook row = new PriceBook();
-        row.setId(idGenerator.generate("pb"));
+        row.setId(newId("pb"));
         row.setTenantId(tenantId);
         String validate = applyPriceBookPayload(row, payload, true);
         if (!isBlank(validate)) {
@@ -251,7 +250,7 @@ public class V1ProductController extends CommerceControllerSupport {
             return ResponseEntity.status(404).body(errorBody(request, "product_not_found", msg(request, "product_not_found"), null));
         }
         PriceBookItem item = priceBookItemRepository.findByTenantIdAndPriceBookIdAndProductId(tenantId, normalizedPriceBookId, productId).orElseGet(PriceBookItem::new);
-        if (isBlank(item.getId())) item.setId(idGenerator.generate("pbi"));
+        if (isBlank(item.getId())) item.setId(newId("pbi"));
         item.setTenantId(tenantId);
         item.setPriceBookId(normalizedPriceBookId);
         item.setProductId(productId);

@@ -50,7 +50,7 @@ public class ReportDesignerTemplate {
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) createdAt = now;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (visibility == null || visibility.trim().isEmpty()) visibility = "PRIVATE";
         if (version == null || version < 1) version = 1;
         updatedAt = now;

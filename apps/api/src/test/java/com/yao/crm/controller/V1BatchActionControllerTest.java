@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -77,7 +78,7 @@ class V1BatchActionControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager-1");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
@@ -90,13 +91,13 @@ class V1BatchActionControllerTest {
         Customer row = new Customer();
         row.setId("c-1");
         row.setOwner("old-owner");
-        when(customerRepository.findByTenantIdAndIdIn("tenant-1", Collections.singletonList("c-1")))
+        when(customerRepository.findByTenantIdAndIdIn(TENANT_TEST, Collections.singletonList("c-1")))
                 .thenReturn(Collections.singletonList(row));
 
         ResponseEntity<?> response = controller.batchCustomers(request, payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(customerRepository).findByTenantIdAndIdIn("tenant-1", Collections.singletonList("c-1"));
+        verify(customerRepository).findByTenantIdAndIdIn(TENANT_TEST, Collections.singletonList("c-1"));
         verify(customerRepository).save(argThat(saved -> "alice".equals(saved.getOwner())));
         Map<?, ?> body = bodyAsMap(response);
         assertEquals(1, body.get("requested"));
@@ -113,13 +114,13 @@ class V1BatchActionControllerTest {
         Product row = new Product();
         row.setId("prd-1");
         row.setStatus("INACTIVE");
-        when(productRepository.findByTenantIdAndIdIn("tenant-1", Collections.singletonList("prd-1")))
+        when(productRepository.findByTenantIdAndIdIn(TENANT_TEST, Collections.singletonList("prd-1")))
                 .thenReturn(Collections.singletonList(row));
 
         ResponseEntity<?> response = controller.batchProducts(request, payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(productRepository).findByTenantIdAndIdIn("tenant-1", Collections.singletonList("prd-1"));
+        verify(productRepository).findByTenantIdAndIdIn(TENANT_TEST, Collections.singletonList("prd-1"));
         verify(productRepository).save(argThat(saved -> "ACTIVE".equals(saved.getStatus())));
     }
 
@@ -132,7 +133,7 @@ class V1BatchActionControllerTest {
 
         Product row = new Product();
         row.setId("prd-1");
-        when(productRepository.findByTenantIdAndIdIn("tenant-1", Collections.singletonList("prd-1")))
+        when(productRepository.findByTenantIdAndIdIn(TENANT_TEST, Collections.singletonList("prd-1")))
                 .thenReturn(Collections.singletonList(row));
 
         ResponseEntity<?> response = controller.batchProducts(request, payload);
@@ -153,3 +154,4 @@ class V1BatchActionControllerTest {
         return (Map<?, ?>) response.getBody();
     }
 }
+

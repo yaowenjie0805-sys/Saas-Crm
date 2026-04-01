@@ -4,8 +4,8 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * 字段权限实体
- * 支持字段级的查看、编辑、删除权限控制
+ * 瀛楁鏉冮檺瀹炰綋
+ * 鏀寔瀛楁绾х殑鏌ョ湅銆佺紪杈戙€佸垹闄ゆ潈闄愭帶鍒?
  */
 @Entity
 @Table(name = "field_permissions")
@@ -55,7 +55,7 @@ public class FieldPermission {
         if (canEdit == null) canEdit = false;
         if (canDelete == null) canDelete = false;
         if (isHidden == null) isHidden = false;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

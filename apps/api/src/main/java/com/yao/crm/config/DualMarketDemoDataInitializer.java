@@ -53,6 +53,8 @@ public class DualMarketDemoDataInitializer {
 
     @Value("${app.seed.demo.enabled:true}")
     private boolean demoSeedEnabled;
+    @Value("${auth.bootstrap.default-password:CHANGE_ME_IN_PRODUCTION}")
+    private String bootstrapDefaultPassword;
 
     @Bean
     @Order(200)
@@ -132,13 +134,13 @@ public class DualMarketDemoDataInitializer {
         upsertTenant(tenantRepository, tenantId, tenantName, marketProfile, currency, timezone, taxRule, approvalMode,
                 channelsJson, dataResidency, maskLevel);
 
-        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_admin", idPrefix + "_admin", "admin123",
+        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_admin", idPrefix + "_admin", bootstrapDefaultPassword,
                 "ADMIN", marketProfile + " Admin", "", tenantId);
-        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_manager", idPrefix + "_manager", "manager123",
+        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_manager", idPrefix + "_manager", bootstrapDefaultPassword,
                 "MANAGER", marketProfile + " Manager", "", tenantId);
-        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_sales", idPrefix + "_sales", "sales123",
+        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_sales", idPrefix + "_sales", bootstrapDefaultPassword,
                 "SALES", marketProfile + " Sales", "sales", tenantId);
-        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_analyst", idPrefix + "_analyst", "analyst123",
+        upsertUser(userAccountRepository, passwordEncoder, "u_" + idPrefix + "_analyst", idPrefix + "_analyst", bootstrapDefaultPassword,
                 "ANALYST", marketProfile + " Analyst", "", tenantId);
 
         String[] ownerPool = new String[]{"sales", "manager", "admin", "analyst"};
@@ -402,10 +404,13 @@ public class DualMarketDemoDataInitializer {
                             String displayName,
                             String ownerScope,
                             String tenantId) {
-        UserAccount user = repository.findByUsernameAndTenantId(username, tenantId).orElseGet(UserAccount::new);
+        java.util.Optional<UserAccount> existing = repository.findByUsernameAndTenantId(username, tenantId);
+        UserAccount user = existing.orElseGet(UserAccount::new);
         user.setId(id);
         user.setUsername(username);
-        user.setPassword(encoder.encode(rawPassword));
+        if (!existing.isPresent()) {
+            user.setPassword(encoder.encode(rawPassword));
+        }
         user.setRole(role);
         user.setDisplayName(displayName);
         user.setOwnerScope(ownerScope);

@@ -23,7 +23,7 @@ public class ReportExportService {
      * 导出概览报表 CSV（默认租户）
      */
     public String exportOverviewCsv(LocalDate fromDate, LocalDate toDate, String role) {
-        return exportOverviewCsvByTenant("tenant_default", fromDate, toDate, role, "", "", "en");
+        throw new IllegalStateException("tenant_id_required");
     }
 
     /**
@@ -43,8 +43,17 @@ public class ReportExportService {
                                             String owner,
                                             String department,
                                             String language) {
-        Map<String, Object> report = reportService.overviewByTenant(tenantId, fromDate, toDate, role, owner, department);
+        String requiredTenantId = requireTenantId(tenantId);
+        Map<String, Object> report = reportService.overviewByTenant(requiredTenantId, fromDate, toDate, role, owner, department);
         return toCsv(report, fromDate, toDate, role, language);
+    }
+
+    private String requireTenantId(String tenantId) {
+        String normalized = tenantId == null ? "" : tenantId.trim();
+        if (normalized.isEmpty()) {
+            throw new IllegalStateException("tenant_id_required");
+        }
+        return normalized;
     }
 
     /**

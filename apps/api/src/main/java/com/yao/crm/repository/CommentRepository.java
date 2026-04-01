@@ -46,10 +46,22 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
             String tenantId, String entityType, String entityId);
 
     /**
+     * 查询顶级评论分页查询
+     */
+    Page<Comment> findByTenantIdAndEntityTypeAndEntityIdAndParentCommentIdIsNull(
+            String tenantId, String entityType, String entityId, Pageable pageable);
+
+    /**
      * 查询回复
      */
     List<Comment> findByTenantIdAndEntityTypeAndEntityIdAndParentCommentId(
             String tenantId, String entityType, String entityId, String parentCommentId);
+
+    /**
+     * Batch query replies by parent comment ids.
+     */
+    List<Comment> findByTenantIdAndEntityTypeAndEntityIdAndParentCommentIdInOrderByCreatedAtDesc(
+            String tenantId, String entityType, String entityId, List<String> parentCommentIds);
 
     /**
      * 根据作者ID查询评论
@@ -72,10 +84,20 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
     Page<Comment> findByTenantIdAndEntityType(String tenantId, String entityType, Pageable pageable);
 
     /**
+     * Page comments where mentions payload contains the user id token.
+     */
+    Page<Comment> findByTenantIdAndMentionsContaining(String tenantId, String mention, Pageable pageable);
+
+    /**
      * 搜索评论内容
      */
     @Query("SELECT c FROM Comment c WHERE c.tenantId = :tenantId AND c.content LIKE %:keyword%")
     List<Comment> searchByContent(@Param("tenantId") String tenantId, @Param("keyword") String keyword);
+
+    /**
+     * 搜索评论内容 (分页)
+     */
+    Page<Comment> findByTenantIdAndContentIgnoreCaseContaining(String tenantId, String keyword, Pageable pageable);
 
     /**
      * 统计实体的评论数
@@ -119,6 +141,10 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
                                  @Param("entityId") String entityId);
 
     /**
+     * 鑾峰彇瀹炰綋鑷繁鐨勭敤鎴?     */
+    Optional<Comment> findByIdAndTenantId(String id, String tenantId);
+
+    /**
      * 查询最近评论
      */
     @Query("SELECT c FROM Comment c WHERE c.tenantId = :tenantId AND c.entityType = :entityType " +
@@ -147,13 +173,13 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
      * 原子递增父评论的回复计数
      */
     @Modifying
-    @Query("UPDATE Comment c SET c.replyCount = c.replyCount + 1 WHERE c.id = :parentId")
-    void incrementReplyCount(@Param("parentId") String parentId);
+    @Query("UPDATE Comment c SET c.replyCount = c.replyCount + 1 WHERE c.id = :parentId AND c.tenantId = :tenantId")
+    void incrementReplyCount(@Param("parentId") String parentId, @Param("tenantId") String tenantId);
 
     /**
      * 原子递减父评论的回复计数
      */
     @Modifying
-    @Query("UPDATE Comment c SET c.replyCount = c.replyCount - 1 WHERE c.id = :parentId AND c.replyCount > 0")
-    void decrementReplyCount(@Param("parentId") String parentId);
+    @Query("UPDATE Comment c SET c.replyCount = c.replyCount - 1 WHERE c.id = :parentId AND c.tenantId = :tenantId AND c.replyCount > 0")
+    void decrementReplyCount(@Param("parentId") String parentId, @Param("tenantId") String tenantId);
 }

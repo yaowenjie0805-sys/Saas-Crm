@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -112,39 +111,40 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> overview(LocalDate fromDate, LocalDate toDate, String role) {
-        return overviewByTenant("tenant_default", fromDate, toDate, role, "", "");
+        throw new IllegalStateException("tenant_id_required");
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> overviewByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String role, String owner, String department) {
+        String requiredTenantId = requireTenantId(tenantId);
         if (fromDate == null && toDate == null && isBlank(role) && isBlank(owner) && isBlank(department)) {
-            return overviewByTenantFastPath(tenantId);
+            return overviewByTenantFastPath(requiredTenantId);
         }
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
-        Set<String> roleIdentities = loadRoleIdentities(tenantId, role);
-        Set<String> departmentIdentities = loadDepartmentIdentities(tenantId, department == null ? "" : department.trim());
+        Set<String> roleIdentities = loadRoleIdentities(requiredTenantId, role);
+        Set<String> departmentIdentities = loadDepartmentIdentities(requiredTenantId, department == null ? "" : department.trim());
         LocalDateTime fromTime = startOfDay(safeFromDate);
         LocalDateTime toTime = endOfDay(safeToDate);
         final String ownerFilter = owner == null ? "" : owner.trim().toLowerCase();
         Set<String> scopedOwners = mergeOwnerScope(roleIdentities, departmentIdentities, ownerFilter);
         if (fromTime != null && toTime != null) {
-            return overviewByTenantDateFastPath(tenantId, fromTime, toTime, scopedOwners);
+            return overviewByTenantDateFastPath(requiredTenantId, fromTime, toTime, scopedOwners);
         }
         if (fromDate == null && toDate == null && scopedOwners != null) {
             if (scopedOwners.isEmpty()) {
                 return emptyOverviewBody();
             }
-            return overviewByTenantScopedFastPath(tenantId, scopedOwners);
+            return overviewByTenantScopedFastPath(requiredTenantId, scopedOwners);
         }
 
-        List<Customer> customers = loadCustomers(tenantId, fromTime, toTime, scopedOwners);
-        List<Opportunity> opportunities = loadOpportunities(tenantId, fromTime, toTime, scopedOwners);
-        List<TaskItem> tasks = loadTasks(tenantId, fromTime, toTime, scopedOwners);
-        List<FollowUp> followUps = loadFollowUps(tenantId, fromTime, toTime, scopedOwners);
-        List<Quote> quotes = loadQuotes(tenantId, fromTime, toTime, scopedOwners);
-        List<OrderRecord> orders = loadOrders(tenantId, fromTime, toTime, scopedOwners);
-        List<PaymentRecord> payments = loadPayments(tenantId, fromTime, toTime, scopedOwners);
+        List<Customer> customers = loadCustomers(requiredTenantId, fromTime, toTime, scopedOwners);
+        List<Opportunity> opportunities = loadOpportunities(requiredTenantId, fromTime, toTime, scopedOwners);
+        List<TaskItem> tasks = loadTasks(requiredTenantId, fromTime, toTime, scopedOwners);
+        List<FollowUp> followUps = loadFollowUps(requiredTenantId, fromTime, toTime, scopedOwners);
+        List<Quote> quotes = loadQuotes(requiredTenantId, fromTime, toTime, scopedOwners);
+        List<OrderRecord> orders = loadOrders(requiredTenantId, fromTime, toTime, scopedOwners);
+        List<PaymentRecord> payments = loadPayments(requiredTenantId, fromTime, toTime, scopedOwners);
 
         long totalRevenue = 0L;
         Map<String, Integer> customerByOwner = new HashMap<String, Integer>();
@@ -390,7 +390,8 @@ public class ReportService {
     }
 
     private Map<String, Object> overviewByTenantScopedFastPath(String tenantId, Set<String> owners) {
-        return reportAggregationService.aggregateWithScope(tenantId, owners);
+        Map<String, Object> body = reportAggregationService.aggregateWithScope(tenantId, owners);
+        return body == null ? reportAggregationService.emptyOverviewBody() : body;
     }
 
     private Map<String, Object> emptyOverviewBody() {
@@ -405,6 +406,7 @@ public class ReportService {
                                                                                                  String role,
                                                                                                  String owner,
                                                                                                  String department) {
+        final String requiredTenantId = requireTenantId(tenantId);
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
         final String cacheKey = ReportUtils.normalizeDate(safeFromDate)
@@ -412,36 +414,38 @@ public class ReportService {
                 + "|" + ReportUtils.normalizeRole(role)
                 + "|" + normalized(owner)
                 + "|" + normalized(department);
-        return dashboardMetricsCacheService.getOrLoad(tenantId, "reports-overview", cacheKey,
+        return dashboardMetricsCacheService.getOrLoad(requiredTenantId, "reports-overview", cacheKey,
                 new java.util.function.Supplier<Map<String, Object>>() {
                     @Override
                     public Map<String, Object> get() {
-                        return overviewByTenant(tenantId, safeFromDate, safeToDate, role, owner, department);
+                        return overviewByTenant(requiredTenantId, safeFromDate, safeToDate, role, owner, department);
                     }
                 });
     }
 
     public DashboardMetricsCacheService.CachedValue<Map<String, Object>> funnelByTenantCached(String tenantId,
-                                                                                               String actor,
-                                                                                               String actorRole,
-                                                                                               LocalDate fromDate,
-                                                                                               LocalDate toDate,
-                                                                                               String owner) {
+                                                                                                String actor,
+                                                                                                String actorRole,
+                                                                                                LocalDate fromDate,
+                                                                                                LocalDate toDate,
+                                                                                                String owner) {
+        final String requiredTenantId = requireTenantId(tenantId);
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
         final String cacheKey = ReportUtils.normalizeDate(safeFromDate)
                 + "|" + ReportUtils.normalizeDate(safeToDate)
                 + "|" + normalized(owner);
-        return dashboardMetricsCacheService.getOrLoad(tenantId, "reports-funnel", cacheKey,
+        return dashboardMetricsCacheService.getOrLoad(requiredTenantId, "reports-funnel", cacheKey,
                 new java.util.function.Supplier<Map<String, Object>>() {
                     @Override
                     public Map<String, Object> get() {
-                        return funnelByTenant(tenantId, safeFromDate, safeToDate, owner);
+                        return funnelByTenant(requiredTenantId, safeFromDate, safeToDate, owner);
                     }
                 });
     }
 
     public Map<String, Object> funnelByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String owner) {
+        final String requiredTenantId = requireTenantId(tenantId);
         final String ownerFilter = owner == null ? "" : owner.trim().toLowerCase();
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
@@ -455,32 +459,32 @@ public class ReportService {
 
         long leadsCount = dated
                 ? (scoped
-                ? leadRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, ownerScope, fromTime, toTime)
-                : leadRepository.countByTenantIdAndCreatedAtBetween(tenantId, fromTime, toTime))
+                ? leadRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(requiredTenantId, ownerScope, fromTime, toTime)
+                : leadRepository.countByTenantIdAndCreatedAtBetween(requiredTenantId, fromTime, toTime))
                 : (scoped
-                ? leadRepository.countByTenantIdAndOwnerIn(tenantId, ownerScope)
-                : leadRepository.countByTenantId(tenantId));
+                ? leadRepository.countByTenantIdAndOwnerIn(requiredTenantId, ownerScope)
+                : leadRepository.countByTenantId(requiredTenantId));
         long oppCount = dated
                 ? (scoped
-                ? opportunityRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, ownerScope, fromTime, toTime)
-                : opportunityRepository.countByTenantIdAndCreatedAtBetween(tenantId, fromTime, toTime))
+                ? opportunityRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(requiredTenantId, ownerScope, fromTime, toTime)
+                : opportunityRepository.countByTenantIdAndCreatedAtBetween(requiredTenantId, fromTime, toTime))
                 : (scoped
-                ? opportunityRepository.countByTenantIdAndOwnerIn(tenantId, ownerScope)
-                : opportunityRepository.countByTenantId(tenantId));
+                ? opportunityRepository.countByTenantIdAndOwnerIn(requiredTenantId, ownerScope)
+                : opportunityRepository.countByTenantId(requiredTenantId));
         long quoteCount = dated
                 ? (scoped
-                ? quoteRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, ownerScope, fromTime, toTime)
-                : quoteRepository.countByTenantIdAndCreatedAtBetween(tenantId, fromTime, toTime))
+                ? quoteRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(requiredTenantId, ownerScope, fromTime, toTime)
+                : quoteRepository.countByTenantIdAndCreatedAtBetween(requiredTenantId, fromTime, toTime))
                 : (scoped
-                ? quoteRepository.countByTenantIdAndOwnerIn(tenantId, ownerScope)
-                : quoteRepository.countByTenantId(tenantId));
+                ? quoteRepository.countByTenantIdAndOwnerIn(requiredTenantId, ownerScope)
+                : quoteRepository.countByTenantId(requiredTenantId));
         long orderCount = dated
                 ? (scoped
-                ? orderRecordRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, ownerScope, fromTime, toTime)
-                : orderRecordRepository.countByTenantIdAndCreatedAtBetween(tenantId, fromTime, toTime))
+                ? orderRecordRepository.countByTenantIdAndOwnerInAndCreatedAtBetween(requiredTenantId, ownerScope, fromTime, toTime)
+                : orderRecordRepository.countByTenantIdAndCreatedAtBetween(requiredTenantId, fromTime, toTime))
                 : (scoped
-                ? orderRecordRepository.countByTenantIdAndOwnerIn(tenantId, ownerScope)
-                : orderRecordRepository.countByTenantId(tenantId));
+                ? orderRecordRepository.countByTenantIdAndOwnerIn(requiredTenantId, ownerScope)
+                : orderRecordRepository.countByTenantId(requiredTenantId));
 
         double leadToOpp = leadsCount == 0 ? 0.0 : Math.round((oppCount * 1000.0 / leadsCount)) / 10.0;
         double oppToQuote = oppCount == 0 ? 0.0 : Math.round((quoteCount * 1000.0 / oppCount)) / 10.0;
@@ -510,6 +514,14 @@ public class ReportService {
         return intersectScopes(out, ownerOnly);
     }
 
+    private String requireTenantId(String tenantId) {
+        String normalizedTenantId = tenantId == null ? "" : tenantId.trim();
+        if (normalizedTenantId.isEmpty()) {
+            throw new IllegalStateException("tenant_id_required");
+        }
+        return normalizedTenantId;
+    }
+
     private Set<String> intersectScopes(Set<String> left, Set<String> right) {
         if (left == null) return right == null ? null : new HashSet<String>(right);
         if (right == null) return new HashSet<String>(left);
@@ -518,106 +530,100 @@ public class ReportService {
         return out;
     }
 
-    // 通用加载方法 - 使用函数式接口减少重复代码
-    @FunctionalInterface
-    interface OwnerDateQuery<T> {
-        List<T> apply(String tenantId, Collection<String> owners, LocalDateTime from, LocalDateTime to);
-    }
-
-    @FunctionalInterface
-    interface OwnerQuery<T> {
-        List<T> apply(String tenantId, Collection<String> owners);
-    }
-
-    @FunctionalInterface
-    interface DateQuery<T> {
-        List<T> apply(String tenantId, LocalDateTime from, LocalDateTime to);
-    }
-
-    @FunctionalInterface
-    interface SimpleQuery<T> {
-        List<T> apply(String tenantId);
-    }
-
-    private <T> List<T> loadEntities(
-            String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners,
-            DateQuery<T> findByDate,
-            OwnerDateQuery<T> findByOwnerAndDate,
-            SimpleQuery<T> findByTenant,
-            OwnerQuery<T> findByOwner) {
-        if (owners != null && owners.isEmpty()) return Collections.emptyList();
+    private List<Customer> loadCustomers(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
         if (from != null && to != null) {
             return owners == null
-                    ? findByDate.apply(tenantId, from, to)
-                    : findByOwnerAndDate.apply(tenantId, owners, from, to);
+                    ? customerRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : customerRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
         }
         return owners == null
-                ? findByTenant.apply(tenantId)
-                : findByOwner.apply(tenantId, owners);
-    }
-
-    private List<Customer> loadCustomers(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                customerRepository::findByTenantIdAndCreatedAtBetween,
-                customerRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                customerRepository::findByTenantId,
-                customerRepository::findByTenantIdAndOwnerIn);
+                ? customerRepository.findByTenantId(tenantId)
+                : customerRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private List<Opportunity> loadOpportunities(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                opportunityRepository::findByTenantIdAndCreatedAtBetween,
-                opportunityRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                opportunityRepository::findByTenantId,
-                opportunityRepository::findByTenantIdAndOwnerIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? opportunityRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : opportunityRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? opportunityRepository.findByTenantId(tenantId)
+                : opportunityRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private List<TaskItem> loadTasks(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                taskRepository::findByTenantIdAndCreatedAtBetween,
-                taskRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                taskRepository::findByTenantId,
-                taskRepository::findByTenantIdAndOwnerIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? taskRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : taskRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? taskRepository.findByTenantId(tenantId)
+                : taskRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private List<FollowUp> loadFollowUps(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                followUpRepository::findByTenantIdAndCreatedAtBetween,
-                followUpRepository::findByTenantIdAndAuthorInAndCreatedAtBetween,
-                followUpRepository::findByTenantId,
-                followUpRepository::findByTenantIdAndAuthorIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? followUpRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : followUpRepository.findByTenantIdAndAuthorInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? followUpRepository.findByTenantId(tenantId)
+                : followUpRepository.findByTenantIdAndAuthorIn(tenantId, owners);
     }
 
     private List<Quote> loadQuotes(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                quoteRepository::findByTenantIdAndCreatedAtBetween,
-                quoteRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                quoteRepository::findByTenantId,
-                quoteRepository::findByTenantIdAndOwnerIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? quoteRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : quoteRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? quoteRepository.findByTenantId(tenantId)
+                : quoteRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private List<OrderRecord> loadOrders(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                orderRecordRepository::findByTenantIdAndCreatedAtBetween,
-                orderRecordRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                orderRecordRepository::findByTenantId,
-                orderRecordRepository::findByTenantIdAndOwnerIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? orderRecordRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : orderRecordRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? orderRecordRepository.findByTenantId(tenantId)
+                : orderRecordRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private List<PaymentRecord> loadPayments(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                paymentRecordRepository::findByTenantIdAndCreatedAtBetween,
-                paymentRecordRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                paymentRecordRepository::findByTenantId,
-                paymentRecordRepository::findByTenantIdAndOwnerIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? paymentRecordRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : paymentRecordRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? paymentRecordRepository.findByTenantId(tenantId)
+                : paymentRecordRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private List<Lead> loadLeads(String tenantId, LocalDateTime from, LocalDateTime to, Set<String> owners) {
-        return loadEntities(tenantId, from, to, owners,
-                leadRepository::findByTenantIdAndCreatedAtBetween,
-                leadRepository::findByTenantIdAndOwnerInAndCreatedAtBetween,
-                leadRepository::findByTenantId,
-                leadRepository::findByTenantIdAndOwnerIn);
+        if (owners != null && owners.isEmpty()) return java.util.Collections.emptyList();
+        if (from != null && to != null) {
+            return owners == null
+                    ? leadRepository.findByTenantIdAndCreatedAtBetween(tenantId, from, to)
+                    : leadRepository.findByTenantIdAndOwnerInAndCreatedAtBetween(tenantId, owners, from, to);
+        }
+        return owners == null
+                ? leadRepository.findByTenantId(tenantId)
+                : leadRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
     private Set<String> loadRoleIdentities(String tenantId, String role) {

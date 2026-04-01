@@ -54,9 +54,21 @@ public class ApprovalSlaService {
                 .collect(Collectors.toList());
         Map<String, List<ApprovalTask>> existingEscalationsMap = new LinkedHashMap<>();
         if (!overdueTaskIds.isEmpty()) {
-            List<ApprovalTask> allExistingEsc = taskRepository.findByEscalationSourceTaskIdIn(overdueTaskIds);
-            existingEscalationsMap = allExistingEsc.stream()
-                    .collect(Collectors.groupingBy(ApprovalTask::getEscalationSourceTaskId, LinkedHashMap::new, Collectors.toList()));
+            Map<String, List<String>> tenantToTaskIds = overdue.stream()
+                    .collect(Collectors.groupingBy(
+                            ApprovalTask::getTenantId,
+                            LinkedHashMap::new,
+                            Collectors.mapping(ApprovalTask::getId, Collectors.toList())
+                    ));
+            for (Map.Entry<String, List<String>> entry : tenantToTaskIds.entrySet()) {
+                if (entry.getValue().isEmpty()) {
+                    continue;
+                }
+                List<ApprovalTask> allExistingEsc = taskRepository.findByTenantIdAndEscalationSourceTaskIdIn(entry.getKey(), entry.getValue());
+                allExistingEsc.forEach(task -> existingEscalationsMap
+                        .computeIfAbsent(task.getEscalationSourceTaskId(), ignored -> new java.util.ArrayList<>())
+                        .add(task));
+            }
         }
 
         int handled = 0;

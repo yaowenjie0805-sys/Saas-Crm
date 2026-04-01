@@ -4,8 +4,8 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * 图表模板实体
- * 支持柱状图、折线图、饼图、漏斗图等图表类型
+ * 鍥捐〃妯℃澘瀹炰綋
+ * 鏀寔鏌辩姸鍥俱€佹姌绾垮浘銆侀ゼ鍥俱€佹紡鏂楀浘绛夊浘琛ㄧ被鍨?
  */
 @Entity
 @Table(name = "chart_templates")
@@ -66,7 +66,7 @@ public class ChartTemplate {
         if (version == null) version = 1;
         if (isSystem == null) isSystem = false;
         if (visibility == null || visibility.trim().isEmpty()) visibility = "PRIVATE";
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

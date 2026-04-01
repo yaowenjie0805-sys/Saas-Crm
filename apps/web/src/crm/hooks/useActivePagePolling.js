@@ -5,6 +5,10 @@ export function useActivePagePolling({ enabled = true, pollers = [] }) {
 
   useEffect(() => {
     const records = pollerRecordsRef.current
+    const isPageVisible = () => (
+      typeof document === 'undefined' || document.visibilityState !== 'hidden'
+    )
+
     const canRunPoller = (poller) => {
       if (typeof poller?.canRun !== 'function') return true
       try {
@@ -64,16 +68,27 @@ export function useActivePagePolling({ enabled = true, pollers = [] }) {
           record.disposed = true
           record.controller.abort()
           if (record.timer) {
-            clearInterval(record.timer)
+            clearTimeout(record.timer)
             record.timer = null
           }
         },
       }
 
-      record.timer = setInterval(async () => {
+      const scheduleNext = () => {
+        if (record.disposed) return
+        record.timer = setTimeout(runOnce, intervalMs)
+      }
+
+      const runOnce = async () => {
         const currentPoller = record.poller
-        if (record.disposed || record.running || record.controller.signal.aborted) return
-        if (!canRunPoller(currentPoller)) return
+        if (record.disposed || record.running || record.controller.signal.aborted) {
+          scheduleNext()
+          return
+        }
+        if (!isPageVisible() || !canRunPoller(currentPoller)) {
+          scheduleNext()
+          return
+        }
 
         record.running = true
         try {
@@ -82,8 +97,11 @@ export function useActivePagePolling({ enabled = true, pollers = [] }) {
           // page-level handlers already process API errors
         } finally {
           record.running = false
+          scheduleNext()
         }
-      }, intervalMs)
+      }
+
+      scheduleNext()
 
       records.set(key, record)
     })

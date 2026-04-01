@@ -60,7 +60,6 @@ public class AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-
         Optional<UserAccount> optional = userAccountRepository.findByUsername(username);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "user_not_found", "NOT_FOUND", null));
@@ -93,7 +92,7 @@ public class AdminUserController extends BaseApiController {
         }
 
         UserAccount saved = userAccountRepository.save(user);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "USER", saved.getUsername(), "Updated user governance settings");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "USER", saved.getUsername(), "Updated user governance settings", currentTenant(request));
         return ResponseEntity.ok(toView(saved));
     }
 
@@ -107,9 +106,9 @@ public class AdminUserController extends BaseApiController {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "user_not_found", "NOT_FOUND", null));
         }
 
-        loginRiskService.clearUser(username);
         UserAccount user = optional.get();
-        auditLogService.record(currentUser(request), currentRole(request), "UNLOCK", "USER", user.getUsername(), "Cleared login risk lock");
+        loginRiskService.clearUser(user.getTenantId(), user.getUsername());
+        auditLogService.record(currentUser(request), currentRole(request), "UNLOCK", "USER", user.getUsername(), "Cleared login risk lock", currentTenant(request));
         return ResponseEntity.ok(toView(user));
     }
 
@@ -120,9 +119,9 @@ public class AdminUserController extends BaseApiController {
         out.put("role", user.getRole());
         out.put("ownerScope", user.getOwnerScope() == null ? "" : user.getOwnerScope());
         out.put("enabled", Boolean.TRUE.equals(user.getEnabled()));
-        boolean locked = loginRiskService.isUserLocked(user.getUsername());
+        boolean locked = loginRiskService.isUserLocked(user.getTenantId(), user.getUsername());
         out.put("locked", locked);
-        out.put("lockRemainingSeconds", loginRiskService.remainingUserSeconds(user.getUsername()));
+        out.put("lockRemainingSeconds", loginRiskService.remainingUserSeconds(user.getTenantId(), user.getUsername()));
         return out;
     }
 }

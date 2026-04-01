@@ -3,6 +3,7 @@ package com.yao.crm.controller;
 import com.yao.crm.entity.*;
 import com.yao.crm.service.WorkflowService;
 import com.yao.crm.service.WorkflowExecutionService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -124,17 +125,8 @@ public class WorkflowController {
         try {
             workflowService.deleteWorkflow(normalizedTenantId, normalizedId);
             return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            if ("Workflow not found".equals(e.getMessage())) {
-                return ResponseEntity.notFound().build();
-            }
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -159,9 +151,7 @@ public class WorkflowController {
             WorkflowDefinition workflow = workflowService.activateWorkflow(normalizedTenantId, normalizedId, request.activatedBy);
             return ResponseEntity.ok(workflow);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -184,9 +174,7 @@ public class WorkflowController {
             WorkflowDefinition workflow = workflowService.deactivateWorkflow(normalizedTenantId, normalizedId);
             return ResponseEntity.ok(workflow);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -444,9 +432,7 @@ public class WorkflowController {
             result.put("startedAt", execution.getStartedAt().toString());
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -469,9 +455,7 @@ public class WorkflowController {
             }
             return ResponseEntity.ok(detail);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -521,9 +505,7 @@ public class WorkflowController {
             result.put("message", "Execution cancelled");
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -547,9 +529,7 @@ public class WorkflowController {
             result.put("status", execution.getStatus());
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -581,9 +561,7 @@ public class WorkflowController {
             result.put("message", "Approval processed");
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
+            return mapServiceException(e);
         }
     }
 
@@ -603,6 +581,43 @@ public class WorkflowController {
         public String action; // APPROVE or REJECT
         public String approverId;
         public String comments;
+    }
+
+    private ResponseEntity<?> mapServiceException(Exception e) {
+        if (e instanceof IllegalArgumentException) {
+            if (isNotFoundError(e.getMessage())) {
+                return buildErrorResponse(HttpStatus.NOT_FOUND, e);
+            }
+            return buildErrorResponse(HttpStatus.BAD_REQUEST, e);
+        }
+        if (e instanceof IllegalStateException) {
+            return buildErrorResponse(HttpStatus.CONFLICT, e);
+        }
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, e);
+    }
+
+    private ResponseEntity<Map<String, Object>> buildErrorResponse(HttpStatus status, Exception e) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", resolveErrorMessage(status, e));
+        return ResponseEntity.status(status).body(error);
+    }
+
+    private String resolveErrorMessage(HttpStatus status, Exception e) {
+        String message = e == null ? null : e.getMessage();
+        if (message != null && !message.trim().isEmpty()) {
+            return message;
+        }
+        if (HttpStatus.INTERNAL_SERVER_ERROR.equals(status)) {
+            return "Internal server error";
+        }
+        return status.getReasonPhrase();
+    }
+
+    private boolean isNotFoundError(String message) {
+        if (message == null) {
+            return false;
+        }
+        return message.toLowerCase(Locale.ROOT).contains("not found");
     }
 
     private String normalizeRequired(String value) {

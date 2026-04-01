@@ -218,7 +218,7 @@ public class SearchController {
             return ResponseEntity.badRequest().build();
         }
         Optional<SavedSearch> savedOpt = savedSearchRepository.findByIdAndTenantIdAndOwner(id, normalizedTenantId, currentUser);
-        if (!savedOpt.isPresent()) {
+        if (savedOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 

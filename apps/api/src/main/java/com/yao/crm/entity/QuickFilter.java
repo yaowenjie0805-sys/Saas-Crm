@@ -58,7 +58,7 @@ public class QuickFilter {
         if (displayOrder == null) displayOrder = 0;
         if (isDefault == null) isDefault = false;
         if (icon == null || icon.trim().isEmpty()) icon = "🏷️";
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

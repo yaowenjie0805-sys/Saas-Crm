@@ -58,7 +58,7 @@ public class Quote {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "DRAFT";
         if (subtotalAmount == null) subtotalAmount = 0L;
         if (taxAmount == null) taxAmount = 0L;

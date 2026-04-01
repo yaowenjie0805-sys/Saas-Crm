@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1")
 public class V1SalesInsightController extends BaseApiController {
+    private static final List<String> PENDING_APPROVAL_STATUSES = java.util.Arrays.asList("PENDING", "WAITING");
 
     private final TaskRepository taskRepository;
     private final FollowUpRepository followUpRepository;
@@ -181,10 +182,9 @@ public class V1SalesInsightController extends BaseApiController {
         List<OrderRecord> orders = orderRecordRepository.findByTenantIdAndOpportunityId(tenantId, opportunityId);
         Set<String> quoteIds = quotes.stream().map(Quote::getId).collect(Collectors.toSet());
         Set<String> orderIds = orders.stream().map(OrderRecord::getId).collect(Collectors.toSet());
-        List<ApprovalInstance> approvals = approvalInstanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .filter(a -> ("QUOTE".equalsIgnoreCase(a.getBizType()) && quoteIds.contains(a.getBizId()))
-                        || ("ORDER".equalsIgnoreCase(a.getBizType()) && orderIds.contains(a.getBizId())))
-                .collect(Collectors.toList());
+        List<ApprovalInstance> approvals = new ArrayList<ApprovalInstance>();
+        appendApprovalsByBizIds(approvals, tenantId, "QUOTE", quoteIds);
+        appendApprovalsByBizIds(approvals, tenantId, "ORDER", orderIds);
 
         String cacheKey = opportunityId + "|" + currentUser(request) + "|" + currentRole(request);
         DashboardMetricsCacheService.CachedValue<List<Map<String, Object>>> cached = dashboardMetricsCacheService.getOrLoad(
@@ -235,16 +235,12 @@ public class V1SalesInsightController extends BaseApiController {
         List<TaskItem> tasks = loadTodoTasksByScope(tenantId, fromAt, toAt, ownerScope);
         List<FollowUp> followUps = loadFollowUpsByScope(tenantId, fromAt, toAt, ownerScope);
         List<ContractRecord> contracts = loadContractsByScope(tenantId, fromAt, toAt, ownerScope);
-        List<ApprovalInstance> approvals = approvalInstanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .filter(row -> matchScopedOwner(request, row.getSubmitter()))
-                .filter(row -> matchesOwnerFilter(row.getSubmitter(), ownerFilter))
-                .filter(row -> inRange(row.getUpdatedAt(), fromAt, toAt))
-                .collect(Collectors.toList());
+        List<ApprovalInstance> approvals = loadPendingApprovalsByScope(tenantId, fromAt, toAt, ownerScope);
         List<PaymentRecord> payments = loadPaymentsByScope(tenantId, fromAt, toAt, ownerScope);
 
         int overdueFollowUps = (int) followUps.stream().filter(f -> f.getNextActionDate() != null && f.getNextActionDate().isBefore(today)).count();
         int upcomingContracts = (int) contracts.stream().filter(c -> c.getSignDate() != null && !c.getSignDate().isBefore(today) && !c.getSignDate().isAfter(today.plusDays(15))).count();
-        int pendingApprovals = (int) approvals.stream().filter(a -> "PENDING".equalsIgnoreCase(a.getStatus()) || "WAITING".equalsIgnoreCase(a.getStatus())).count();
+        int pendingApprovals = approvals.size();
         int paymentWarnings = (int) payments.stream().filter(p -> "OVERDUE".equalsIgnoreCase(p.getStatus()) || "PENDING".equalsIgnoreCase(p.getStatus())).count();
 
         List<Map<String, Object>> cards = new ArrayList<Map<String, Object>>();
@@ -259,8 +255,6 @@ public class V1SalesInsightController extends BaseApiController {
             todoItems.add(workbenchItem("TASK", row.getId(), row.getTitle(), row.getOwner(), row.getUpdatedAt(), "tasks", row.getLevel(), null));
         }
         for (ApprovalInstance row : approvals) {
-            String status = String.valueOf(row.getStatus() == null ? "" : row.getStatus()).toUpperCase(Locale.ROOT);
-            if (!"PENDING".equals(status) && !"WAITING".equals(status)) continue;
             Map<String, Object> payload = new LinkedHashMap<String, Object>();
             payload.put("status", "PENDING");
             payload.put("instanceId", row.getId());
@@ -323,11 +317,10 @@ public class V1SalesInsightController extends BaseApiController {
         Set<String> contractIds = contracts.stream().map(ContractRecord::getId).collect(Collectors.toSet());
         Set<String> quoteIds = quotes.stream().map(Quote::getId).collect(Collectors.toSet());
         Set<String> orderIds = orders.stream().map(OrderRecord::getId).collect(Collectors.toSet());
-        List<ApprovalInstance> approvals = approvalInstanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .filter(a -> ("CONTRACT".equalsIgnoreCase(a.getBizType()) && contractIds.contains(a.getBizId()))
-                        || ("QUOTE".equalsIgnoreCase(a.getBizType()) && quoteIds.contains(a.getBizId()))
-                        || ("ORDER".equalsIgnoreCase(a.getBizType()) && orderIds.contains(a.getBizId())))
-                .collect(Collectors.toList());
+        List<ApprovalInstance> approvals = new ArrayList<ApprovalInstance>();
+        appendApprovalsByBizIds(approvals, tenantId, "CONTRACT", contractIds);
+        appendApprovalsByBizIds(approvals, tenantId, "QUOTE", quoteIds);
+        appendApprovalsByBizIds(approvals, tenantId, "ORDER", orderIds);
 
         List<Map<String, Object>> events = new ArrayList<Map<String, Object>>();
         for (FollowUp f : followUps) {
@@ -367,6 +360,17 @@ public class V1SalesInsightController extends BaseApiController {
         for (Map<String, Object> row : events) {
             row.remove("timeRaw");
         }
+    }
+
+    private void appendApprovalsByBizIds(List<ApprovalInstance> target, String tenantId, String bizType, Set<String> bizIds) {
+        if (bizIds == null || bizIds.isEmpty()) {
+            return;
+        }
+        target.addAll(approvalInstanceRepository.findByTenantIdAndBizTypeIgnoreCaseAndBizIdInOrderByCreatedAtDesc(
+                tenantId,
+                bizType,
+                bizIds
+        ));
     }
 
     private Map<String, Object> timelineEvent(LocalDateTime time, String type, String title, String status, String sourceId) {
@@ -512,15 +516,26 @@ public class V1SalesInsightController extends BaseApiController {
                 : paymentRecordRepository.findByTenantIdAndOwnerIn(tenantId, owners);
     }
 
-    private boolean matchScopedOwner(HttpServletRequest request, String owner) {
-        return !isSalesScoped(request) || ownerMatchesScope(request, owner);
+    private List<ApprovalInstance> loadPendingApprovalsByScope(String tenantId,
+                                                               LocalDateTime fromAt,
+                                                               LocalDateTime toAt,
+                                                               Set<String> owners) {
+        if (owners != null && owners.isEmpty()) return Collections.emptyList();
+        if (fromAt != null && toAt != null) {
+            return owners == null
+                    ? approvalInstanceRepository.findByTenantIdAndStatusInAndUpdatedAtBetweenOrderByCreatedAtDesc(
+                    tenantId, PENDING_APPROVAL_STATUSES, fromAt, toAt)
+                    : approvalInstanceRepository.findByTenantIdAndSubmitterInAndStatusInAndUpdatedAtBetweenOrderByCreatedAtDesc(
+                    tenantId, owners, PENDING_APPROVAL_STATUSES, fromAt, toAt);
+        }
+        return owners == null
+                ? approvalInstanceRepository.findByTenantIdAndStatusInOrderByCreatedAtDesc(tenantId, PENDING_APPROVAL_STATUSES)
+                : approvalInstanceRepository.findByTenantIdAndSubmitterInAndStatusInOrderByCreatedAtDesc(
+                tenantId, owners, PENDING_APPROVAL_STATUSES);
     }
 
-    private boolean inRange(LocalDateTime value, LocalDateTime from, LocalDateTime to) {
-        if (value == null) return true;
-        if (from != null && value.isBefore(from)) return false;
-        if (to != null && value.isAfter(to)) return false;
-        return true;
+    private boolean matchScopedOwner(HttpServletRequest request, String owner) {
+        return !isSalesScoped(request) || ownerMatchesScope(request, owner);
     }
 
     private String normalizeOptional(String value) {

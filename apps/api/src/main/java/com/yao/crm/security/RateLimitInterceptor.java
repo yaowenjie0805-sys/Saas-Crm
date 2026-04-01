@@ -91,29 +91,42 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private String buildRateLimitKey(HttpServletRequest request, String requestUri) {
         String route = normalizeRouteKeyPart(requestUri, "unknown-route");
+        String ip = normalizeKeyPart(request.getRemoteAddr(), "unknown");
         AuthPrincipal cachedPrincipal = getCachedAuthenticatedPrincipal(request);
         if (cachedPrincipal != null) {
-            return buildRateLimitKey(cachedPrincipal, route);
+            return buildRateLimitKey(cachedPrincipal, ip, route);
         }
         String tenantId = normalizeRequestAttributePart(request.getAttribute(AUTH_TENANT_ID_ATTR));
         String username = normalizeRequestAttributePart(request.getAttribute(AUTH_USERNAME_ATTR));
         if (tenantId != null && username != null) {
             return tenantId + "|" + username + "|" + route;
         }
+        if (username != null) {
+            return buildUsernameIpRouteKey(username, ip, route);
+        }
 
         AuthPrincipal principal = resolveAuthenticatedPrincipal(request);
         if (principal != null) {
             cacheAuthenticatedPrincipal(request, principal);
-            return buildRateLimitKey(principal, route);
+            return buildRateLimitKey(principal, ip, route);
         }
-        String ip = normalizeKeyPart(request.getRemoteAddr(), "unknown");
         return ip + "|" + route;
     }
 
-    private String buildRateLimitKey(AuthPrincipal principal, String route) {
-        String principalTenantId = normalizeKeyPart(principal.getTenantId(), "tenant_default");
-        String principalUsername = normalizeKeyPart(principal.getUsername(), "unknown-user");
-        return principalTenantId + "|" + principalUsername + "|" + route;
+    private String buildRateLimitKey(AuthPrincipal principal, String ip, String route) {
+        String principalTenantId = normalizeRequestAttributePart(principal.getTenantId());
+        String principalUsername = normalizeRequestAttributePart(principal.getUsername());
+        if (principalTenantId != null && principalUsername != null) {
+            return principalTenantId + "|" + principalUsername + "|" + route;
+        }
+        if (principalUsername != null) {
+            return buildUsernameIpRouteKey(principalUsername, ip, route);
+        }
+        return ip + "|" + route;
+    }
+
+    private String buildUsernameIpRouteKey(String username, String ip, String route) {
+        return "user:" + username + "|" + ip + "|" + route;
     }
 
     private void cacheAuthenticatedPrincipal(HttpServletRequest request, AuthPrincipal principal) {

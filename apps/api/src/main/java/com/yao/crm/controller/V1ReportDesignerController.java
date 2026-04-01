@@ -9,7 +9,6 @@ import com.yao.crm.entity.*;
 import com.yao.crm.repository.*;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,8 +21,8 @@ import java.util.*;
 @RequestMapping("/api/v1/reports/designer")
 public class V1ReportDesignerController extends BaseApiController {
 
-    private static final Set<String> DATASETS = CollectionsUtil.setOf("CUSTOMERS", "OPPORTUNITIES", "CONTRACTS", "PAYMENTS", "LEADS");
-    private static final Set<String> VISIBILITY = CollectionsUtil.setOf("PRIVATE", "DEPARTMENT", "TENANT");
+    private static final Set<String> DATASETS = Set.of("CUSTOMERS", "OPPORTUNITIES", "CONTRACTS", "PAYMENTS", "LEADS");
+    private static final Set<String> VISIBILITY = Set.of("PRIVATE", "DEPARTMENT", "TENANT");
 
     private final ReportDesignerTemplateRepository templateRepository;
     private final CustomerRepository customerRepository;
@@ -90,7 +89,7 @@ public class V1ReportDesignerController extends BaseApiController {
             return ResponseEntity.status(409).body(errorBody(request, "report_template_name_exists", msg(request, "report_template_name_exists"), null));
         }
         ReportDesignerTemplate template = new ReportDesignerTemplate();
-        template.setId(idGenerator.generate("rpt"));
+        template.setId(newId("rpt"));
         template.setTenantId(tenantId);
         template.setName(name);
         template.setDataset(dataset);
@@ -305,6 +304,9 @@ public class V1ReportDesignerController extends BaseApiController {
         }
     }
 
+    private String newId(String prefix) {
+        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
+    }
 
     private String normalizeTemplateId(String value) {
         return isBlank(value) ? "" : value.trim();

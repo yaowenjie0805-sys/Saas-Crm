@@ -133,10 +133,14 @@ function makeBundle(version) {
 }
 
 function ssh(host, user, port, remoteCommand) {
+  const knownHostsFile = env('SSH_KNOWN_HOSTS_FILE', path.join(os.homedir(), '.ssh', 'known_hosts'))
+  ensureDir(path.dirname(knownHostsFile))
+  if (!fs.existsSync(knownHostsFile)) fs.writeFileSync(knownHostsFile, '')
   const target = `${user}@${host}`
   const args = [
     '-p', String(port),
-    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', 'StrictHostKeyChecking=yes',
+    '-o', `UserKnownHostsFile=${knownHostsFile}`,
     target,
     remoteCommand,
   ]
@@ -144,10 +148,14 @@ function ssh(host, user, port, remoteCommand) {
 }
 
 function scp(host, user, port, sourcePath, targetPath) {
+  const knownHostsFile = env('SSH_KNOWN_HOSTS_FILE', path.join(os.homedir(), '.ssh', 'known_hosts'))
+  ensureDir(path.dirname(knownHostsFile))
+  if (!fs.existsSync(knownHostsFile)) fs.writeFileSync(knownHostsFile, '')
   const target = `${user}@${host}:${targetPath}`
   const args = [
     '-P', String(port),
-    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', 'StrictHostKeyChecking=yes',
+    '-o', `UserKnownHostsFile=${knownHostsFile}`,
     '-r',
     sourcePath,
     target,
@@ -256,7 +264,7 @@ async function main() {
       `ln -sfn "${remoteReleaseDir}" "${stagingBaseDir}/current"`,
       `export RELEASE_DIR="${stagingBaseDir}/current"`,
       `export COMPOSE_PROJECT_NAME="${composeProjectName}"`,
-      `docker compose -f "${stagingBaseDir}/current/docker-compose.yml" --project-name "${composeProjectName}" pull || true`,
+      `docker compose -f "${stagingBaseDir}/current/docker-compose.yml" --project-name "${composeProjectName}" pull`,
       `docker compose -f "${stagingBaseDir}/current/docker-compose.yml" --project-name "${composeProjectName}" up -d --remove-orphans`,
       `docker compose -f "${stagingBaseDir}/current/docker-compose.yml" --project-name "${composeProjectName}" ps`,
     ].join(' && ')

@@ -16,6 +16,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -59,13 +60,13 @@ class V1LeadAssignmentControllerTest {
         V1LeadAssignmentRuleRequest payload = validPayload();
         LeadAssignmentRule row = new LeadAssignmentRule();
         row.setId("rule-1");
-        when(leadAssignmentService.patchRule("tenant-1", "rule-1", "manager-1", payload)).thenReturn(row);
+        when(leadAssignmentService.patchRule(TENANT_TEST, "rule-1", "manager-1", payload)).thenReturn(row);
         when(leadAssignmentService.toView(row)).thenReturn(Collections.singletonMap("id", "rule-1"));
 
         ResponseEntity<?> response = controller.patch(request, "  rule-1  ", payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(leadAssignmentService).patchRule("tenant-1", "rule-1", "manager-1", payload);
+        verify(leadAssignmentService).patchRule(TENANT_TEST, "rule-1", "manager-1", payload);
     }
 
     private V1LeadAssignmentRuleRequest validPayload() {
@@ -80,3 +81,4 @@ class V1LeadAssignmentControllerTest {
         return payload;
     }
 }
+

@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.FollowUpRepository;
 import com.yao.crm.repository.LeadRepository;
@@ -15,10 +17,8 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -35,6 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ReportServiceTest {
+    private static final String CACHE_INVALIDATION_MODE = TENANT_TEST.replace("_test", "");
 
     @Test
     void shouldUseScopedFastPathWhenNoDateAndScopedOwnerPresent() {
@@ -51,9 +52,9 @@ class ReportServiceTest {
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
-        when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
-        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment("tenant_default", "bd"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
 
         when(customerRepository.countByTenantIdAndOwnerIn(anyString(), anyCollection())).thenReturn(2L);
@@ -91,6 +92,12 @@ class ReportServiceTest {
 
         when(paymentRecordRepository.sumAmountByTenantIdAndOwnerInAndStatusInUppercase(anyString(), anyCollection(), anyList()))
                 .thenReturn(150L);
+        Map<String, Object> scopedSummary = new java.util.HashMap<String, Object>();
+        scopedSummary.put("customers", 2L);
+        scopedSummary.put("revenue", 300L);
+        Map<String, Object> scopedBody = new java.util.HashMap<String, Object>();
+        scopedBody.put("summary", scopedSummary);
+        when(reportAggregationService.aggregateWithScope(eq(TENANT_TEST), anySet())).thenReturn(scopedBody);
 
         ReportService reportService = new ReportService(
                 customerRepository,
@@ -107,16 +114,8 @@ class ReportServiceTest {
                 reportAggregationService
         );
 
-        // Mock the reportAggregationService to return a mock result
-        Map<String, Object> mockResult = new HashMap<String, Object>();
-        Map<String, Object> mockSummary = new HashMap<String, Object>();
-        mockSummary.put("customers", 2L);
-        mockSummary.put("revenue", 300L);
-        mockResult.put("summary", mockSummary);
-        when(reportAggregationService.aggregateWithScope(anyString(), anySet())).thenReturn(mockResult);
-
         Map<String, Object> report = reportService.overviewByTenant(
-                "tenant_default",
+                TENANT_TEST,
                 null,
                 null,
                 "SALES",
@@ -130,11 +129,12 @@ class ReportServiceTest {
         Assertions.assertEquals(2L, summary.get("customers"));
         Assertions.assertEquals(300L, summary.get("revenue"));
 
-        verify(reportAggregationService).aggregateWithScope(anyString(), anySet());
+        verify(reportAggregationService).aggregateWithScope(eq(TENANT_TEST), anySet());
         verify(customerRepository, never()).findByTenantId(anyString());
+        verify(customerRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(customerRepository, never()).findByTenantIdAndOwnerIn(anyString(), anyCollection());
-        verify(userAccountRepository).findIdentityPairsByTenantIdAndRole("tenant_default", "SALES");
-        verify(userAccountRepository).findIdentityPairsByTenantIdAndDepartment("tenant_default", "bd");
+        verify(userAccountRepository).findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES");
+        verify(userAccountRepository).findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd");
     }
 
     @Test
@@ -152,19 +152,17 @@ class ReportServiceTest {
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
-        // Mock the emptyOverviewBody method to return a mock result
-        Map<String, Object> mockEmptyResult = new HashMap<String, Object>();
-        Map<String, Object> mockEmptySummary = new HashMap<String, Object>();
-        mockEmptySummary.put("customers", 0L);
-        mockEmptySummary.put("opportunities", 0L);
-        mockEmptySummary.put("quotes", 0L);
-        mockEmptyResult.put("summary", mockEmptySummary);
-        when(reportAggregationService.emptyOverviewBody()).thenReturn(mockEmptyResult);
-
-        when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
-        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment("tenant_default", "bd"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
+        Map<String, Object> emptySummary = new java.util.HashMap<String, Object>();
+        emptySummary.put("customers", 0L);
+        emptySummary.put("opportunities", 0L);
+        emptySummary.put("quotes", 0L);
+        Map<String, Object> emptyBody = new java.util.HashMap<String, Object>();
+        emptyBody.put("summary", emptySummary);
+        when(reportAggregationService.emptyOverviewBody()).thenReturn(emptyBody);
 
         ReportService reportService = new ReportService(
                 customerRepository,
@@ -182,7 +180,7 @@ class ReportServiceTest {
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
-                "tenant_default",
+                TENANT_TEST,
                 null,
                 null,
                 "SALES",
@@ -192,15 +190,14 @@ class ReportServiceTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> summary = (Map<String, Object>) report.get("summary");
-        Assertions.assertNotNull(summary);
-        Assertions.assertEquals(0L, summary.get("customers"));
-        Assertions.assertEquals(0L, summary.get("opportunities"));
-        Assertions.assertEquals(0L, summary.get("quotes"));
+        Assertions.assertEquals(0, ((Number) summary.get("customers")).intValue());
+        Assertions.assertEquals(0, ((Number) summary.get("opportunities")).intValue());
+        Assertions.assertEquals(0, ((Number) summary.get("quotes")).intValue());
 
-        verify(reportAggregationService).emptyOverviewBody();
         verify(customerRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(opportunityRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(taskRepository, never()).countByTenantIdAndDoneTrueAndOwnerIn(anyString(), anyCollection());
+        verify(reportAggregationService, never()).aggregateWithScope(anyString(), anySet());
     }
 
     @Test
@@ -248,7 +245,7 @@ class ReportServiceTest {
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
-                "tenant_default",
+                TENANT_TEST,
                 LocalDate.now().minusDays(7),
                 LocalDate.now(),
                 "",
@@ -316,7 +313,7 @@ class ReportServiceTest {
         );
 
         Map<String, Object> report = reportService.overviewByTenant(
-                "tenant_default",
+                TENANT_TEST,
                 LocalDate.now().minusDays(7),
                 null,
                 "",
@@ -350,9 +347,9 @@ class ReportServiceTest {
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
-        when(userAccountRepository.findIdentityPairsByTenantIdAndRole("tenant_default", "SALES"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
-        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment("tenant_default", "BD"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "BD"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
         when(customerRepository.countByTenantIdAndOwnerIn(anyString(), anyCollection())).thenReturn(1L);
         when(customerRepository.sumValueByTenantIdAndOwnerIn(anyString(), anyCollection())).thenReturn(100L);
@@ -390,11 +387,11 @@ class ReportServiceTest {
                 reportAggregationService
         );
 
-        reportService.overviewByTenant("tenant_default", null, null, "sales", "alice", "bd");
-        reportService.overviewByTenant("tenant_default", null, null, "sales", "alice", "bd");
+        reportService.overviewByTenant(TENANT_TEST, null, null, "sales", "alice", "bd");
+        reportService.overviewByTenant(TENANT_TEST, null, null, "sales", "alice", "bd");
 
-        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndRole("tenant_default", "SALES");
-        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndDepartment("tenant_default", "bd");
+        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES");
+        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd");
     }
 
     @Test
@@ -433,7 +430,7 @@ class ReportServiceTest {
         );
 
         Map<String, Object> funnel = reportService.funnelByTenant(
-                "tenant_default",
+                TENANT_TEST,
                 LocalDate.now().minusDays(7),
                 LocalDate.now(),
                 "alice"
@@ -496,7 +493,7 @@ class ReportServiceTest {
                 reportAggregationService
         );
 
-        Map<String, Object> funnel = reportService.funnelByTenant("tenant_default", null, null, "");
+        Map<String, Object> funnel = reportService.funnelByTenant(TENANT_TEST, null, null, "");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> counts = (Map<String, Object>) funnel.get("counts");
@@ -505,10 +502,10 @@ class ReportServiceTest {
         Assertions.assertEquals(2L, counts.get("quotes"));
         Assertions.assertEquals(1L, counts.get("orders"));
 
-        verify(leadRepository).countByTenantId("tenant_default");
-        verify(opportunityRepository).countByTenantId("tenant_default");
-        verify(quoteRepository).countByTenantId("tenant_default");
-        verify(orderRecordRepository).countByTenantId("tenant_default");
+        verify(leadRepository).countByTenantId(TENANT_TEST);
+        verify(opportunityRepository).countByTenantId(TENANT_TEST);
+        verify(quoteRepository).countByTenantId(TENANT_TEST);
+        verify(orderRecordRepository).countByTenantId(TENANT_TEST);
         verify(leadRepository, never()).findByTenantId(anyString());
         verify(opportunityRepository, never()).findByTenantId(anyString());
         verify(quoteRepository, never()).findByTenantId(anyString());
@@ -553,7 +550,7 @@ class ReportServiceTest {
         );
 
         reportService.funnelByTenantCached(
-                "tenant_default",
+                TENANT_TEST,
                 "  Alice  ",
                 " manager ",
                 LocalDate.of(2026, 3, 1),
@@ -562,7 +559,7 @@ class ReportServiceTest {
         );
 
         verify(cacheService).getOrLoad(
-                eq("tenant_default"),
+                eq(TENANT_TEST),
                 eq("reports-funnel"),
                 eq("2026-03-01|2026-03-31|bob"),
                 any()
@@ -614,6 +611,71 @@ class ReportServiceTest {
         Assertions.assertTrue(orderSummary.orderIds.contains("order-2"));
         Assertions.assertEquals(1, orderSummary.byStatus.get("COMPLETED"));
         Assertions.assertEquals(1, orderSummary.byStatus.get("NEW"));
+    }
+
+    @Test
+    void overviewByTenantCachedShouldFailFastWhenTenantBlank() {
+        CustomerRepository customerRepository = mock(CustomerRepository.class);
+        OpportunityRepository opportunityRepository = mock(OpportunityRepository.class);
+        TaskRepository taskRepository = mock(TaskRepository.class);
+        FollowUpRepository followUpRepository = mock(FollowUpRepository.class);
+        QuoteRepository quoteRepository = mock(QuoteRepository.class);
+        OrderRecordRepository orderRecordRepository = mock(OrderRecordRepository.class);
+        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
+        UserAccountRepository userAccountRepository = mock(UserAccountRepository.class);
+        LeadRepository leadRepository = mock(LeadRepository.class);
+        ValueNormalizerService valueNormalizerService = mock(ValueNormalizerService.class);
+        ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
+        DashboardMetricsCacheService cacheService = new DashboardMetricsCacheService(
+                emptyRedisProvider(),
+                emptyMeterProvider(),
+                false,
+                CACHE_INVALIDATION_MODE,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                60000L,
+                30000L,
+                60000L
+        );
+
+        ReportService reportService = new ReportService(
+                customerRepository,
+                opportunityRepository,
+                taskRepository,
+                followUpRepository,
+                quoteRepository,
+                orderRecordRepository,
+                paymentRecordRepository,
+                userAccountRepository,
+                leadRepository,
+                valueNormalizerService,
+                cacheService,
+                reportAggregationService
+        );
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> reportService.overviewByTenantCached("   ", "alice", "MANAGER", null, null, "", "", "")
+        );
+
+        Assertions.assertEquals("tenant_id_required", error.getMessage());
+        verify(reportAggregationService, never()).aggregateWithoutScope(anyString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private org.springframework.beans.factory.ObjectProvider<org.springframework.data.redis.core.RedisTemplate<String, Object>> emptyRedisProvider() {
+        org.springframework.beans.factory.support.DefaultListableBeanFactory factory = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        return (org.springframework.beans.factory.ObjectProvider<org.springframework.data.redis.core.RedisTemplate<String, Object>>) (org.springframework.beans.factory.ObjectProvider<?>) factory.getBeanProvider(org.springframework.data.redis.core.RedisTemplate.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry> emptyMeterProvider() {
+        org.springframework.beans.factory.support.DefaultListableBeanFactory factory = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        return (org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry>) (org.springframework.beans.factory.ObjectProvider<?>) factory.getBeanProvider(io.micrometer.core.instrument.MeterRegistry.class);
     }
 
     private static final class CountingList<E> extends ArrayList<E> {

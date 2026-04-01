@@ -65,7 +65,7 @@ public class PushMessage {
         if (retryCount == null) retryCount = 0;
         if (status == null || status.trim().isEmpty()) status = "PENDING";
         if (contentType == null || contentType.trim().isEmpty()) contentType = "TEXT";
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     // Getters and Setters

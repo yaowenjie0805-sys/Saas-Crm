@@ -147,35 +147,46 @@ export function useLeadImportActions({
     setLeadImportExportSize(value)
   }, [setLeadImportExportSize])
 
+  const downloadLeadImportBlob = useCallback(async ({ path, filename, fallbackMessage = t('downloadFailed') }) => {
+    const headers = { 'Accept-Language': lang }
+    if (auth?.token && auth.token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${auth.token}`
+    if (auth?.tenantId) headers['X-Tenant-Id'] = auth.tenantId
+    const res = await fetch(`${API_BASE}${path}`, { credentials: 'include', headers })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const message = body.message || fallbackMessage
+      const requestId = body.requestId || ''
+      throw new Error(requestId ? `${message} [${requestId}]` : message)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    try {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  }, [auth?.tenantId, auth?.token, lang, t])
+
   const downloadLeadImportFailedRowsExportJob = useCallback(async (jobId, exportJobId) => {
     if (!jobId || !exportJobId || isLeadImportActionPending('export-download', exportJobId)) return
     markPending('export-download', exportJobId, true)
     try {
-      const headers = { 'Accept-Language': lang }
-      if (auth?.token && auth.token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${auth.token}`
-      if (auth?.tenantId) headers['X-Tenant-Id'] = auth.tenantId
-      const res = await fetch(`${API_BASE}/v1/leads/import-jobs/${jobId}/failed-rows/export-jobs/${exportJobId}/download`, { credentials: 'include', headers })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        const message = body.message || t('downloadFailed')
-        const requestId = body.requestId || ''
-        throw new Error(requestId ? `${message} [${requestId}]` : message)
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `lead-import-failed-rows-${exportJobId}.csv`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      await downloadLeadImportBlob({
+        path: `/v1/leads/import-jobs/${jobId}/failed-rows/export-jobs/${exportJobId}/download`,
+        filename: `lead-import-failed-rows-${exportJobId}.csv`,
+        fallbackMessage: t('downloadFailed'),
+      })
     } catch (err) {
       handleLeadImportError(err, t('downloadFailed'))
     } finally {
       markPending('export-download', exportJobId, false)
     }
-  }, [auth?.tenantId, auth?.token, handleLeadImportError, isLeadImportActionPending, lang, markPending, t])
+  }, [downloadLeadImportBlob, handleLeadImportError, isLeadImportActionPending, markPending, t])
 
   const updateLeadImportStatusFilter = useCallback((value) => {
     setLeadImportStatusFilter(value)
@@ -195,22 +206,13 @@ export function useLeadImportActions({
 
   const downloadLeadImportTemplate = useCallback(async () => {
     try {
-      const headers = { 'Accept-Language': lang }
-      if (auth?.token && auth.token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${auth.token}`
-      if (auth?.tenantId) headers['X-Tenant-Id'] = auth.tenantId
-      const res = await fetch(`${API_BASE}/v1/leads/import-template`, { credentials: 'include', headers })
-      if (!res.ok) throw new Error(t('downloadFailed'))
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'lead_import_template.csv'
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      await downloadLeadImportBlob({
+        path: '/v1/leads/import-template',
+        filename: 'lead_import_template.csv',
+        fallbackMessage: t('downloadFailed'),
+      })
     } catch (err) { handleLeadImportError(err, t('downloadFailed')) }
-  }, [auth?.tenantId, auth?.token, handleLeadImportError, lang, t])
+  }, [downloadLeadImportBlob, handleLeadImportError, t])
 
   return {
     importLeadsCsv,

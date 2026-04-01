@@ -2,7 +2,6 @@ package com.yao.crm.controller;
 
 import com.yao.crm.entity.ApprovalTask;
 import com.yao.crm.entity.LeadImportJob;
-import com.yao.crm.entity.NotificationJob;
 import com.yao.crm.repository.ApprovalTaskRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.NotificationJobRepository;
@@ -11,6 +10,7 @@ import com.yao.crm.service.ApiRequestMetricsService;
 import com.yao.crm.service.AuditExportJobService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.NotificationJobScheduler;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -37,6 +38,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/v1/ops")
 public class V1OpsController extends BaseApiController {
+    private static final List<String> APPROVAL_PENDING_STATUSES = Arrays.asList("PENDING", "WAITING");
+    private static final List<String> NOTIFICATION_ACTIVE_STATUSES = Arrays.asList("PENDING", "RUNNING", "SUCCESS", "FAILED", "RETRY");
 
     private final DataSource dataSource;
     private final NotificationJobScheduler notificationJobScheduler;
@@ -159,17 +162,19 @@ public class V1OpsController extends BaseApiController {
         String tenantId = context.getTenantId();
         ZoneId zoneId = context.getZoneId();
 
-        List<ApprovalTask> tasks = approvalTaskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
-        List<NotificationJob> jobs = notificationJobRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         LocalDateTime now = nowAt(zoneId);
-        long approvalBacklog = tasks.stream().filter(t -> "PENDING".equalsIgnoreCase(t.getStatus()) || "WAITING".equalsIgnoreCase(t.getStatus())).count();
-        long approvalOverdue = tasks.stream().filter(t -> ("PENDING".equalsIgnoreCase(t.getStatus()) || "WAITING".equalsIgnoreCase(t.getStatus())) && t.getDeadlineAt() != null && t.getDeadlineAt().isBefore(now)).count();
-        long notifySuccess = jobs.stream().filter(j -> "SUCCESS".equalsIgnoreCase(j.getStatus())).count();
-        long notifyFailed = jobs.stream().filter(j -> "FAILED".equalsIgnoreCase(j.getStatus())).count();
-        long notifyRetry = jobs.stream().filter(j -> "RETRY".equalsIgnoreCase(j.getStatus())).count();
-        long notifyTotal = notifySuccess + notifyFailed + notifyRetry + jobs.stream().filter(j -> "PENDING".equalsIgnoreCase(j.getStatus()) || "RUNNING".equalsIgnoreCase(j.getStatus())).count();
+        long approvalBacklog = approvalTaskRepository.countByTenantIdAndStatusIn(tenantId, APPROVAL_PENDING_STATUSES);
+        long approvalOverdue = approvalTaskRepository.countByTenantIdAndStatusInAndDeadlineAtBefore(tenantId, APPROVAL_PENDING_STATUSES, now);
+        Map<String, Long> groupedStatus = toLongCountMap(notificationJobRepository.countGroupedByStatus(tenantId));
+        long notifySuccess = groupedStatus.containsKey("SUCCESS") ? groupedStatus.get("SUCCESS") : 0L;
+        long notifyFailed = groupedStatus.containsKey("FAILED") ? groupedStatus.get("FAILED") : 0L;
+        long notifyRetry = groupedStatus.containsKey("RETRY") ? groupedStatus.get("RETRY") : 0L;
+        long notifyTotal = 0L;
+        for (String status : NOTIFICATION_ACTIVE_STATUSES) {
+            notifyTotal += groupedStatus.containsKey(status) ? groupedStatus.get(status) : 0L;
+        }
         double successRate = notifyTotal == 0 ? 1.0 : ((double) notifySuccess / (double) notifyTotal);
-        Map<String, Object> retryBuckets = buildRetryDistribution(jobs);
+        Map<String, Object> retryBuckets = buildRetryDistribution(tenantId);
 
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("requestId", traceId(request));
@@ -297,35 +302,50 @@ public class V1OpsController extends BaseApiController {
         LocalDateTime now = nowAt(zoneId);
         ZonedDateTime zoneNow = ZonedDateTime.now(zoneId);
         LocalDateTime from = zoneNow.minusHours(24).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
-        List<LeadImportJob> allJobs = leadImportJobRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
-        List<LeadImportJob> jobs = new ArrayList<LeadImportJob>();
-        for (LeadImportJob row : allJobs) {
-            if (row.getCreatedAt() != null && !row.getCreatedAt().isBefore(from)) {
-                jobs.add(row);
+        long total = 0L;
+        long running = 0L;
+        long success = 0L;
+        long partial = 0L;
+        long failed = 0L;
+        long canceled = 0L;
+        long processedRows = 0L;
+        long failedRows = 0L;
+        List<Long> durations = new ArrayList<Long>();
+        final int batchSize = 500;
+        for (int page = 0; ; page++) {
+            List<LeadImportJob> jobs = leadImportJobRepository.findByTenantIdAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                    tenantId,
+                    from,
+                    PageRequest.of(page, batchSize)
+            );
+            if (jobs.isEmpty()) {
+                break;
+            }
+            for (LeadImportJob row : jobs) {
+                total++;
+                String status = row.getStatus() == null ? "" : row.getStatus().trim().toUpperCase(Locale.ROOT);
+                if ("PENDING".equals(status) || "RUNNING".equals(status)) running++;
+                if ("SUCCESS".equals(status)) success++;
+                if ("PARTIAL_SUCCESS".equals(status)) partial++;
+                if ("FAILED".equals(status)) failed++;
+                if ("CANCELED".equals(status)) canceled++;
+                processedRows += row.getProcessedRows() == null ? 0L : row.getProcessedRows();
+                failedRows += row.getFailCount() == null ? 0L : row.getFailCount();
+
+                if (row.getCreatedAt() == null) continue;
+                if (!isTerminal(status)) continue;
+                LocalDateTime end = row.getUpdatedAt() == null ? now : row.getUpdatedAt();
+                long ms = Math.max(0L, Duration.between(row.getCreatedAt(), end).toMillis());
+                durations.add(ms);
+            }
+            if (jobs.size() < batchSize) {
+                break;
             }
         }
-
-        long total = jobs.size();
-        long running = jobs.stream().filter(j -> "PENDING".equalsIgnoreCase(j.getStatus()) || "RUNNING".equalsIgnoreCase(j.getStatus())).count();
-        long success = jobs.stream().filter(j -> "SUCCESS".equalsIgnoreCase(j.getStatus())).count();
-        long partial = jobs.stream().filter(j -> "PARTIAL_SUCCESS".equalsIgnoreCase(j.getStatus())).count();
-        long failed = jobs.stream().filter(j -> "FAILED".equalsIgnoreCase(j.getStatus())).count();
-        long canceled = jobs.stream().filter(j -> "CANCELED".equalsIgnoreCase(j.getStatus())).count();
 
         long completed = success + partial + failed + canceled;
         double successRate = completed == 0 ? 1.0 : ((double) (success + partial) / (double) completed);
         double failureRate = completed == 0 ? 0.0 : ((double) failed / (double) completed);
-        long processedRows = jobs.stream().mapToLong(j -> j.getProcessedRows() == null ? 0 : j.getProcessedRows()).sum();
-        long failedRows = jobs.stream().mapToLong(j -> j.getFailCount() == null ? 0 : j.getFailCount()).sum();
-
-        List<Long> durations = new ArrayList<Long>();
-        for (LeadImportJob row : jobs) {
-            if (row.getCreatedAt() == null) continue;
-            if (!isTerminal(row.getStatus())) continue;
-            LocalDateTime end = row.getUpdatedAt() == null ? now : row.getUpdatedAt();
-            long ms = Math.max(0L, Duration.between(row.getCreatedAt(), end).toMillis());
-            durations.add(ms);
-        }
         Collections.sort(durations);
         long avgDurationMs = durations.isEmpty() ? 0L : (long) durations.stream().mapToLong(Long::longValue).average().orElse(0.0);
         long p95DurationMs = durations.isEmpty() ? 0L : durations.get(Math.max(0, (int) Math.ceil(durations.size() * 0.95) - 1));
@@ -357,24 +377,24 @@ public class V1OpsController extends BaseApiController {
                 || "CANCELED".equalsIgnoreCase(status);
     }
 
-    private Map<String, Object> buildRetryDistribution(List<NotificationJob> jobs) {
-        long zero = 0;
-        long low = 0;
-        long high = 0;
-        for (NotificationJob job : jobs) {
-            int count = job.getRetryCount() == null ? 0 : job.getRetryCount();
-            if (count <= 0) {
-                zero++;
-            } else if (count <= 2) {
-                low++;
-            } else {
-                high++;
-            }
-        }
+    private Map<String, Object> buildRetryDistribution(String tenantId) {
+        Map<String, Long> groupedBuckets = toLongCountMap(notificationJobRepository.countRetryBuckets(tenantId));
         Map<String, Object> out = new LinkedHashMap<String, Object>();
-        out.put("retry0", zero);
-        out.put("retry1to2", low);
-        out.put("retry3plus", high);
+        out.put("retry0", groupedBuckets.containsKey("RETRY0") ? groupedBuckets.get("RETRY0") : 0L);
+        out.put("retry1to2", groupedBuckets.containsKey("RETRY1TO2") ? groupedBuckets.get("RETRY1TO2") : 0L);
+        out.put("retry3plus", groupedBuckets.containsKey("RETRY3PLUS") ? groupedBuckets.get("RETRY3PLUS") : 0L);
+        return out;
+    }
+
+    private Map<String, Long> toLongCountMap(List<Object[]> rows) {
+        Map<String, Long> out = new LinkedHashMap<String, Long>();
+        if (rows == null) return out;
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2) continue;
+            String key = row[0] == null ? "UNKNOWN" : String.valueOf(row[0]).trim().toUpperCase(Locale.ROOT);
+            Number count = row[1] instanceof Number ? (Number) row[1] : 0;
+            out.put(key, count.longValue());
+        }
         return out;
     }
 

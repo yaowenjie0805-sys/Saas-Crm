@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 评论实体 - 团队协作功能
+ * 璇勮瀹炰綋 - 鍥㈤槦鍗忎綔鍔熻兘
  */
 @Entity
 @Table(name = "comments")
@@ -75,7 +75,7 @@ public class Comment {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    // 瞬时字段，不存储
+    // 鐬椂瀛楁锛屼笉瀛樺偍
     @Transient
     private java.util.List<Comment> replies;
 
@@ -87,7 +87,7 @@ public class Comment {
         if (updatedAt == null) updatedAt = now;
         if (likeCount == null) likeCount = 0;
         if (isDeleted == null) isDeleted = false;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

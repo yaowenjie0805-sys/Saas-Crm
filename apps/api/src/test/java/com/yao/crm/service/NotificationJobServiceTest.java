@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.NotificationJob;
 import com.yao.crm.repository.NotificationJobRepository;
@@ -17,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -35,6 +38,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationJobServiceTest {
+    private static final String TENANT_OTHER = TENANT_TEST + "-other";
 
     @Mock
     private NotificationJobRepository jobRepository;
@@ -173,23 +177,23 @@ class NotificationJobServiceTest {
     void shouldDeduplicateAndNormalizeProviders_whenEnqueueSlaEscalated() throws Exception {
         service = createService(100, " wecom , , DINGTALK, wecom,  dingTalk  ");
 
-        when(jobRepository.findByTenantIdAndDedupeKeyIn(eq("tenant-1"), any(List.class)))
+        when(jobRepository.findByTenantIdAndDedupeKeyIn(eq(TENANT_TEST), any(List.class)))
                 .thenReturn(Collections.<NotificationJob>emptyList());
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"event\":\"approval_sla_escalated\"}");
         when(jobRepository.save(any(NotificationJob.class))).thenAnswer(inv -> inv.getArgument(0));
         when(idGenerator.generate(anyString())).thenReturn("noj-123");
 
-        service.enqueueSlaEscalated("tenant-1", "instance-1", "task-1", "approver-1");
+        service.enqueueSlaEscalated(TENANT_TEST, "instance-1", "task-1", "approver-1");
 
         ArgumentCaptor<List> dedupeKeysCaptor = ArgumentCaptor.forClass(List.class);
-        verify(jobRepository, times(1)).findByTenantIdAndDedupeKeyIn(eq("tenant-1"), dedupeKeysCaptor.capture());
+        verify(jobRepository, times(1)).findByTenantIdAndDedupeKeyIn(eq(TENANT_TEST), dedupeKeysCaptor.capture());
         List dedupeKeys = dedupeKeysCaptor.getValue();
         assertEquals(2, dedupeKeys.size());
-        assertTrue(dedupeKeys.contains("tenant-1|instance-1|task-1|approval_sla_escalated|WECOM"));
-        assertTrue(dedupeKeys.contains("tenant-1|instance-1|task-1|approval_sla_escalated|DINGTALK"));
+        assertTrue(dedupeKeys.contains(TENANT_TEST + "|instance-1|task-1|approval_sla_escalated|WECOM"));
+        assertTrue(dedupeKeys.contains(TENANT_TEST + "|instance-1|task-1|approval_sla_escalated|DINGTALK"));
 
         verify(jobRepository, times(2)).save(any(NotificationJob.class));
-        verify(auditLogService, times(2)).record(eq("system"), eq("SYSTEM"), eq("NOTIFY_ENQUEUED"), eq("NOTIFICATION_JOB"), anyString(), eq("Queued notification job"), eq("tenant-1"));
+        verify(auditLogService, times(2)).record(eq("system"), eq("SYSTEM"), eq("NOTIFY_ENQUEUED"), eq("NOTIFICATION_JOB"), anyString(), eq("Queued notification job"), eq(TENANT_TEST));
     }
 
     @Test
@@ -197,7 +201,7 @@ class NotificationJobServiceTest {
     void shouldReturnImmediately_whenProvidersAreBlank() {
         service = createService(100, " ,  , ");
 
-        service.enqueueSlaEscalated("tenant-1", "instance-1", "task-1", "approver-1");
+        service.enqueueSlaEscalated(TENANT_TEST, "instance-1", "task-1", "approver-1");
 
         verifyNoInteractions(jobRepository, auditLogService, objectMapper, integrationWebhookService);
     }
@@ -207,22 +211,22 @@ class NotificationJobServiceTest {
     void shouldUseFailedAsEffectiveStatus_whenRetryByFilterUsesAll() {
         NotificationJob failed = createJob("job-failed-1");
         failed.setStatus("FAILED");
-        when(jobRepository.findByTenantIdAndStatus(eq("tenant-1"), eq("FAILED"), any(Pageable.class)))
+        when(jobRepository.findByTenantIdAndStatus(eq(TENANT_TEST), eq("FAILED"), any(Pageable.class)))
                 .thenReturn(new PageImpl<NotificationJob>(Collections.singletonList(failed)));
         when(jobRepository.save(any(NotificationJob.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Map<String, Object> summary = service.retryByFilter("tenant-1", " ALL ", 1, 20);
+        Map<String, Object> summary = service.retryByFilter(TENANT_TEST, " ALL ", 1, 20);
 
         assertEquals("FAILED", summary.get("status"));
         assertEquals(1, summary.get("requested"));
         assertEquals(1, summary.get("succeeded"));
-        verify(jobRepository).findByTenantIdAndStatus(eq("tenant-1"), eq("FAILED"), any(Pageable.class));
+        verify(jobRepository).findByTenantIdAndStatus(eq(TENANT_TEST), eq("FAILED"), any(Pageable.class));
     }
 
     @Test
     @DisplayName("shouldSkipRetry_whenRetryByFilterUsesNonRetryableStatus")
     void shouldSkipRetry_whenRetryByFilterUsesNonRetryableStatus() {
-        Map<String, Object> summary = service.retryByFilter("tenant-1", "SUCCESS", 1, 20);
+        Map<String, Object> summary = service.retryByFilter(TENANT_TEST, "SUCCESS", 1, 20);
 
         assertEquals("SUCCESS", summary.get("status"));
         assertEquals(0, summary.get("requested"));
@@ -232,10 +236,50 @@ class NotificationJobServiceTest {
         verify(jobRepository, never()).save(any(NotificationJob.class));
     }
 
+    @Test
+    @DisplayName("shouldBatchRetryJobsInBulk_whenBatchRetryByIds")
+    void shouldBatchRetryJobsInBulk_whenBatchRetryByIds() {
+        NotificationJob failed = createJob("job-failed");
+        failed.setStatus("FAILED");
+        NotificationJob forbidden = createJob("job-forbidden");
+        forbidden.setTenantId(TENANT_OTHER);
+        NotificationJob notFailed = createJob("job-not-failed");
+        notFailed.setStatus("SUCCESS");
+
+        List<String> jobIds = Arrays.asList(" job-failed ", null, "missing", "job-forbidden", " job-not-failed ", "job-failed");
+
+        when(jobRepository.findAllById(any())).thenReturn(Arrays.asList(failed, forbidden, notFailed));
+
+        Map<String, Object> summary = service.batchRetryByIds(TENANT_TEST, jobIds);
+
+        assertEquals(6, summary.get("requested"));
+        assertEquals(1, summary.get("succeeded"));
+        assertEquals(3, summary.get("skipped"));
+        assertEquals(1, summary.get("notFound"));
+        assertEquals(1, summary.get("forbidden"));
+
+        ArgumentCaptor<Iterable> idCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(jobRepository).findAllById(idCaptor.capture());
+        List<String> capturedIds = new ArrayList<String>();
+        for (Object rawId : idCaptor.getValue()) {
+            capturedIds.add((String) rawId);
+        }
+        assertEquals(Arrays.asList("job-failed", "missing", "job-forbidden", "job-not-failed"), capturedIds);
+
+        ArgumentCaptor<List> saveCaptor = ArgumentCaptor.forClass(List.class);
+        verify(jobRepository).saveAll(saveCaptor.capture());
+        List<NotificationJob> savedJobs = saveCaptor.getValue();
+        assertEquals(1, savedJobs.size());
+        assertEquals("job-failed", savedJobs.get(0).getId());
+        assertEquals("RETRY", savedJobs.get(0).getStatus());
+
+        verify(auditLogService).record(eq("system"), eq("SYSTEM"), eq("NOTIFY_BATCH_RETRY"), eq("NOTIFICATION_JOB"), eq(TENANT_TEST), anyString(), eq(TENANT_TEST));
+    }
+
     private NotificationJob createJob(String id) {
         NotificationJob job = new NotificationJob();
         job.setId(id);
-        job.setTenantId("tenant-1");
+        job.setTenantId(TENANT_TEST);
         job.setEventType("approval_sla_escalated");
         job.setTarget("WECOM");
         job.setPayload("{\"event\":\"approval_sla_escalated\"}");
@@ -265,3 +309,4 @@ class NotificationJobServiceTest {
         );
     }
 }
+

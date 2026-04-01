@@ -85,3 +85,12 @@ verify-*.png
 # -------------------------------------------
 .codeartsdoer/
 .qoder/
+.lingma/
+.arts/
+.claude/
+
+# Backups
+backups/
+
+# Evaluation artifacts
+evaluation/

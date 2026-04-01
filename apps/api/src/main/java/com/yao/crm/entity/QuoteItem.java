@@ -44,7 +44,7 @@ public class QuoteItem {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (quantity == null || quantity < 1) quantity = 1;
         if (unitPrice == null) unitPrice = 0L;
         if (discountRate == null) discountRate = 0.0;
@@ -88,4 +88,3 @@ public class QuoteItem {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
-

@@ -5,17 +5,24 @@ import com.yao.crm.repository.AuditLogRepository;
 import com.yao.crm.service.AuditExportJobService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import javax.persistence.criteria.Predicate;
 import javax.servlet.http.HttpServletRequest;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.*;
@@ -27,6 +34,9 @@ public class AuditController extends BaseApiController {
     private final AuditLogService auditLogService;
     private final AuditLogRepository auditLogRepository;
     private final AuditExportJobService auditExportJobService;
+
+    private static final int EXPORT_BATCH_SIZE = 500;
+    private static final int MAX_EXPORT_ROWS = 10000;
 
     public AuditController(AuditLogService auditLogService,
                            AuditLogRepository auditLogRepository,
@@ -67,7 +77,7 @@ public class AuditController extends BaseApiController {
         int safeSize = Math.max(1, Math.min(100, size));
         Pageable pageable = buildPageable(
                 safePage, safeSize, sortBy, sortDir,
-                CollectionsUtil.setOf("username", "role", "action", "resource", "createdAt"),
+                new HashSet<>(Set.of("username", "role", "action", "resource", "createdAt")),
                 "createdAt"
         );
 
@@ -103,39 +113,61 @@ public class AuditController extends BaseApiController {
 
         LocalDateTime fromTime = parseDateStart(request, from);
         LocalDateTime toTime = parseDateEnd(request, to);
-        if ((!isBlank(from) && fromTime == null) || (!isBlank(to) && toTime == null)) {
+        if (((!isBlank(from)) && fromTime == null) || ((!isBlank(to)) && toTime == null)) {
             return ResponseEntity.badRequest().body(legacyErrorByKey(request, "invalid_date_format", "BAD_REQUEST", null));
         }
 
         String tenantId = currentTenant(request);
-        List<AuditLog> logs = auditLogRepository.findAll(buildAuditSpec(tenantId, username, role, action, fromTime, toTime));
+        Specification<AuditLog> spec = buildAuditSpec(tenantId, username, role, action, fromTime, toTime);
+        long totalRows = auditLogRepository.count(spec);
+        if (totalRows > MAX_EXPORT_ROWS) {
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("requestedRows", totalRows);
+            details.put("limit", MAX_EXPORT_ROWS);
+            return ResponseEntity.status(413).body(
+                    legacyErrorByKey(request, "audit_export_limit_exceeded", "REQUEST_ENTITY_TOO_LARGE", details)
+            );
+        }
         boolean zh = request.getHeader("Accept-Language") != null
                 && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
-        StringBuilder csv = new StringBuilder();
-        csv.append('\uFEFF');
-        if (zh) {
-            csv.append("id,用户,角色,动作,资源,资源ID,详情,创建时间\n");
-        } else {
-            csv.append("id,username,role,action,resource,resourceId,details,createdAt\n");
-        }
-        for (AuditLog log : logs) {
-            csv.append(escapeCsv(log.getId())).append(',')
-                    .append(escapeCsv(log.getUsername())).append(',')
-                    .append(escapeCsv(log.getRole())).append(',')
-                    .append(escapeCsv(log.getAction())).append(',')
-                    .append(escapeCsv(log.getResource())).append(',')
-                    .append(escapeCsv(log.getResourceId())).append(',')
-                    .append(escapeCsv(log.getDetails())).append(',')
-                    .append(escapeCsv(log.getCreatedAt() == null ? "" : log.getCreatedAt().toString()))
-                    .append('\n');
-        }
+
+        StreamingResponseBody stream = outputStream -> {
+            try (Writer writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))) {
+                writer.write('\uFEFF');
+                writer.write(zh
+                        ? "id,用户,角色,动作,资源,资源ID,详情,创建时间\n"
+                        : "id,username,role,action,resource,resourceId,details,createdAt\n");
+                int page = 0;
+                long emitted = 0;
+                while (true) {
+                    Page<AuditLog> batch = auditLogRepository.findAll(
+                            spec,
+                            PageRequest.of(page, EXPORT_BATCH_SIZE, Sort.by(Sort.Direction.DESC, "createdAt"))
+                    );
+                    if (batch.isEmpty()) {
+                        break;
+                    }
+                    for (AuditLog log : batch.getContent()) {
+                        writeAuditLine(writer, log);
+                        emitted++;
+                    }
+                    writer.flush();
+                    if (!batch.hasNext() || emitted >= totalRows) {
+                        break;
+                    }
+                    page++;
+                }
+                writer.flush();
+            } catch (IOException ex) {
+                throw new RuntimeException("Failed to stream audit export", ex);
+            }
+        };
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + (zh ? "审计日志.csv" : "audit-logs.csv") + "\"")
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
-                .body(csv.toString());
+                .body(stream);
     }
-
     @PostMapping("/audit-logs/export-jobs")
     public ResponseEntity<?> createExportJob(
             HttpServletRequest request,
@@ -281,6 +313,17 @@ public class AuditController extends BaseApiController {
         }
     }
 
+    private void writeAuditLine(Writer writer, AuditLog log) throws IOException {
+        writer.append(escapeCsv(log.getId())).append(',');
+        writer.append(escapeCsv(log.getUsername())).append(',');
+        writer.append(escapeCsv(log.getRole())).append(',');
+        writer.append(escapeCsv(log.getAction())).append(',');
+        writer.append(escapeCsv(log.getResource())).append(',');
+        writer.append(escapeCsv(log.getResourceId())).append(',');
+        writer.append(escapeCsv(log.getDetails())).append(',');
+        writer.append(escapeCsv(log.getCreatedAt() == null ? "" : log.getCreatedAt().toString())).append('\n');
+    }
+
     private Specification<AuditLog> buildAuditSpec(String tenantId, String username, String role, String action, LocalDateTime fromTime, LocalDateTime toTime) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<Predicate>();
@@ -290,8 +333,7 @@ public class AuditController extends BaseApiController {
             if (!isBlank(action)) predicates.add(cb.equal(root.get("action"), action));
             if (fromTime != null) predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromTime));
             if (toTime != null) predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), toTime));
-            return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
+            return cb.and(predicates.toArray(Predicate[]::new));
         };
     }
 }

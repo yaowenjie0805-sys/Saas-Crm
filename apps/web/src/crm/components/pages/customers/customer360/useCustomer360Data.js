@@ -32,6 +32,10 @@ import {
   rebalanceAdaptivePrefetchModules,
 } from './customer360DataHelpers'
 
+const MODULE_CACHE_MAX_ENTRIES = CUSTOMER360_MODULE_KEYS.length * 20
+const PREFETCH_SIGNATURE_MAX_ENTRIES = CUSTOMER360_PREFETCH_MODULES.length * 20
+const buildPrefetchTrackingKey = (customerIdText, moduleName) => `${customerIdText}:${moduleName}`
+
 export default function useCustomer360Data({
   t,
   token,
@@ -53,9 +57,43 @@ export default function useCustomer360Data({
   const [detailModuleMeta, setDetailModuleMeta] = useState(() => createCustomer360ModuleMeta())
   const detailsAbortRef = useRef(null)
   const prefetchAbortRef = useRef(null)
-  const activePrefetchModulesRef = useRef(new Set())
+  const activePrefetchModulesRef = useRef(new Map())
   const moduleCacheRef = useRef(new Map())
-  const prefetchedSignaturesRef = useRef(new Set())
+  const prefetchedSignaturesRef = useRef(new Map())
+  const pruneCacheEntries = useCallback((store, ttlMs, maxEntries, now = Date.now()) => {
+    if (!store.size) return
+    for (const [key, entry] of store) {
+      if (now - entry.at > ttlMs) {
+        store.delete(key)
+      }
+    }
+    if (store.size <= maxEntries) return
+    const sortedEntries = [...store.entries()].sort(([, a], [, b]) => (a.at || 0) - (b.at || 0))
+    let index = 0
+    while (store.size > maxEntries && index < sortedEntries.length) {
+      store.delete(sortedEntries[index][0])
+      index += 1
+    }
+  }, [])
+  const cleanupModuleCache = useCallback((now = Date.now()) => {
+    pruneCacheEntries(moduleCacheRef.current, CUSTOMER360_MODULE_TTL_MS, MODULE_CACHE_MAX_ENTRIES, now)
+  }, [pruneCacheEntries])
+  const cleanupPrefetchedSignatures = useCallback((now = Date.now()) => {
+    pruneCacheEntries(prefetchedSignaturesRef.current, CUSTOMER360_MODULE_TTL_MS, PREFETCH_SIGNATURE_MAX_ENTRIES, now)
+  }, [pruneCacheEntries])
+  const isPrefetchedSignatureFresh = (signature, now = Date.now()) => {
+    const entry = prefetchedSignaturesRef.current.get(signature)
+    if (!entry) return false
+    if (now - entry.at > CUSTOMER360_MODULE_TTL_MS) {
+      prefetchedSignaturesRef.current.delete(signature)
+      return false
+    }
+    return true
+  }
+  const trackPrefetchedSignature = useCallback((signature, now = Date.now()) => {
+    prefetchedSignaturesRef.current.set(signature, { at: now })
+    cleanupPrefetchedSignatures(now)
+  }, [cleanupPrefetchedSignatures])
   const adaptivePrefetchModulesRef = useRef([...CUSTOMER360_PREFETCH_MODULES])
   const adaptiveModuleStatsRef = useRef({})
   const detailsCustomerIdRef = useRef('')
@@ -86,7 +124,8 @@ export default function useCustomer360Data({
     }
     if (!prefetchAbortRef.current) return
     prefetchAbortRef.current.abort()
-    ;[...activePrefetchModulesRef.current].forEach((moduleName) => markCustomer360PrefetchAbort?.(moduleName))
+    const moduleNamesToAbort = new Set(activePrefetchModulesRef.current.values())
+    moduleNamesToAbort.forEach((moduleName) => markCustomer360PrefetchAbort?.(moduleName))
     activePrefetchModulesRef.current.clear()
   }, [markCustomer360PrefetchAbort])
 
@@ -155,6 +194,7 @@ export default function useCustomer360Data({
           moduleName,
           moduleServerFilterSignature(moduleName, MAX_ASSOC_ITEMS),
         )
+        cleanupModuleCache(now)
         const cacheEntry = moduleCacheRef.current.get(signature)
         const metaEntry = detailModuleMetaRef.current?.[moduleName]
         const moduleData = detailModulesRef.current?.[moduleName]
@@ -165,7 +205,7 @@ export default function useCustomer360Data({
           setDetailModules((prev) => ({ ...prev, [moduleName]: reusedData }))
           setDetailModuleMeta((prev) => ({ ...prev, [moduleName]: { ...(prev[moduleName] || {}), loading: false, error: '', signature, lastLoadedAt: cacheHit ? cacheEntry.at : Number(metaEntry?.lastLoadedAt || now) } }))
           markCustomer360ModuleCacheHit?.(true, moduleName)
-          const prefetchedHit = cacheHit && prefetchedSignaturesRef.current.has(signature)
+          const prefetchedHit = cacheHit && isPrefetchedSignatureFresh(signature)
           if (source === 'open' && adaptivePrefetchModulesRef.current.includes(moduleName)) {
             markCustomer360PrefetchHit?.(prefetchedHit, moduleName)
             if (prefetchedHit) prefetchedSignaturesRef.current.delete(signature)
@@ -191,9 +231,11 @@ export default function useCustomer360Data({
         try {
           const data = await moduleLoaders[moduleName]()
           if (controller.signal.aborted) return
-          moduleCacheRef.current.set(signature, { at: Date.now(), signature, data })
+          const loadedAt = Date.now()
+          moduleCacheRef.current.set(signature, { at: loadedAt, signature, data })
+          cleanupModuleCache(loadedAt)
           setDetailModules((prev) => ({ ...prev, [moduleName]: data }))
-          setDetailModuleMeta((prev) => ({ ...prev, [moduleName]: { ...(prev[moduleName] || {}), loading: false, error: '', signature, lastLoadedAt: Date.now() } }))
+          setDetailModuleMeta((prev) => ({ ...prev, [moduleName]: { ...(prev[moduleName] || {}), loading: false, error: '', signature, lastLoadedAt: loadedAt } }))
         } catch (error) {
           if (controller.signal.aborted) return
           const message = error?.requestId ? `${error?.message || t('loadFailed')} [${error.requestId}]` : (error?.message || t('loadFailed'))
@@ -223,7 +265,7 @@ export default function useCustomer360Data({
       if ((fullRefresh || shouldReset) && isLatestRequest) setDetailLoading(false)
       if (isLatestRequest) markCustomer360ModuleRefreshLatency?.('all', Math.max(Date.now() - startedAt, 0))
     }
-  }, [lang, markCustomer360ModuleCacheHit, markCustomer360ModuleRefreshLatency, markCustomer360PrefetchHit, markCustomer360PrefetchModules, t, token])
+  }, [cleanupModuleCache, lang, markCustomer360ModuleCacheHit, markCustomer360ModuleRefreshLatency, markCustomer360PrefetchHit, markCustomer360PrefetchModules, t, token])
 
   const refreshCustomer360Modules = useCallback(async (modules = []) => {
     if (!detail?.id) return
@@ -261,11 +303,13 @@ export default function useCustomer360Data({
       toArray,
     })
     const prefetchModule = async (customerIdText, moduleName) => {
-      activePrefetchModulesRef.current.add(moduleName)
+      const trackingKey = buildPrefetchTrackingKey(customerIdText, moduleName)
+      activePrefetchModulesRef.current.set(trackingKey, moduleName)
       try {
         const signature = buildCustomer360ModuleSignature(customerIdText, moduleName, getCustomer360PrefetchSignature(moduleName, MAX_ASSOC_ITEMS))
-        const cacheEntry = moduleCacheRef.current.get(signature)
         const nowAt = Date.now()
+        cleanupModuleCache(nowAt)
+        const cacheEntry = moduleCacheRef.current.get(signature)
         if (cacheEntry && cacheEntry.signature === signature && (nowAt - cacheEntry.at) <= CUSTOMER360_MODULE_TTL_MS) return
         const prefetchLoaders = prefetchLoadersByModule(customerIdText)
         const loadModule = prefetchLoaders[moduleName]
@@ -273,10 +317,12 @@ export default function useCustomer360Data({
         let data = []
         data = await loadModule()
         if (controller.signal.aborted) return
-        moduleCacheRef.current.set(signature, { at: Date.now(), signature, data })
-        prefetchedSignaturesRef.current.add(signature)
+        const cachedAt = Date.now()
+        moduleCacheRef.current.set(signature, { at: cachedAt, signature, data })
+        cleanupModuleCache(cachedAt)
+        trackPrefetchedSignature(signature, cachedAt)
       } finally {
-        activePrefetchModulesRef.current.delete(moduleName)
+        activePrefetchModulesRef.current.delete(trackingKey)
       }
     }
     try {
@@ -287,7 +333,7 @@ export default function useCustomer360Data({
     } catch {
       // prefetch failures are non-blocking
     }
-  }, [abortPrefetchRequests, activePage, detailMode, lang, rowIndexById, rows, token])
+  }, [abortPrefetchRequests, activePage, cleanupModuleCache, detailMode, lang, rowIndexById, rows, token, trackPrefetchedSignature])
 
   const scheduleNeighborPrefetch = useCallback((row) => {
     if (!row?.id || detailMode !== 'drawer') return

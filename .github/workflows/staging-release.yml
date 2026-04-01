@@ -6,7 +6,7 @@ on:
       ref:
         description: "Git ref to release to staging"
         required: false
-        default: "master"
+        default: "main"
 
 concurrency:
   group: staging-release-${{ github.ref }}
@@ -18,6 +18,7 @@ permissions:
 jobs:
   staging-release:
     runs-on: windows-latest
+    timeout-minutes: 60
     environment: staging
     env:
       AUTH_TOKEN_SECRET: ${{ secrets.CI_AUTH_TOKEN_SECRET }}
@@ -43,21 +44,21 @@ jobs:
       STAGING_APPROVAL_STATUS: approved
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.event.inputs.ref || 'master' }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: "temurin"
-          java-version: "8"
+          java-version: "17"
           cache: "maven"
 
       - name: Install Frontend Dependencies
@@ -70,7 +71,7 @@ jobs:
         run: npm run build
 
       - name: Backend Tests
-        run: npm run test:backend
+        run: npm run test:backend:coverage
 
       - name: Backend Package
         run: mvn -f apps/api/pom.xml -DskipTests package
@@ -88,6 +89,35 @@ jobs:
 
       - name: Security Scan
         run: npm run security:scan
+        env:
+          SECURITY_SCAN_JAVA_ENABLED: "true"
+          SECURITY_SCAN_JAVA_REQUIRED: "true"
+          SECURITY_SCAN_JAVA_TIMEOUT_MS: "300000"
+
+      - name: Security Scan Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $reportPath = "logs/security/security-scan-latest.json"
+          if (Test-Path $reportPath) {
+            $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+            $secretFindings = 0
+            if ($null -ne $report.checks.secretScan.findings) {
+              $secretFindings = @($report.checks.secretScan.findings).Count
+            }
+            Write-Host ("SECURITY_REPORT pass={0} npmHigh={1} npmCritical={2} secretFindings={3} sbomPass={4} javaStatus={5}" -f $report.pass, $report.checks.npmAudit.high, $report.checks.npmAudit.critical, $secretFindings, $report.checks.sbom.pass, $report.checks.javaDependencyScan.status)
+          } else {
+            Write-Host "SECURITY_REPORT missing=logs/security/security-scan-latest.json"
+          }
+
+      - name: Upload Security Artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: staging-security-scan-${{ github.run_number }}
+          path: |
+            logs/security/**
+          if-no-files-found: warn
 
       - name: Release Snapshot
         run: npm run release:snapshot
@@ -112,7 +142,8 @@ jobs:
           if (Test-Path logs\staging\staging-deploy-latest.json) { Get-Content logs\staging\staging-deploy-latest.json }
 
       - name: Upload Staging Evidence
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: staging-evidence-${{ github.run_number }}
           path: |
@@ -122,3 +153,4 @@ jobs:
             logs/preflight/**
             logs/security/**
             logs/staging/**
+

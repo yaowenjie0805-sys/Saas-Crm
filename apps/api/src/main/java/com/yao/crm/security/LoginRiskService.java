@@ -3,6 +3,9 @@ package com.yao.crm.security;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -34,6 +37,8 @@ public class LoginRiskService {
     private final long lockMs;
     private final long cleanupIntervalMs;
     private final ConcurrentHashMap<String, AttemptState> states = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Set<String>> tenantUserIndex = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Set<String>> usernameIndex = new ConcurrentHashMap<>();
     private final Object cleanupLock = new Object();
     private volatile long lastCleanupAt;
 
@@ -51,9 +56,13 @@ public class LoginRiskService {
     }
 
     public boolean isLocked(String username, String ip) {
+        throw new IllegalStateException("tenant_id_required");
+    }
+
+    public boolean isLocked(String tenantId, String username, String ip) {
         long now = System.currentTimeMillis();
         cleanupIfNeeded(now);
-        AttemptState state = states.get(key(username, ip));
+        AttemptState state = states.get(key(tenantId, username, ip));
         if (state == null) {
             return false;
         }
@@ -61,20 +70,17 @@ public class LoginRiskService {
     }
 
     public boolean isUserLocked(String username) {
-        long now = System.currentTimeMillis();
-        cleanupIfNeeded(now);
-        String prefix = (username == null ? "" : username.trim().toLowerCase()) + "|";
-        return states.keySet().stream().anyMatch(k -> {
-            if (!k.startsWith(prefix)) return false;
-            AttemptState state = states.get(k);
-            return state != null && state.lockedUntil > now;
-        });
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public long remainingSeconds(String username, String ip) {
+        throw new IllegalStateException("tenant_id_required");
+    }
+
+    public long remainingSeconds(String tenantId, String username, String ip) {
         long now = System.currentTimeMillis();
         cleanupIfNeeded(now);
-        AttemptState state = states.get(key(username, ip));
+        AttemptState state = states.get(key(tenantId, username, ip));
         if (state == null) {
             return 0;
         }
@@ -86,22 +92,17 @@ public class LoginRiskService {
     }
 
     public long remainingUserSeconds(String username) {
-        long now = System.currentTimeMillis();
-        cleanupIfNeeded(now);
-        String prefix = (username == null ? "" : username.trim().toLowerCase()) + "|";
-        return states.keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .map(k -> states.get(k))
-                .filter(state -> state != null && state.lockedUntil > now)
-                .mapToLong(state -> (state.lockedUntil - now + 999) / 1000)
-                .max()
-                .orElse(0);
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public void recordFailure(String username, String ip) {
+        throw new IllegalStateException("tenant_id_required");
+    }
+
+    public void recordFailure(String tenantId, String username, String ip) {
         long now = System.currentTimeMillis();
         cleanupIfNeeded(now);
-        String k = key(username, ip);
+        String k = key(tenantId, username, ip);
         
         states.compute(k, (key, existing) -> {
             AttemptState state = existing;
@@ -128,15 +129,102 @@ public class LoginRiskService {
             
             return state;
         });
+        indexKey(k, tenantId, username);
     }
 
     public void clear(String username, String ip) {
-        states.remove(key(username, ip));
+        throw new IllegalStateException("tenant_id_required");
+    }
+
+    public void clear(String tenantId, String username, String ip) {
+        String fullKey = key(tenantId, username, ip);
+        AttemptState removed = states.remove(fullKey);
+        if (removed != null) {
+            removeKeyFromIndexes(fullKey);
+        }
+    }
+
+    public boolean isUserLocked(String tenantId, String username) {
+        long now = System.currentTimeMillis();
+        cleanupIfNeeded(now);
+        Set<String> keys = tenantUserIndex.get(tenantUserPrefix(tenantId, username));
+        if (keys == null || keys.isEmpty()) {
+            return false;
+        }
+        for (String key : keys) {
+            AttemptState state = states.get(key);
+            if (state != null && state.lockedUntil > now) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public long remainingUserSeconds(String tenantId, String username) {
+        long now = System.currentTimeMillis();
+        cleanupIfNeeded(now);
+        Set<String> keys = tenantUserIndex.get(tenantUserPrefix(tenantId, username));
+        if (keys == null || keys.isEmpty()) {
+            return 0;
+        }
+        long max = 0;
+        for (String key : keys) {
+            AttemptState state = states.get(key);
+            if (state == null || state.lockedUntil <= now) {
+                continue;
+            }
+            long remaining = (state.lockedUntil - now + 999) / 1000;
+            if (remaining > max) {
+                max = remaining;
+            }
+        }
+        return max;
     }
 
     public void clearUser(String username) {
-        String prefix = (username == null ? "" : username.trim().toLowerCase()) + "|";
-        states.keySet().removeIf(k -> k.startsWith(prefix));
+        throw new IllegalStateException("tenant_id_required");
+    }
+
+    public void clearUser(String tenantId, String username) {
+        String prefix = tenantUserPrefix(tenantId, username);
+        Set<String> keys = tenantUserIndex.get(prefix);
+        if (keys == null || keys.isEmpty()) {
+            return;
+        }
+        for (String key : keys.toArray(new String[0])) {
+            AttemptState removed = states.remove(key);
+            if (removed != null) {
+                removeKeyFromIndexes(key);
+            }
+        }
+    }
+
+    private void indexKey(String key, String tenantId, String username) {
+        String prefix = tenantUserPrefix(tenantId, username);
+        tenantUserIndex.computeIfAbsent(prefix, p -> ConcurrentHashMap.newKeySet()).add(key);
+        String normalized = normalizeUsername(username);
+        usernameIndex.computeIfAbsent(normalized, p -> ConcurrentHashMap.newKeySet()).add(key);
+    }
+
+    private void removeKeyFromIndexes(String key) {
+        String[] parts = key.split("\\|", 3);
+        if (parts.length < 2) {
+            return;
+        }
+        String prefix = parts[0] + "|" + parts[1] + "|";
+        removeFromIndex(tenantUserIndex, prefix, key);
+        removeFromIndex(usernameIndex, normalizeUsername(parts[1]), key);
+    }
+
+    private void removeFromIndex(ConcurrentHashMap<String, Set<String>> index, String mapKey, String value) {
+        Set<String> keys = index.get(mapKey);
+        if (keys == null) {
+            return;
+        }
+        keys.remove(value);
+        if (keys.isEmpty()) {
+            index.remove(mapKey, keys);
+        }
     }
 
     private void cleanupIfNeeded(long now) {
@@ -154,8 +242,10 @@ public class LoginRiskService {
 
     private void cleanupExpiredStates(long now) {
         long retentionMs = Math.max(1L, Math.max(windowMs, lockMs));
-        for (String key : states.keySet()) {
-            AttemptState state = states.get(key);
+        Iterator<Map.Entry<String, AttemptState>> iterator = states.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, AttemptState> entry = iterator.next();
+            AttemptState state = entry.getValue();
             if (state == null) {
                 continue;
             }
@@ -163,12 +253,29 @@ public class LoginRiskService {
                 continue;
             }
             if (now - state.lastSeen >= retentionMs) {
-                states.remove(key, state);
+                String key = entry.getKey();
+                iterator.remove();
+                removeKeyFromIndexes(key);
             }
         }
     }
 
-    private String key(String username, String ip) {
-        return (username == null ? "" : username.trim().toLowerCase()) + "|" + (ip == null ? "unknown" : ip);
+    private String key(String tenantId, String username, String ip) {
+        return normalizeTenantId(tenantId) + "|" + normalizeUsername(username) + "|" + (ip == null ? "unknown" : ip);
+    }
+
+    private String tenantUserPrefix(String tenantId, String username) {
+        return normalizeTenantId(tenantId) + "|" + normalizeUsername(username) + "|";
+    }
+
+    private String normalizeTenantId(String tenantId) {
+        if (tenantId == null) throw new IllegalStateException("tenant_id_required");
+        String normalized = tenantId.trim().toLowerCase();
+        if (normalized.isEmpty()) throw new IllegalStateException("tenant_id_required");
+        return normalized;
+    }
+
+    private String normalizeUsername(String username) {
+        return username == null ? "" : username.trim().toLowerCase();
     }
 }

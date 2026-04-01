@@ -55,7 +55,7 @@ public class ApprovalTemplateVersion {
 
     @PrePersist
     public void prePersist() {
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
         if (status == null || status.trim().isEmpty()) status = "PUBLISHED";
         if (publishedBy == null || publishedBy.trim().isEmpty()) publishedBy = "system";
         if (publishedAt == null) publishedAt = LocalDateTime.now();

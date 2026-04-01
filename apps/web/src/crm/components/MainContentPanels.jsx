@@ -56,6 +56,7 @@ function MainContentPanels({
       {(activePage === 'dashboard' || activePage === 'reports') && (
         <DashboardPanel
           activePage={activePage}
+          apiContext={apiContext}
           refreshPage={refreshPage}
           stats={base.stats}
           reports={base.reports}

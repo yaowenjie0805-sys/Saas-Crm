@@ -1,5 +1,7 @@
 package com.yao.crm.repository;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.yao.crm.entity.Comment;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +28,7 @@ class CommentRepositoryTest {
         Comment parent = buildComment("parent-positive", 2);
         entityManager.persistAndFlush(parent);
 
-        commentRepository.decrementReplyCount(parent.getId());
+        commentRepository.decrementReplyCount(parent.getId(), TENANT_TEST);
         entityManager.flush();
         entityManager.clear();
 
@@ -39,7 +41,7 @@ class CommentRepositoryTest {
         Comment parent = buildComment("parent-zero", 0);
         entityManager.persistAndFlush(parent);
 
-        commentRepository.decrementReplyCount(parent.getId());
+        commentRepository.decrementReplyCount(parent.getId(), TENANT_TEST);
         entityManager.flush();
         entityManager.clear();
 
@@ -51,7 +53,7 @@ class CommentRepositoryTest {
         LocalDateTime now = LocalDateTime.now();
         Comment comment = new Comment();
         comment.setId(id);
-        comment.setTenantId("tenant-1");
+        comment.setTenantId(TENANT_TEST);
         comment.setEntityType("customer");
         comment.setEntityId("entity-1");
         comment.setAuthor("author");
@@ -65,3 +67,4 @@ class CommentRepositoryTest {
         return comment;
     }
 }
+

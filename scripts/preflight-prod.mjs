@@ -267,7 +267,7 @@ function checkSecurityEvidence() {
 
 function checkStagingEvidence() {
   const checks = []
-  const defaultRequire = envVal('GITHUB_REF_NAME', '').toLowerCase() === 'master' ? 'true' : 'false'
+  const defaultRequire = envVal('GITHUB_REF_NAME', '').toLowerCase() === 'main' ? 'true' : 'false'
   const requireStagingEvidence = envVal('PREFLIGHT_REQUIRE_STAGING_EVIDENCE', defaultRequire).toLowerCase() === 'true'
   if (!requireStagingEvidence) {
     checks.push(pass('staging release evidence', 'not required (PREFLIGHT_REQUIRE_STAGING_EVIDENCE=false)'))

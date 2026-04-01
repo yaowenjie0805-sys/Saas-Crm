@@ -7,7 +7,6 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.service.ValueNormalizerService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
@@ -50,7 +49,7 @@ public class CustomerController extends BaseApiController {
         int safePage = Math.max(1, page);
         int safeSize = Math.max(1, Math.min(50, size));
         Pageable pageable = buildPageable(safePage, safeSize, "updatedAt", "desc",
-                CollectionsUtil.setOf("name", "owner", "tag", "value", "status", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
                 "updatedAt");
         Page<Customer> result = customerRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
@@ -83,7 +82,7 @@ public class CustomerController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                CollectionsUtil.setOf("name", "owner", "tag", "value", "status", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("name", "owner", "tag", "value", "status", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -109,7 +108,6 @@ public class CustomerController extends BaseApiController {
                 predicates.add(cb.equal(root.get("owner"), ownerScope));
             }
             return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
         };
 
         Page<Customer> result = customerRepository.findAll(spec, pageable);
@@ -145,7 +143,7 @@ public class CustomerController extends BaseApiController {
         customer.setValue(payload.getValue() == null ? 0L : payload.getValue());
 
         Customer saved = customerRepository.save(customer);
-        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "CUSTOMER", saved.getId(), saved.getName());
+        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "CUSTOMER", saved.getId(), saved.getName(), currentTenant(request));
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -180,7 +178,7 @@ public class CustomerController extends BaseApiController {
         if (patch.getValue() != null) customer.setValue(patch.getValue());
 
         Customer saved = customerRepository.save(customer);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CUSTOMER", saved.getId(), "Updated customer fields");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CUSTOMER", saved.getId(), "Updated customer fields", tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -202,7 +200,7 @@ public class CustomerController extends BaseApiController {
         if (deleted == 0L) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "customer_not_found", "NOT_FOUND", null));
         }
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CUSTOMER", id, "Deleted customer");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CUSTOMER", id, "Deleted customer", tenantId);
         return ResponseEntity.noContent().build();
     }
 

@@ -12,7 +12,8 @@ export const EMPTY_CUSTOMER360_MODULES = {
 
 export function filterRequestedModules(modules, moduleKeys) {
   if (!Array.isArray(modules) || modules.length === 0) return moduleKeys
-  return modules.filter((key) => moduleKeys.includes(key))
+  const allowed = new Set(moduleKeys)
+  return modules.filter((key) => allowed.has(key))
 }
 
 export function moduleServerFilterSignature(moduleName, maxAssocItems) {
@@ -30,9 +31,12 @@ export function moduleServerFilterSignature(moduleName, maxAssocItems) {
 }
 
 export function orderCustomer360Modules(requestedModules, primaryModules, secondaryModules) {
-  const primary = requestedModules.filter((moduleName) => primaryModules.includes(moduleName))
-  const secondary = requestedModules.filter((moduleName) => secondaryModules.includes(moduleName))
-  const remaining = requestedModules.filter((moduleName) => !primary.includes(moduleName) && !secondary.includes(moduleName))
+  const primarySet = new Set(primaryModules)
+  const secondarySet = new Set(secondaryModules)
+  const primary = requestedModules.filter((moduleName) => primarySet.has(moduleName))
+  const secondary = requestedModules.filter((moduleName) => secondarySet.has(moduleName))
+  const consumed = new Set([...primary, ...secondary])
+  const remaining = requestedModules.filter((moduleName) => !consumed.has(moduleName))
   return [...primary, ...secondary, ...remaining]
 }
 
@@ -101,6 +105,35 @@ export function createCustomer360ModuleLoaders({
   timedLoad,
   toArray,
 }) {
+  const normalizeValue = (value) => String(value ?? '').trim()
+  const hasCustomerId = (value) => {
+    const normalized = normalizeValue(value)
+    return normalized === customerIdText || normalized.includes(customerIdText)
+  }
+  const tryMatchByKeys = (target, keys) => {
+    if (!target || typeof target !== 'object') return false
+    return keys.some((key) => {
+      const value = target[key]
+      if (Array.isArray(value)) return value.some((entry) => hasCustomerId(entry))
+      return hasCustomerId(value)
+    })
+  }
+  const notificationMatchesCustomer = (item) => {
+    if (!customerIdText) return false
+    const directKeys = ['customerId', 'bizId', 'refId', 'entityId', 'relatedId', 'targetId', 'taskId', 'recordId']
+    if (tryMatchByKeys(item, directKeys)) return true
+
+    const nestedBlocks = ['payload', 'data', 'meta', 'context', 'detail']
+    for (const blockKey of nestedBlocks) {
+      if (tryMatchByKeys(item?.[blockKey], directKeys)) return true
+    }
+
+    // Lightweight fallback: inspect shallow scalar values only.
+    return Object.values(item || {}).some((value) => (
+      (typeof value === 'string' || typeof value === 'number') && hasCustomerId(value)
+    ))
+  }
+
   return {
     contacts: async () => toArray(await timedLoad('contacts', `/contacts/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${maxAssocItems}`)).slice(0, maxAssocItems),
     opportunities: async () => toArray(await timedLoad('opportunities', `/opportunities/search?customerId=${encodeURIComponent(customerIdText)}&page=1&size=${maxAssocItems}`)).slice(0, maxAssocItems),
@@ -125,7 +158,7 @@ export function createCustomer360ModuleLoaders({
     audits: async () => toArray(await timedLoad('audits', `/audit-logs/search?q=${encodeURIComponent(customerIdText)}&page=1&size=${maxAssocItems}`)).slice(0, maxAssocItems),
     notifications: async () =>
       toArray(await timedLoad('notifications', '/v1/integrations/notifications/jobs?status=ALL&page=1&size=30'))
-        .filter((item) => JSON.stringify(item).includes(customerIdText))
+        .filter((item) => notificationMatchesCustomer(item))
         .slice(0, maxAssocItems),
   }
 }

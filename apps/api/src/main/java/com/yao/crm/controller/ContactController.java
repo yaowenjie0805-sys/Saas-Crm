@@ -8,7 +8,6 @@ import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
-import com.yao.crm.util.CollectionsUtil;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -63,7 +62,7 @@ public class ContactController extends BaseApiController {
                 safeSize,
                 sortBy,
                 sortDir,
-                CollectionsUtil.setOf("customerId", "name", "title", "phone", "email", "owner", "createdAt", "updatedAt"),
+                new HashSet<>(Set.of("customerId", "name", "title", "phone", "email", "owner", "createdAt", "updatedAt")),
                 "updatedAt"
         );
 
@@ -92,7 +91,6 @@ public class ContactController extends BaseApiController {
                 predicates.add(cb.or(selfOwner, scopeOwner));
             }
             return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
         };
 
         Page<Contact> result = contactRepository.findAll(spec, pageable);
@@ -139,7 +137,7 @@ public class ContactController extends BaseApiController {
         }
 
         Contact saved = contactRepository.save(contact);
-        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "CONTACT", saved.getId(), saved.getName());
+        auditLogService.record(currentUser(request), currentRole(request), "CREATE", "CONTACT", saved.getId(), saved.getName(), tenantId);
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -188,7 +186,7 @@ public class ContactController extends BaseApiController {
         if (patch.getOwner() != null && !isSalesScoped(request)) contact.setOwner(patch.getOwner());
 
         Contact saved = contactRepository.save(contact);
-        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTACT", saved.getId(), "Updated contact");
+        auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "CONTACT", saved.getId(), "Updated contact", tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -217,7 +215,7 @@ public class ContactController extends BaseApiController {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "contact_not_found", "NOT_FOUND", null));
         }
 
-        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTACT", normalizedId, "Deleted contact");
+        auditLogService.record(currentUser(request), currentRole(request), "DELETE", "CONTACT", normalizedId, "Deleted contact", tenantId);
         return ResponseEntity.noContent().build();
     }
 

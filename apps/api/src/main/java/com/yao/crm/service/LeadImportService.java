@@ -12,7 +12,6 @@ import com.yao.crm.repository.LeadImportJobChunkRepository;
 import com.yao.crm.repository.LeadImportJobItemRepository;
 import com.yao.crm.repository.LeadImportJobRepository;
 import com.yao.crm.repository.LeadRepository;
-import com.yao.crm.enums.LeadStatusEnum;
 import com.yao.crm.util.IdGenerator;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +45,7 @@ import java.util.concurrent.ConcurrentMap;
 @Service
 public class LeadImportService {
 
+    private static final Set<String> LEAD_STATUSES = Set.of("NEW", "QUALIFIED", "NURTURING", "CONVERTED", "DISQUALIFIED");
     private static final int DEDUPE_BATCH_SIZE = 500;
     private static final int SAVE_BATCH_SIZE = 100;
 
@@ -108,7 +108,7 @@ public class LeadImportService {
         validateUpload(file);
         ensureTenantImportCapacity(tenantId);
         LeadImportJob job = new LeadImportJob();
-        job.setId(idGenerator.generate("lij"));
+        job.setId(newId("lij"));
         job.setTenantId(tenantId);
         job.setFileName(file.getOriginalFilename());
         job.setStatus("PENDING");
@@ -349,7 +349,7 @@ public class LeadImportService {
                     addedKeys.add(dedupe);
                     pendingKeys.add(dedupe);
                     Lead lead = new Lead();
-                    lead.setId(idGenerator.generate("ld"));
+                    lead.setId(newId("ld"));
                     lead.setTenantId(tenantId);
                     lead.setName(row.name);
                     lead.setCompany(row.company);
@@ -427,7 +427,7 @@ public class LeadImportService {
     private void enqueueChunk(String tenantId, String jobId, int chunkNo, List<String> rows, String requestId) throws Exception {
         List<String> chunkRows = new ArrayList<String>(rows);
         LeadImportJobChunk chunk = new LeadImportJobChunk();
-        chunk.setId(idGenerator.generate("ljc"));
+        chunk.setId(newId("ljc"));
         chunk.setTenantId(tenantId);
         chunk.setJobId(jobId);
         chunk.setChunkNo(chunkNo);
@@ -514,7 +514,7 @@ public class LeadImportService {
 
     private void saveItemFailure(String tenantId, String jobId, int lineNo, String rawLine, String errorCode, String message) {
         LeadImportJobItem item = new LeadImportJobItem();
-        item.setId(idGenerator.generate("lji"));
+        item.setId(newId("lji"));
         item.setTenantId(tenantId);
         item.setJobId(jobId);
         item.setLineNo(lineNo);
@@ -562,8 +562,7 @@ public class LeadImportService {
         }
         out.add(current.toString().trim());
         while (out.size() < 7) out.add("");
-        return out.toArray(new String[out.size()]);
-
+        return out.toArray(String[]::new);
     }
 
     private Row parseRow(String[] cols) {
@@ -592,7 +591,7 @@ public class LeadImportService {
         if (!isBlank(row.email) && !row.email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             throw new IllegalArgumentException("contact_email_invalid");
         }
-        if (!LeadStatusEnum.isValid(row.status)) {
+        if (!LEAD_STATUSES.contains(row.status)) {
             throw new IllegalArgumentException("invalid_lead_status");
         }
     }
@@ -690,6 +689,9 @@ public class LeadImportService {
         return tenantId + "|" + jobId;
     }
 
+    private String newId(String prefix) {
+        return prefix + "_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
+    }
 
     private static class DedupeKeyCache {
         private final Set<String> committedKeys = ConcurrentHashMap.newKeySet();

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.dto.request.V1ApprovalSubmitRequest;
 import com.yao.crm.dto.request.V1ApprovalTemplatePatchRequest;
 import com.yao.crm.entity.ApprovalInstance;
+import com.yao.crm.entity.ApprovalTask;
 import com.yao.crm.repository.ApprovalEventRepository;
 import com.yao.crm.repository.ApprovalInstanceRepository;
 import com.yao.crm.repository.ApprovalTaskRepository;
@@ -21,20 +22,29 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -105,12 +115,12 @@ class V1ApprovalControllerTest {
 
     @Test
     void patchTemplateShouldTrimIdAndTenantBeforeLookup() {
-        when(templateRepository.findByIdAndTenantId("tpl-1", "tenant-1")).thenReturn(Optional.empty());
+        when(templateRepository.findByIdAndTenantId("tpl-1", TENANT_TEST)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.patchTemplate(request, "  tpl-1  ", new V1ApprovalTemplatePatchRequest());
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(templateRepository).findByIdAndTenantId("tpl-1", "tenant-1");
+        verify(templateRepository).findByIdAndTenantId("tpl-1", TENANT_TEST);
     }
 
     @Test
@@ -126,12 +136,12 @@ class V1ApprovalControllerTest {
 
     @Test
     void approveTaskShouldTrimTaskIdAndTenantBeforeLookup() {
-        when(taskRepository.findByIdAndTenantId("task-1", "tenant-1")).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndTenantId("task-1", TENANT_TEST)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.approveTask(request, "  task-1  ", null);
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(taskRepository).findByIdAndTenantId("task-1", "tenant-1");
+        verify(taskRepository).findByIdAndTenantId("task-1", TENANT_TEST);
     }
 
     @Test
@@ -142,7 +152,7 @@ class V1ApprovalControllerTest {
         active.setBizType("QUOTE");
         active.setBizId("biz-1");
         when(instanceRepository.findTopByTenantIdAndBizTypeAndBizIdAndStatusInOrderByCreatedAtDesc(
-                eq("tenant-1"),
+                eq(TENANT_TEST),
                 eq("QUOTE"),
                 eq("biz-1"),
                 eq(Arrays.asList("PENDING", "WAITING"))
@@ -153,7 +163,7 @@ class V1ApprovalControllerTest {
 
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         verify(instanceRepository).findTopByTenantIdAndBizTypeAndBizIdAndStatusInOrderByCreatedAtDesc(
-                "tenant-1",
+                TENANT_TEST,
                 "QUOTE",
                 "biz-1",
                 Arrays.asList("PENDING", "WAITING")
@@ -164,13 +174,111 @@ class V1ApprovalControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void instanceDetailShouldReturnInstanceNotFoundCode() {
-        when(instanceRepository.findByIdAndTenantId("ins-1", "tenant-1")).thenReturn(Optional.empty());
+        when(instanceRepository.findByIdAndTenantId("ins-1", TENANT_TEST)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.instanceDetail(request, "  ins-1  ");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(instanceRepository).findByIdAndTenantId("ins-1", "tenant-1");
+        verify(instanceRepository).findByIdAndTenantId("ins-1", TENANT_TEST);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("approval_instance_not_found", body.get("code"));
     }
+
+    @Test
+    void listInstancesShouldUsePagedRepositoryQuery() {
+        ApprovalInstance row = new ApprovalInstance();
+        row.setId("ins-1");
+        when(instanceRepository.findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class)))
+                .thenReturn(Collections.singletonList(row));
+
+        ResponseEntity<?> response = controller.listInstances(request, 5);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(instanceRepository).findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class));
+    }
+
+    @Test
+    void listTasksShouldUsePagedRepositoryQueryWhenNoPostFilters() {
+        ApprovalTask task = new ApprovalTask();
+        task.setId("task-1");
+        task.setStatus("PENDING");
+        when(taskRepository.findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class)))
+                .thenReturn(Collections.singletonList(task));
+
+        ResponseEntity<?> response = controller.listTasks(request, "", false, false, 3);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(taskRepository).findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class));
+    }
+
+    @Test
+    void listTasksShouldScanMultiplePagesWhenOverdueFilterApplied() {
+        List<ApprovalTask> firstPage = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            ApprovalTask nonOverdue = new ApprovalTask();
+            nonOverdue.setId("task-" + i);
+            nonOverdue.setStatus("PENDING");
+            nonOverdue.setDeadlineAt(LocalDateTime.now().plusHours(1));
+            firstPage.add(nonOverdue);
+        }
+
+        ApprovalTask overdue = new ApprovalTask();
+        overdue.setId("task-overdue");
+        overdue.setStatus("PENDING");
+        overdue.setDeadlineAt(LocalDateTime.now().minusHours(1));
+
+        when(taskRepository.findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class)))
+                .thenReturn(firstPage)
+                .thenReturn(Collections.singletonList(overdue))
+                .thenReturn(Collections.emptyList());
+
+        ResponseEntity<?> response = controller.listTasks(request, "", true, false, 1);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(taskRepository, times(2)).findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void statsShouldUseAggregatedRepositoryQueries() {
+        when(instanceRepository.countGroupedByStatus(TENANT_TEST))
+                .thenReturn(Arrays.<Object[]>asList(new Object[]{"PENDING", 2L}));
+        when(instanceRepository.countGroupedByBizType(TENANT_TEST))
+                .thenReturn(Arrays.<Object[]>asList(new Object[]{"QUOTE", 3L}));
+        when(instanceRepository.countByTenantId(TENANT_TEST)).thenReturn(5L);
+
+        when(taskRepository.countGroupedByStatus(TENANT_TEST))
+                .thenReturn(Arrays.<Object[]>asList(new Object[]{"PENDING", 2L}, new Object[]{"APPROVED", 1L}));
+        when(taskRepository.countBacklogByRole(TENANT_TEST))
+                .thenReturn(Arrays.<Object[]>asList(new Object[]{"MANAGER", 2L}));
+        when(taskRepository.countByTenantId(TENANT_TEST)).thenReturn(4L);
+        when(taskRepository.countByTenantIdAndStatusIgnoreCase(TENANT_TEST, "PENDING")).thenReturn(2L);
+        when(taskRepository.countOverduePendingTasks(eq(TENANT_TEST), any(LocalDateTime.class))).thenReturn(1L);
+        when(taskRepository.countEscalatedTasks(TENANT_TEST)).thenReturn(1L);
+
+        ApprovalTask terminal = new ApprovalTask();
+        terminal.setCreatedAt(LocalDateTime.now().minusMinutes(30));
+        terminal.setUpdatedAt(LocalDateTime.now());
+        when(taskRepository.findByTenantIdAndStatusInOrderByCreatedAtDesc(eq(TENANT_TEST), anyCollection(), any(Pageable.class)))
+                .thenReturn(Collections.singletonList(terminal));
+        when(templateRepository.countByTenantId(TENANT_TEST)).thenReturn(0L);
+
+        ResponseEntity<?> response = controller.stats(request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(instanceRepository).countGroupedByStatus(TENANT_TEST);
+        verify(instanceRepository).countGroupedByBizType(TENANT_TEST);
+        verify(instanceRepository).countByTenantId(TENANT_TEST);
+        verify(taskRepository).countGroupedByStatus(TENANT_TEST);
+        verify(taskRepository).countBacklogByRole(TENANT_TEST);
+        verify(taskRepository).countByTenantId(TENANT_TEST);
+        verify(taskRepository).countByTenantIdAndStatusIgnoreCase(TENANT_TEST, "PENDING");
+        verify(taskRepository).countOverduePendingTasks(eq(TENANT_TEST), any(LocalDateTime.class));
+        verify(taskRepository).countEscalatedTasks(TENANT_TEST);
+        verify(taskRepository).findByTenantIdAndStatusInOrderByCreatedAtDesc(eq(TENANT_TEST), anyCollection(), any(Pageable.class));
+        verify(templateRepository).countByTenantId(TENANT_TEST);
+        verify(instanceRepository, never()).findByTenantIdOrderByCreatedAtDesc(TENANT_TEST);
+        verify(taskRepository, never()).findByTenantIdOrderByCreatedAtDesc(TENANT_TEST);
+    }
 }
+

@@ -6,8 +6,6 @@ import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import java.util.Arrays;
-
 @Aspect
 @Component
 public class ServiceLoggingAspect {
@@ -17,12 +15,11 @@ public class ServiceLoggingAspect {
         Logger log = LoggerFactory.getLogger(joinPoint.getTarget().getClass());
         String methodName = joinPoint.getSignature().getName();
         
-        // Summarize args (truncate long values)
-        String argsSummary = summarizeArgs(joinPoint.getArgs());
-        
         long start = System.currentTimeMillis();
         
         if (log.isDebugEnabled()) {
+            // Build argument summary only when debug logging is enabled.
+            String argsSummary = summarizeArgs(joinPoint.getArgs());
             log.debug(">>> {}.{}() args={}", 
                 joinPoint.getTarget().getClass().getSimpleName(), methodName, argsSummary);
         }

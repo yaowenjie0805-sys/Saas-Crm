@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -90,10 +91,13 @@ public class AuthController extends BaseApiController {
         user.setDisplayName(isBlank(payload.getDisplayName()) ? username : payload.getDisplayName().trim());
         user.setOwnerScope(username);
         user.setEnabled(true);
-        user.setTenantId("tenant_default");
+        user.setTenantId(currentTenant(request));
         user.setDepartment("DEFAULT");
         user.setDataScope("SELF");
         user = userAccountRepository.save(user);
+        if (isBlank(user.getTenantId())) {
+            return invalidTenantState(request);
+        }
 
         auditLogService.record(user.getUsername(), user.getRole(), "REGISTER", "AUTH", null, "User self-registered", user.getTenantId());
         return ResponseEntity.status(201).body(buildAuthBody(request, user, false));
@@ -101,22 +105,23 @@ public class AuthController extends BaseApiController {
 
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(HttpServletRequest request, @Valid @RequestBody LoginRequest payload) {
-        String username = payload.getUsername();
+        String username = normalizeOptional(payload.getUsername());
         String password = payload.getPassword();
+        String tenantId = normalizeOptional(payload.getTenantId());
+        if (isBlank(tenantId)) {
+            return validationError(request, "tenantId");
+        }
         String ip = request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
 
-        if (loginRiskService.isLocked(username, ip)) {
+        if (loginRiskService.isLocked(tenantId, username, ip)) {
             Map<String, Object> details = new HashMap<String, Object>();
-            details.put("retryAfterSeconds", loginRiskService.remainingSeconds(username, ip));
+            details.put("retryAfterSeconds", loginRiskService.remainingSeconds(tenantId, username, ip));
             return ResponseEntity.status(423).body(singleMessage(request, "login_locked", "LOGIN_LOCKED", details));
         }
 
-        String tenantId = payload.getTenantId() == null ? "" : payload.getTenantId().trim();
-        Optional<UserAccount> anyUser = isBlank(tenantId)
-                ? userAccountRepository.findByUsername(username)
-                : userAccountRepository.findByUsernameAndTenantId(username, tenantId);
+        Optional<UserAccount> anyUser = userAccountRepository.findByUsernameAndTenantId(username, tenantId);
         if (!anyUser.isPresent()) {
-            loginRiskService.recordFailure(username, ip);
+            loginRiskService.recordFailure(tenantId, username, ip);
             return ResponseEntity.status(401).body(singleMessage(request, "invalid_credentials", "UNAUTHORIZED", null));
         }
 
@@ -125,7 +130,7 @@ public class AuthController extends BaseApiController {
             return ResponseEntity.status(403).body(singleMessage(request, "account_disabled", "FORBIDDEN", null));
         }
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            loginRiskService.recordFailure(username, ip);
+            loginRiskService.recordFailure(tenantId, username, ip);
             return ResponseEntity.status(401).body(singleMessage(request, "invalid_credentials", "UNAUTHORIZED", null));
         }
 
@@ -134,12 +139,15 @@ public class AuthController extends BaseApiController {
                 return ResponseEntity.status(401).body(singleMessage(request, "mfa_required", "UNAUTHORIZED", null));
             }
             if (!mfaService.verify(payload.getMfaCode())) {
-                loginRiskService.recordFailure(username, ip);
+                loginRiskService.recordFailure(tenantId, username, ip);
                 return ResponseEntity.status(401).body(singleMessage(request, "mfa_invalid", "UNAUTHORIZED", null));
             }
         }
 
-        loginRiskService.clear(username, ip);
+        if (isBlank(user.getTenantId())) {
+            return invalidTenantState(request);
+        }
+        loginRiskService.clear(tenantId, username, ip);
         Map<String, Object> body = buildAuthBody(request, user, false);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
@@ -161,7 +169,10 @@ public class AuthController extends BaseApiController {
         }
 
         String username = identity.getUsername();
-        String tenantId = isBlank(payload.getTenantId()) ? "tenant_default" : payload.getTenantId().trim();
+        String tenantId = normalizeOptional(payload.getTenantId());
+        if (isBlank(tenantId)) {
+            return validationError(request, "tenantId");
+        }
         if (!tenantRepository.findById(tenantId).isPresent()) {
             return ResponseEntity.status(404).body(singleMessage(request, "tenant_not_found", "NOT_FOUND", null));
         }
@@ -190,6 +201,9 @@ public class AuthController extends BaseApiController {
         if (!Boolean.TRUE.equals(user.getEnabled())) {
             return ResponseEntity.status(403).body(singleMessage(request, "forbidden", "FORBIDDEN", null));
         }
+        if (isBlank(user.getTenantId())) {
+            return invalidTenantState(request);
+        }
 
         auditLogService.record(user.getUsername(), user.getRole(), "LOGIN_SSO", "AUTH", null, "User logged in via " + ssoAuthService.providerName(), user.getTenantId());
         Map<String, Object> body = buildAuthBody(request, user, true);
@@ -217,12 +231,16 @@ public class AuthController extends BaseApiController {
         if (!optional.isPresent()) {
             return ResponseEntity.status(401).body(singleMessage(request, "invalid_or_expired", "UNAUTHORIZED", null));
         }
-        return ResponseEntity.ok(buildAuthBody(request, optional.get(), true));
+        UserAccount user = optional.get();
+        if (isBlank(user.getTenantId())) {
+            return invalidTenantState(request);
+        }
+        return ResponseEntity.ok(buildAuthBody(request, user, true));
     }
 
     private Map<String, Object> buildAuthBody(HttpServletRequest request, UserAccount user, boolean sso) {
         String ownerScope = isBlank(user.getOwnerScope()) ? user.getUsername() : user.getOwnerScope();
-        String tenantId = isBlank(user.getTenantId()) ? "tenant_default" : user.getTenantId();
+        String tenantId = normalizeOptional(user.getTenantId());
         String token = tokenService.createToken(user.getUsername(), user.getRole(), ownerScope, tenantId, true);
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("token", token);
@@ -242,6 +260,22 @@ public class AuthController extends BaseApiController {
     private Map<String, Object> singleMessage(HttpServletRequest request, String messageKey, String fallbackCode, Map<String, Object> details) {
         String code = legacyCode(messageKey, fallbackCode);
         return legacyErrorBody(request, code, msg(request, messageKey), details);
+    }
+
+    private ResponseEntity<?> validationError(HttpServletRequest request, String field) {
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("field", field);
+        return ResponseEntity.badRequest().body(singleMessage(request, "validation_error", "BAD_REQUEST", details));
+    }
+
+    private ResponseEntity<?> invalidTenantState(HttpServletRequest request) {
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("field", "tenantId");
+        return ResponseEntity.status(401).body(singleMessage(request, "invalid_or_expired", "UNAUTHORIZED", details));
+    }
+
+    private String normalizeOptional(String value) {
+        return isBlank(value) ? "" : value.trim();
     }
 }
 

@@ -1,5 +1,7 @@
 package com.yao.crm.service;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+
 import com.yao.crm.dto.DashboardResponse;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.OpportunityRepository;
@@ -39,10 +41,10 @@ class DashboardServiceTest {
                 cacheService
         );
 
-        service.loadByTenantCached("tenant_default", "  Alice  ", " manager ");
+        service.loadByTenantCached(TENANT_TEST, "  Alice  ", " manager ");
 
         verify(cacheService).getOrLoad(
-                eq("tenant_default"),
+                eq(TENANT_TEST),
                 eq("dashboard-overview"),
                 eq("MANAGER"),
                 any()

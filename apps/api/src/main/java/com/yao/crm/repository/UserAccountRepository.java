@@ -11,6 +11,7 @@ import java.util.Optional;
 public interface UserAccountRepository extends JpaRepository<UserAccount, String> {
     Optional<UserAccount> findByUsernameAndEnabledTrue(String username);
     Optional<UserAccount> findByUsername(String username);
+    Optional<UserAccount> findByIdAndTenantId(String id, String tenantId);
     Optional<UserAccount> findByUsernameAndTenantIdAndEnabledTrue(String username, String tenantId);
     Optional<UserAccount> findByUsernameAndTenantId(String username, String tenantId);
     List<UserAccount> findAllByTenantId(String tenantId);

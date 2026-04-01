@@ -77,7 +77,7 @@ public class PermissionController extends BaseApiController {
         }
         try {
             Map<String, Object> body = permissionMatrixService.updateRole(role, payload.getGrant(), payload.getRevoke());
-            auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PERMISSION", role.toUpperCase(), "Updated permission matrix");
+            auditLogService.record(currentUser(request), currentRole(request), "UPDATE", "PERMISSION", role.toUpperCase(), "Updated permission matrix", currentTenant(request));
             return ResponseEntity.ok(body);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(legacyErrorByKnownKey(
@@ -98,7 +98,7 @@ public class PermissionController extends BaseApiController {
         }
         try {
             Map<String, Object> body = permissionMatrixService.rollbackRole(role);
-            auditLogService.record(currentUser(request), currentRole(request), "ROLLBACK", "PERMISSION", role.toUpperCase(), "Rolled back permission matrix");
+            auditLogService.record(currentUser(request), currentRole(request), "ROLLBACK", "PERMISSION", role.toUpperCase(), "Rolled back permission matrix", currentTenant(request));
             return ResponseEntity.ok(body);
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(409).body(legacyErrorByKnownKey(

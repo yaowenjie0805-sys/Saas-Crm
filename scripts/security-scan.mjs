@@ -12,17 +12,23 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
 
-function run(command, args = [], env = {}) {
+function run(command, args = [], env = {}, options = {}) {
+  const timeoutMs = Number(options.timeoutMs || 0)
   const result = spawnSync(command, args, {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, ...env },
+    timeout: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined,
   })
+  const timedOut = Boolean(result.error && String(result.error.code || '').toUpperCase() === 'ETIMEDOUT')
   return {
     ok: result.status === 0,
     status: result.status,
     stdout: result.stdout || '',
     stderr: result.stderr || '',
+    signal: result.signal || '',
+    timedOut,
+    error: result.error ? String(result.error.message || result.error) : '',
   }
 }
 
@@ -32,6 +38,115 @@ function runNpm(args = [], env = {}) {
     return run('cmd.exe', ['/c', 'npm', ...args], env)
   }
   return run('npm', args, env)
+}
+
+function runMaven(args = [], env = {}, options = {}) {
+  const isWin = process.platform === 'win32'
+  if (isWin) {
+    return run('cmd.exe', ['/c', 'mvn', ...args], env, options)
+  }
+  return run('mvn', args, env, options)
+}
+
+function envFlag(name, fallback = false) {
+  const raw = String(process.env[name] || '').trim().toLowerCase()
+  if (!raw) return fallback
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function envPositiveInt(name, fallback) {
+  const raw = String(process.env[name] || '').trim()
+  if (!raw) return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) return fallback
+  return Math.floor(value)
+}
+
+function outputPreview(text, maxLength = 1200) {
+  const value = String(text || '').trim()
+  if (!value) return ''
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength)}...`
+}
+
+function isMavenUnavailable(scanResult) {
+  const detail = `${scanResult.stderr}\n${scanResult.stdout}\n${scanResult.error}`.toLowerCase()
+  return (
+    detail.includes('mvn is not recognized') ||
+    detail.includes('mvn: command not found') ||
+    detail.includes('not found') && detail.includes('mvn') ||
+    detail.includes('enoent')
+  )
+}
+
+function runJavaDependencyScan({ enabled, required, timeoutMs }) {
+  const args = [
+    '-f',
+    'apps/api/pom.xml',
+    'org.owasp:dependency-check-maven:check',
+    '-Dformat=JSON',
+    '-DfailBuildOnCVSS=11',
+  ]
+  const command = `mvn ${args.join(' ')}`
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      requiredForPass: required,
+      countedInOverallPass: required,
+      ran: false,
+      status: required ? 'disabled_required' : 'disabled',
+      pass: !required,
+      command,
+      timeoutMs,
+      exitCode: null,
+      timedOut: false,
+      reportFile: '',
+      stdoutPreview: '',
+      stderrPreview: '',
+      error: '',
+    }
+  }
+
+  const scanResult = runMaven(args, {}, { timeoutMs })
+  const reportPath = path.join(root, 'apps', 'api', 'target', 'dependency-check-report.json')
+  let status = 'passed'
+  if (!scanResult.ok) {
+    if (scanResult.timedOut) {
+      status = 'timed_out'
+    } else {
+      status = isMavenUnavailable(scanResult) ? 'tool_unavailable' : 'failed'
+    }
+  }
+
+  const scan = {
+    enabled: true,
+    requiredForPass: required,
+    countedInOverallPass: required,
+    ran: true,
+    status,
+    pass: scanResult.ok,
+    command,
+    timeoutMs,
+    exitCode: typeof scanResult.status === 'number' ? scanResult.status : null,
+    timedOut: scanResult.timedOut,
+    reportFile: fs.existsSync(reportPath) ? path.relative(root, reportPath) : '',
+    stdoutPreview: outputPreview(scanResult.stdout),
+    stderrPreview: outputPreview(scanResult.stderr),
+    error: scanResult.error || '',
+  }
+
+  if (scan.status !== 'passed') {
+    if (scan.status === 'timed_out') {
+      scan.actionableHint = 'Java dependency scan timed out. Increase SECURITY_SCAN_JAVA_TIMEOUT_MS if a longer scan is expected.'
+    } else if (scan.status === 'tool_unavailable') {
+      scan.actionableHint = 'Install Maven and verify `mvn -v` works. If Java scan is optional, set SECURITY_SCAN_JAVA_REQUIRED=0.'
+    } else {
+      scan.actionableHint = 'Inspect Maven output above and rerun dependency-check locally. If this gate is too strict, set SECURITY_SCAN_JAVA_REQUIRED=0.'
+    }
+  }
+
+  return scan
 }
 
 function gitTrackedFiles() {
@@ -119,9 +234,17 @@ function writeReport(report) {
   fs.writeFileSync(latestFile, JSON.stringify(report, null, 2))
 }
 
+function summarizeStatus(pass, fallback = false) {
+  if (!pass) return 'failed'
+  return fallback ? 'passed_fallback' : 'passed'
+}
+
 function main() {
   ensureDir(outDir)
   const beginAt = Date.now()
+  const javaEnabled = envFlag('SECURITY_SCAN_JAVA_ENABLED', false)
+  const javaRequired = envFlag('SECURITY_SCAN_JAVA_REQUIRED', false)
+  const javaTimeoutMs = envPositiveInt('SECURITY_SCAN_JAVA_TIMEOUT_MS', 300000)
 
   const auditRes = runNpm(['audit', '--omit=dev', '--json'])
   const audit = parseAudit(auditRes)
@@ -134,6 +257,11 @@ function main() {
 
   const sbom = runSbom()
   const sbomPass = sbom.ok
+  const javaDependencyScan = runJavaDependencyScan({
+    enabled: javaEnabled,
+    required: javaRequired,
+    timeoutMs: javaTimeoutMs,
+  })
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -153,15 +281,27 @@ function main() {
         file: sbom.file,
         fallback: sbom.fallback,
       },
+      javaDependencyScan,
     },
-    pass: auditPass && secretsPass && sbomPass,
+    pass: auditPass && secretsPass && sbomPass && (!javaRequired || javaDependencyScan.pass),
   }
   writeReport(report)
+  const summary = [
+    `npmAudit(high=${high},critical=${critical})`,
+    `secrets(findings=${secretFindings.length})`,
+    `sbom(${summarizeStatus(sbomPass, sbom.fallback)})`,
+    `javaDependencyScan(${javaDependencyScan.status})`,
+  ].join(' ')
+  console.log(
+    `SECURITY_SCAN_JAVA_RESULT status=${javaDependencyScan.status} enabled=${javaDependencyScan.enabled} required=${javaDependencyScan.requiredForPass} timeoutMs=${javaDependencyScan.timeoutMs} timedOut=${javaDependencyScan.timedOut} exitCode=${javaDependencyScan.exitCode === null ? 'null' : javaDependencyScan.exitCode}`
+  )
 
   if (!report.pass) {
+    console.error(`SECURITY_SCAN_SUMMARY ${summary}`)
     console.error(`SECURITY_SCAN_FAIL ${path.relative(root, reportFile)}`)
     process.exit(1)
   }
+  console.log(`SECURITY_SCAN_SUMMARY ${summary}`)
   console.log(`SECURITY_SCAN_OK ${path.relative(root, reportFile)}`)
 }
 

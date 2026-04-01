@@ -22,6 +22,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,15 +62,15 @@ class V1AdminUserControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authUsername", "admin-1");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void patchUserShouldTrimIdAndNormalizeRoleBeforeSave() {
-        UserAccount user = user("u-1", "tenant-1", "target");
+        UserAccount user = user("u-1", TENANT_TEST, "target");
         user.setRole("SALES");
-        when(userAccountRepository.findById("u-1")).thenReturn(Optional.of(user));
+        when(userAccountRepository.findByIdAndTenantId("u-1", TENANT_TEST)).thenReturn(Optional.of(user));
         when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AdminUpdateUserRequest payload = new AdminUpdateUserRequest();
@@ -78,7 +79,7 @@ class V1AdminUserControllerTest {
         ResponseEntity<?> response = controller.patchUser(request, "  u-1  ", payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(userAccountRepository).findById("u-1");
+        verify(userAccountRepository).findByIdAndTenantId("u-1", TENANT_TEST);
         ArgumentCaptor<UserAccount> captor = ArgumentCaptor.forClass(UserAccount.class);
         verify(userAccountRepository).save(captor.capture());
         assertEquals("MANAGER", captor.getValue().getRole());
@@ -104,20 +105,20 @@ class V1AdminUserControllerTest {
 
     @Test
     void unlockUserShouldTrimIdBeforeLookup() {
-        UserAccount user = user("u-2", "tenant-1", "alice");
-        when(userAccountRepository.findById("u-2")).thenReturn(Optional.of(user));
+        UserAccount user = user("u-2", TENANT_TEST, "alice");
+        when(userAccountRepository.findByIdAndTenantId("u-2", TENANT_TEST)).thenReturn(Optional.of(user));
 
         ResponseEntity<?> response = controller.unlockUser(request, "  u-2  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(userAccountRepository).findById("u-2");
-        verify(loginRiskService).clearUser("alice");
+        verify(userAccountRepository).findByIdAndTenantId("u-2", TENANT_TEST);
+        verify(loginRiskService).clearUser(TENANT_TEST, "alice");
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void inviteUserShouldNormalizeRoleScopeAndUsernameBeforeSave() {
-        when(userAccountRepository.findByUsernameAndTenantId("alice", "tenant-1")).thenReturn(Optional.empty());
+        when(userAccountRepository.findByUsernameAndTenantId("alice", TENANT_TEST)).thenReturn(Optional.empty());
         when(userInvitationRepository.save(any(UserInvitation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         V1InviteUserRequest payload = invitePayload();
@@ -129,7 +130,7 @@ class V1AdminUserControllerTest {
         ResponseEntity<?> response = controller.inviteUser(request, payload);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        verify(userAccountRepository).findByUsernameAndTenantId("alice", "tenant-1");
+        verify(userAccountRepository).findByUsernameAndTenantId("alice", TENANT_TEST);
         ArgumentCaptor<UserInvitation> captor = ArgumentCaptor.forClass(UserInvitation.class);
         verify(userInvitationRepository).save(captor.capture());
         assertEquals("alice", captor.getValue().getUsername());
@@ -160,8 +161,8 @@ class V1AdminUserControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void inviteUserShouldReturnConflictWhenUsernameAlreadyExists() {
-        UserAccount existing = user("u-exist", "tenant-1", "alice");
-        when(userAccountRepository.findByUsernameAndTenantId("alice", "tenant-1")).thenReturn(Optional.of(existing));
+        UserAccount existing = user("u-exist", TENANT_TEST, "alice");
+        when(userAccountRepository.findByUsernameAndTenantId("alice", TENANT_TEST)).thenReturn(Optional.of(existing));
 
         V1InviteUserRequest payload = invitePayload();
         payload.setUsername("  alice  ");
@@ -172,7 +173,7 @@ class V1AdminUserControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertNotNull(body);
         assertEquals("username_exists", body.get("code"));
-        verify(userAccountRepository).findByUsernameAndTenantId("alice", "tenant-1");
+        verify(userAccountRepository).findByUsernameAndTenantId("alice", TENANT_TEST);
         verify(userInvitationRepository, never()).save(any(UserInvitation.class));
     }
 
@@ -216,3 +217,5 @@ class V1AdminUserControllerTest {
         return user;
     }
 }
+
+

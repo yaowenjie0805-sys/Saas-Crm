@@ -15,6 +15,8 @@ import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
 import com.yao.crm.util.IdGenerator;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +33,14 @@ import java.util.*;
 public class V1ApprovalController extends BaseApiController {
     private static final int URGE_COOLDOWN_MINUTES = 15;
     private static final int URGE_DAILY_LIMIT = 10;
+    private static final int TASK_SCAN_BATCH_SIZE = 200;
+    private static final List<String> TERMINAL_TASK_STATUSES = Arrays.asList(
+            "APPROVED",
+            "REJECTED",
+            "TRANSFERRED",
+            "CANCELED",
+            "EXPIRED"
+    );
 
     private final ApprovalTemplateRepository templateRepository;
     private final ApprovalInstanceRepository instanceRepository;
@@ -450,17 +460,13 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         String tenantId = normalize(currentTenant(request));
-        List<ApprovalTask> rows = isBlank(status)
-                ? taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)
-                : taskRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status.trim().toUpperCase(Locale.ROOT));
         int finalLimit = Math.max(1, Math.min(limit, 100));
+        String normalizedStatus = isBlank(status) ? "" : status.trim().toUpperCase(Locale.ROOT);
+        List<ApprovalTask> rows = loadTaskRows(tenantId, normalizedStatus, overdue, escalated, finalLimit);
         LocalDateTime now = LocalDateTime.now();
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (ApprovalTask row : rows) {
-            boolean isOverdue = "PENDING".equals(row.getStatus()) && row.getDeadlineAt() != null && row.getDeadlineAt().isBefore(now);
-            boolean isEscalated = "ESCALATED".equals(row.getStatus()) || (row.getEscalationLevel() != null && row.getEscalationLevel() > 0);
-            if (overdue && !isOverdue) continue;
-            if (escalated && !isEscalated) continue;
+            if (!matchesTaskFilter(row, overdue, escalated, now)) continue;
             items.add(toTaskView(row));
             if (items.size() >= finalLimit) break;
         }
@@ -474,8 +480,11 @@ public class V1ApprovalController extends BaseApiController {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         String tenantId = normalize(currentTenant(request));
-        List<ApprovalInstance> rows = instanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         int finalLimit = Math.max(1, Math.min(limit, 100));
+        List<ApprovalInstance> rows = instanceRepository.findByTenantIdOrderByCreatedAtDesc(
+                tenantId,
+                PageRequest.of(0, finalLimit)
+        );
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (ApprovalInstance row : rows) {
             Map<String, Object> item = new LinkedHashMap<>();
@@ -494,54 +503,103 @@ public class V1ApprovalController extends BaseApiController {
         return ResponseEntity.ok(successWithFields(request, "approval_instances_listed", Collections.<String, Object>singletonMap("items", items)));
     }
 
+    private List<ApprovalTask> loadTaskRows(String tenantId,
+                                            String status,
+                                            boolean overdue,
+                                            boolean escalated,
+                                            int finalLimit) {
+        boolean needsPostFilter = overdue || escalated;
+        if (!needsPostFilter) {
+            Pageable firstPage = PageRequest.of(0, finalLimit);
+            return isBlank(status)
+                    ? taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId, firstPage)
+                    : taskRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, firstPage);
+        }
+
+        int batchSize = Math.max(finalLimit * 2, TASK_SCAN_BATCH_SIZE);
+        List<ApprovalTask> matchedRows = new ArrayList<ApprovalTask>();
+        for (int page = 0; matchedRows.size() < finalLimit; page++) {
+            Pageable pageable = PageRequest.of(page, batchSize);
+            List<ApprovalTask> rows = isBlank(status)
+                    ? taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable)
+                    : taskRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable);
+            if (rows.isEmpty()) {
+                break;
+            }
+            LocalDateTime now = LocalDateTime.now();
+            for (ApprovalTask row : rows) {
+                if (!matchesTaskFilter(row, overdue, escalated, now)) continue;
+                matchedRows.add(row);
+                if (matchedRows.size() >= finalLimit) {
+                    break;
+                }
+            }
+            if (matchedRows.size() >= finalLimit) {
+                break;
+            }
+            if (rows.size() < batchSize) {
+                break;
+            }
+        }
+        return matchedRows;
+    }
+
+    private boolean matchesTaskFilter(ApprovalTask row, boolean overdue, boolean escalated, LocalDateTime now) {
+        boolean isOverdue = "PENDING".equals(row.getStatus()) && row.getDeadlineAt() != null && row.getDeadlineAt().isBefore(now);
+        boolean isEscalated = "ESCALATED".equals(row.getStatus()) || (row.getEscalationLevel() != null && row.getEscalationLevel() > 0);
+        return (!overdue || isOverdue) && (!escalated || isEscalated);
+    }
+
     @GetMapping("/stats")
     public ResponseEntity<?> stats(HttpServletRequest request) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES", "ANALYST")) {
             return ResponseEntity.status(403).body(errorBody(request, "forbidden", msg(request, "forbidden"), null));
         }
         String tenantId = normalize(currentTenant(request));
-        List<ApprovalInstance> instances = instanceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
-        List<ApprovalTask> tasks = taskRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        Map<String, Integer> instanceByStatus = toCountMap(instanceRepository.countGroupedByStatus(tenantId));
+        Map<String, Integer> taskByStatus = toCountMap(taskRepository.countGroupedByStatus(tenantId));
+        Map<String, Integer> bizByType = toCountMap(instanceRepository.countGroupedByBizType(tenantId));
+        Map<String, Integer> backlogByRole = toCountMap(taskRepository.countBacklogByRole(tenantId));
 
-        Map<String, Integer> instanceByStatus = new LinkedHashMap<>();
-        Map<String, Integer> taskByStatus = new LinkedHashMap<>();
-        Map<String, Integer> bizByType = new LinkedHashMap<>();
-        Map<String, Integer> backlogByRole = new LinkedHashMap<>();
-        int overdueCount = 0;
-        int escalatedCount = 0;
+        long instancesTotal = instanceRepository.countByTenantId(tenantId);
+        long tasksTotal = taskRepository.countByTenantId(tenantId);
+        int pendingTasks = safeLongToInt(taskRepository.countByTenantIdAndStatusIgnoreCase(tenantId, "PENDING"));
+
+        LocalDateTime now = LocalDateTime.now();
+        int overdueCount = safeLongToInt(taskRepository.countOverduePendingTasks(tenantId, now));
+        int escalatedCount = safeLongToInt(taskRepository.countEscalatedTasks(tenantId));
+
         long processingMinutesTotal = 0L;
         int processedCount = 0;
-        LocalDateTime now = LocalDateTime.now();
-        for (ApprovalInstance row : instances) {
-            String status = isBlank(row.getStatus()) ? "UNKNOWN" : row.getStatus().trim().toUpperCase(Locale.ROOT);
-            instanceByStatus.put(status, instanceByStatus.containsKey(status) ? instanceByStatus.get(status) + 1 : 1);
-            String biz = isBlank(row.getBizType()) ? "UNKNOWN" : row.getBizType().trim().toUpperCase(Locale.ROOT);
-            bizByType.put(biz, bizByType.containsKey(biz) ? bizByType.get(biz) + 1 : 1);
-        }
-        for (ApprovalTask row : tasks) {
-            String status = isBlank(row.getStatus()) ? "UNKNOWN" : row.getStatus().trim().toUpperCase(Locale.ROOT);
-            taskByStatus.put(status, taskByStatus.containsKey(status) ? taskByStatus.get(status) + 1 : 1);
-            if ("PENDING".equals(status) && row.getDeadlineAt() != null && row.getDeadlineAt().isBefore(now)) overdueCount++;
-            if ("ESCALATED".equals(status) || (row.getEscalationLevel() != null && row.getEscalationLevel() > 0)) escalatedCount++;
-            if ("PENDING".equals(status) || "WAITING".equals(status)) {
-                String role = isBlank(row.getApproverRole()) ? "UNKNOWN" : row.getApproverRole().trim().toUpperCase(Locale.ROOT);
-                backlogByRole.put(role, backlogByRole.containsKey(role) ? backlogByRole.get(role) + 1 : 1);
+        final int completedBatchSize = 500;
+        for (int page = 0; ; page++) {
+            List<ApprovalTask> completedTasks = taskRepository.findByTenantIdAndStatusInOrderByCreatedAtDesc(
+                    tenantId,
+                    TERMINAL_TASK_STATUSES,
+                    PageRequest.of(page, completedBatchSize)
+            );
+            if (completedTasks.isEmpty()) {
+                break;
             }
-            if ("APPROVED".equals(status) || "REJECTED".equals(status) || "TRANSFERRED".equals(status) || "CANCELED".equals(status) || "EXPIRED".equals(status)) {
+            for (ApprovalTask row : completedTasks) {
+                if (row.getCreatedAt() == null || row.getUpdatedAt() == null) continue;
                 processingMinutesTotal += Math.max(0L, Duration.between(row.getCreatedAt(), row.getUpdatedAt()).toMinutes());
                 processedCount++;
             }
+            if (completedTasks.size() < completedBatchSize) {
+                break;
+            }
         }
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("templates", templateRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).size());
-        summary.put("instances", instances.size());
-        summary.put("tasks", tasks.size());
-        summary.put("pendingTasks", taskByStatus.containsKey("PENDING") ? taskByStatus.get("PENDING") : 0);
+        summary.put("templates", safeLongToInt(templateRepository.countByTenantId(tenantId)));
+        summary.put("instances", safeLongToInt(instancesTotal));
+        summary.put("tasks", safeLongToInt(tasksTotal));
+        summary.put("pendingTasks", pendingTasks);
         Map<String, Object> sla = new LinkedHashMap<>();
         sla.put("overdueCount", overdueCount);
         sla.put("escalatedCount", escalatedCount);
         sla.put("avgProcessingMinutes", processedCount == 0 ? 0 : processingMinutesTotal / processedCount);
-        sla.put("escalationRate", tasks.isEmpty() ? 0.0 : ((double) escalatedCount / (double) tasks.size()));
+        sla.put("escalationRate", tasksTotal == 0 ? 0.0 : ((double) escalatedCount / (double) tasksTotal));
         sla.put("backlogByRole", backlogByRole);
 
         Map<String, Object> body = new LinkedHashMap<>();
@@ -912,6 +970,22 @@ public class V1ApprovalController extends BaseApiController {
         eventRepository.save(event);
     }
 
+    private Map<String, Integer> toCountMap(List<Object[]> rows) {
+        Map<String, Integer> out = new LinkedHashMap<String, Integer>();
+        if (rows == null) return out;
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2) continue;
+            String key = row[0] == null ? "UNKNOWN" : String.valueOf(row[0]).trim().toUpperCase(Locale.ROOT);
+            Number value = row[1] instanceof Number ? (Number) row[1] : 0;
+            out.put(key, safeLongToInt(value.longValue()));
+        }
+        return out;
+    }
+
+    private int safeLongToInt(long value) {
+        if (value <= 0L) return 0;
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
+    }
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
@@ -1005,12 +1079,12 @@ public class V1ApprovalController extends BaseApiController {
 
     private Long resolveAmount(String tenantId, String bizType, String bizId) {
         if ("CONTRACT".equals(bizType)) {
-            Optional<ContractRecord> c = contractRepository.findById(bizId);
-            if (c.isPresent() && tenantId.equals(c.get().getTenantId())) return c.get().getAmount();
+            Optional<ContractRecord> c = contractRepository.findByIdAndTenantId(bizId, tenantId);
+            if (c.isPresent()) return c.get().getAmount();
         }
         if ("PAYMENT".equals(bizType)) {
-            Optional<PaymentRecord> p = paymentRepository.findById(bizId);
-            if (p.isPresent() && tenantId.equals(p.get().getTenantId())) return p.get().getAmount();
+            Optional<PaymentRecord> p = paymentRepository.findByIdAndTenantId(bizId, tenantId);
+            if (p.isPresent()) return p.get().getAmount();
         }
         if ("QUOTE".equals(bizType)) {
             Optional<Quote> q = quoteRepository.findByIdAndTenantId(bizId, tenantId);

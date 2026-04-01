@@ -142,7 +142,12 @@ public class ReportController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         try {
-            return ResponseEntity.ok(reportExportJobService.status(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER")));
+            return ResponseEntity.ok(reportExportJobService.statusByTenant(
+                    jobId,
+                    currentUser(request),
+                    currentTenant(request),
+                    hasAnyRole(request, "ADMIN", "MANAGER")
+            ));
         } catch (IllegalArgumentException ex) {
             if ("forbidden".equals(ex.getMessage())) {
                 return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
@@ -164,7 +169,12 @@ public class ReportController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         try {
-            Map<String, Object> job = reportExportJobService.retry(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            Map<String, Object> job = reportExportJobService.retryByTenant(
+                    jobId,
+                    currentUser(request),
+                    currentTenant(request),
+                    hasAnyRole(request, "ADMIN", "MANAGER")
+            );
             return ResponseEntity.status(202).body(job);
         } catch (IllegalArgumentException ex) {
             if ("forbidden".equals(ex.getMessage())) {
@@ -187,7 +197,12 @@ public class ReportController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         try {
-            String csv = reportExportJobService.download(jobId, currentUser(request), hasAnyRole(request, "ADMIN", "MANAGER"));
+            String csv = reportExportJobService.downloadByTenant(
+                    jobId,
+                    currentUser(request),
+                    currentTenant(request),
+                    hasAnyRole(request, "ADMIN", "MANAGER")
+            );
             boolean zh = request.getHeader("Accept-Language") != null
                     && request.getHeader("Accept-Language").toLowerCase(Locale.ROOT).startsWith("zh");
             String fileName = (zh ? "\u62a5\u8868\u603b\u89c8-" : "report-overview-") + jobId + ".csv";

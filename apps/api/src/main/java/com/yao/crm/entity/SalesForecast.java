@@ -69,7 +69,7 @@ public class SalesForecast {
         if (predictedCount == null) predictedCount = 0;
         if (confirmedAmount == null) confirmedAmount = 0L;
         if (pipelineAmount == null) pipelineAmount = 0L;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

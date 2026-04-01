@@ -9,5 +9,6 @@ import java.util.Optional;
 public interface ApprovalTemplateRepository extends JpaRepository<ApprovalTemplate, String> {
     List<ApprovalTemplate> findByTenantIdAndBizTypeAndEnabledTrueOrderByCreatedAtAsc(String tenantId, String bizType);
     List<ApprovalTemplate> findByTenantIdOrderByCreatedAtDesc(String tenantId);
+    long countByTenantId(String tenantId);
     Optional<ApprovalTemplate> findByIdAndTenantId(String id, String tenantId);
 }

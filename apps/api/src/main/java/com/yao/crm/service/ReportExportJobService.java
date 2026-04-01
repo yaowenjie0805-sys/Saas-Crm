@@ -31,7 +31,7 @@ public class ReportExportJobService {
     }
 
     public Map<String, Object> submit(String requestedBy, String roleFilter, LocalDate fromDate, LocalDate toDate) {
-        return submitByTenant(requestedBy, "tenant_default", roleFilter, fromDate, toDate);
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public Map<String, Object> submitByTenant(String requestedBy, String tenantId, String roleFilter, LocalDate fromDate, LocalDate toDate) {
@@ -48,24 +48,26 @@ public class ReportExportJobService {
                                               String timezone,
                                               String currency,
                                               String language) {
+        String requiredTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
-        JobRecord record = createRecord(requestedBy, tenantId, roleFilter, fromDate, toDate, owner, department, timezone, currency, language, null);
+        JobRecord record = createRecord(requestedBy, requiredTenantId, roleFilter, fromDate, toDate, owner, department, timezone, currency, language, null);
         jobs.put(record.jobId, record);
         start(record);
         return toStatus(record);
     }
 
     public Map<String, Object> retry(String jobId, String requester, boolean canViewAll) {
-        return retryByTenant(jobId, requester, "tenant_default", canViewAll);
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public Map<String, Object> retryByTenant(String jobId, String requester, String tenantId, boolean canViewAll) {
+        String requiredTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         JobRecord source = jobs.get(jobId);
         if (source == null) {
             throw new IllegalArgumentException("export_job_not_found");
         }
-        if (!tenantId.equals(source.tenantId)) {
+        if (!requiredTenantId.equals(source.tenantId)) {
             throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(source.requestedBy, requester)) {
@@ -79,10 +81,7 @@ public class ReportExportJobService {
     }
 
     public List<Map<String, Object>> list(String requester, boolean canViewAll, int limit, String status) {
-        Map<String, Object> paged = listByTenantPaged(requester, "tenant_default", canViewAll, 1, Math.max(1, limit), status);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> items = (List<Map<String, Object>>) paged.get("items");
-        return items;
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public List<Map<String, Object>> listByTenant(String requester, String tenantId, boolean canViewAll, int limit, String status) {
@@ -93,6 +92,7 @@ public class ReportExportJobService {
     }
 
     public Map<String, Object> listByTenantPaged(String requester, String tenantId, boolean canViewAll, int page, int size, String status) {
+        String requiredTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         List<JobRecord> rows = new ArrayList<JobRecord>(jobs.values());
         Collections.sort(rows, new Comparator<JobRecord>() {
@@ -107,7 +107,7 @@ public class ReportExportJobService {
         String statusFilter = normalizeStatus(status);
         List<Map<String, Object>> filtered = new ArrayList<Map<String, Object>>();
         for (JobRecord row : rows) {
-            if (!tenantId.equals(row.tenantId)) {
+            if (!requiredTenantId.equals(row.tenantId)) {
                 continue;
             }
             if (!canViewAll && !Objects.equals(row.requestedBy, requester)) {
@@ -139,16 +139,17 @@ public class ReportExportJobService {
     }
 
     public Map<String, Object> status(String jobId, String requester, boolean canViewAll) {
-        return statusByTenant(jobId, requester, "tenant_default", canViewAll);
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public Map<String, Object> statusByTenant(String jobId, String requester, String tenantId, boolean canViewAll) {
+        String requiredTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         JobRecord record = jobs.get(jobId);
         if (record == null) {
             throw new IllegalArgumentException("export_job_not_found");
         }
-        if (!tenantId.equals(record.tenantId)) {
+        if (!requiredTenantId.equals(record.tenantId)) {
             throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(record.requestedBy, requester)) {
@@ -158,16 +159,17 @@ public class ReportExportJobService {
     }
 
     public String download(String jobId, String requester, boolean canViewAll) {
-        return downloadByTenant(jobId, requester, "tenant_default", canViewAll);
+        throw new IllegalStateException("tenant_id_required");
     }
 
     public String downloadByTenant(String jobId, String requester, String tenantId, boolean canViewAll) {
+        String requiredTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         JobRecord record = jobs.get(jobId);
         if (record == null) {
             throw new IllegalArgumentException("export_job_not_found");
         }
-        if (!tenantId.equals(record.tenantId)) {
+        if (!requiredTenantId.equals(record.tenantId)) {
             throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(record.requestedBy, requester)) {
@@ -203,7 +205,7 @@ public class ReportExportJobService {
         record.jobId = "rpt_" + Long.toString(System.currentTimeMillis(), 36) + String.format("%03d", (int) (Math.random() * 1000));
         record.sourceJobId = sourceJobId;
         record.requestedBy = requestedBy;
-        record.tenantId = tenantId == null || tenantId.trim().isEmpty() ? "tenant_default" : tenantId.trim();
+        record.tenantId = requireTenantId(tenantId);
         record.status = "PENDING";
         record.progress = 5;
         record.role = roleFilter == null ? "" : roleFilter.trim().toUpperCase(Locale.ROOT);
@@ -274,6 +276,14 @@ public class ReportExportJobService {
         if ("ALL".equals(s)) return null;
         if ("PENDING".equals(s) || "RUNNING".equals(s) || "DONE".equals(s) || "FAILED".equals(s)) return s;
         return null;
+    }
+
+    private String requireTenantId(String tenantId) {
+        String normalized = tenantId == null ? "" : tenantId.trim();
+        if (normalized.isEmpty()) {
+            throw new IllegalStateException("tenant_id_required");
+        }
+        return normalized;
     }
 
     private void cleanupOldFinishedJobs() {

@@ -111,7 +111,7 @@ public class WorkflowExecutionService {
         workflowRepository.save(workflow);
 
         // 异步执行工作流
-        executeAsync(execution.getId());
+        executeAsync(execution.getId(), tenantId);
 
         return execution;
     }
@@ -121,11 +121,16 @@ public class WorkflowExecutionService {
      */
     @Transactional(timeout = 30)
     public void executeAsync(String executionId) {
+        executeAsync(executionId, null);
+    }
+
+    @Transactional(timeout = 30)
+    public void executeAsync(String executionId, String tenantId) {
         try {
-            executeNextNodes(executionId);
+            executeNextNodes(executionId, tenantId);
         } catch (Exception e) {
             log.error("Workflow execution failed", e);
-            failExecution(executionId, e.getMessage(), e.toString());
+            failExecutionInternal(executionId, e.getMessage(), e.toString(), tenantId);
         }
     }
 
@@ -134,9 +139,13 @@ public class WorkflowExecutionService {
      */
     @Transactional(timeout = 30)
     public void executeNextNodes(String executionId) {
+        executeNextNodes(executionId, null);
+    }
+
+    @Transactional(timeout = 30)
+    public void executeNextNodes(String executionId, String tenantId) {
         while (true) {
-            WorkflowExecution execution = executionRepository.findById(executionId)
-                    .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
+            WorkflowExecution execution = loadExecution(executionId, tenantId);
 
             if (!WorkflowStatus.isRunning(execution.getStatus())) {
                 return;
@@ -152,7 +161,7 @@ public class WorkflowExecutionService {
             if (context.getCurrentNodeId() == null) {
                 List<WorkflowNode> triggerNodes = nodeRepository.findByWorkflowIdAndNodeType(execution.getWorkflowId(), NodeType.TRIGGER.name());
                 if (triggerNodes.isEmpty()) {
-                    completeExecution(executionId);
+                    completeExecutionInternal(executionId, execution.getTenantId());
                     return;
                 }
                 List<String> nextNodeIds = new ArrayList<>();
@@ -162,15 +171,20 @@ public class WorkflowExecutionService {
                 // 从当前节点的连接中获取下一个节点
                 List<WorkflowConnection> outgoing = connectionRepository.findBySourceNodeId(context.getCurrentNodeId());
                 if (outgoing.isEmpty()) {
-                    completeExecution(executionId);
+                    completeExecutionInternal(executionId, execution.getTenantId());
                     return;
                 }
                 context.setNextNodeIds(outgoing.stream().map(WorkflowConnection::getTargetNodeId).collect(Collectors.toList()));
             }
 
             // 执行下一个节点
-            for (String nodeId : context.getNextNodeIds()) {
-                WorkflowNode node = nodeRepository.findById(nodeId).orElse(null);
+            List<String> nextNodeIds = context.getNextNodeIds();
+            List<WorkflowNode> nodes = nodeRepository.findAllById(nextNodeIds);
+            Map<String, WorkflowNode> nodeLookup = nodes.stream()
+                    .collect(Collectors.toMap(WorkflowNode::getId, node -> node));
+
+            for (String nodeId : nextNodeIds) {
+                WorkflowNode node = nodeLookup.get(nodeId);
                 if (node == null) continue;
 
                 context.setCurrentNodeId(nodeId);
@@ -182,13 +196,13 @@ public class WorkflowExecutionService {
                 context.getNodeResults().put(nodeId, result);
 
                 if (!result.isSuccess()) {
-                    failExecution(executionId, result.getErrorMessage(), result.getErrorDetails());
+                    failExecutionInternal(executionId, result.getErrorMessage(), result.getErrorDetails(), execution.getTenantId());
                     return;
                 }
 
                 // 如果是结束节点，完成执行
                 if (NodeType.END.name().equals(node.getNodeType())) {
-                    completeExecution(executionId);
+                    completeExecutionInternal(executionId, execution.getTenantId());
                     return;
                 }
 
@@ -589,7 +603,7 @@ public class WorkflowExecutionService {
             // 继续执行流程
             context.setCurrentNodeId(nodeId);
             saveContext(execution, context);
-            executeNextNodes(executionId);
+            executeNextNodes(executionId, tenantId);
         } else if ("REJECT".equals(action)) {
             approvalData.put("status", ApprovalStatus.REJECTED.name());
             approvalData.put("approverId", approverId);
@@ -597,7 +611,7 @@ public class WorkflowExecutionService {
             approvalData.put("rejectionReason", comments);
 
             // 工作流失败
-            failExecution(executionId, "Approval rejected by " + approverId, comments);
+            failExecutionInternal(executionId, "Approval rejected by " + approverId, comments, tenantId);
         }
     }
 
@@ -678,8 +692,11 @@ public class WorkflowExecutionService {
      */
     @Transactional(timeout = 30)
     public void completeExecution(String executionId) {
-        WorkflowExecution execution = executionRepository.findById(executionId)
-                .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
+        completeExecutionInternal(executionId, null);
+    }
+
+    private void completeExecutionInternal(String executionId, String tenantId) {
+        WorkflowExecution execution = loadExecution(executionId, tenantId);
 
         execution.setStatus(WorkflowStatus.COMPLETED.name());
         execution.setCompletedAt(LocalDateTime.now());
@@ -703,8 +720,11 @@ public class WorkflowExecutionService {
      */
     @Transactional(timeout = 30)
     public void failExecution(String executionId, String errorMessage, String errorDetails) {
-        WorkflowExecution execution = executionRepository.findById(executionId)
-                .orElseThrow(() -> new IllegalArgumentException("Execution not found"));
+        failExecutionInternal(executionId, errorMessage, errorDetails, null);
+    }
+
+    private void failExecutionInternal(String executionId, String errorMessage, String errorDetails, String tenantId) {
+        WorkflowExecution execution = loadExecution(executionId, tenantId);
 
         execution.setStatus(WorkflowStatus.FAILED.name());
         execution.setCompletedAt(LocalDateTime.now());
@@ -851,6 +871,15 @@ public class WorkflowExecutionService {
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize context", e);
         }
+    }
+
+    private WorkflowExecution loadExecution(String executionId, String tenantId) {
+        if (tenantId != null) {
+            return executionRepository.findByIdAndTenantId(executionId, tenantId)
+                    .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
+        }
+        return executionRepository.findById(executionId)
+                .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
     }
 
     /**

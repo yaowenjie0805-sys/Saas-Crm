@@ -15,6 +15,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
+import static com.yao.crm.support.TestTenant.TENANT_MISSING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,14 +47,14 @@ class V1IntegrationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authUsername", "  boss  ");
-        request.setAttribute("authTenantId", "  tenant_default  ");
+        request.setAttribute("authTenantId", "  " + TENANT_TEST + "  ");
 
         WebhookRequest payload = new WebhookRequest();
         payload.setTitle("  Approval Escalation  ");
         payload.setText("  Please handle now  ");
 
-        when(tenantRepository.findById("tenant_default")).thenReturn(Optional.of(mock(Tenant.class)));
-        when(integrationWebhookService.sendMessage("WECOM", "tenant_default", "Approval Escalation", "Please handle now", "boss"))
+        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(mock(Tenant.class)));
+        when(integrationWebhookService.sendMessage("WECOM", TENANT_TEST, "Approval Escalation", "Please handle now", "boss"))
                 .thenReturn(true);
 
         ResponseEntity<?> response = controller.wecom(request, payload);
@@ -63,8 +65,8 @@ class V1IntegrationControllerTest {
         assertTrue(Boolean.TRUE.equals(body.get("accepted")));
         assertTrue(Boolean.TRUE.equals(body.get("dispatched")));
         assertEquals("WECOM", body.get("provider"));
-        assertEquals("tenant_default", body.get("tenantId"));
-        verify(integrationWebhookService).sendMessage("WECOM", "tenant_default", "Approval Escalation", "Please handle now", "boss");
+        assertEquals(TENANT_TEST, body.get("tenantId"));
+        verify(integrationWebhookService).sendMessage("WECOM", TENANT_TEST, "Approval Escalation", "Please handle now", "boss");
     }
 
     @Test
@@ -102,7 +104,7 @@ class V1IntegrationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authUsername", "boss");
-        request.setAttribute("authTenantId", "tenant_default");
+        request.setAttribute("authTenantId", TENANT_TEST);
 
         ResponseEntity<?> response = controller.wecom(request, null);
 
@@ -118,18 +120,18 @@ class V1IntegrationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authUsername", "boss");
-        request.setAttribute("authTenantId", "tenant_missing");
+        request.setAttribute("authTenantId", TENANT_MISSING);
 
         WebhookRequest payload = new WebhookRequest();
         payload.setText("hello");
-        when(tenantRepository.findById("tenant_missing")).thenReturn(Optional.empty());
+        when(tenantRepository.findById(TENANT_MISSING)).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.wecom(request, payload);
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("tenant_not_found", body.get("code"));
-        verify(tenantRepository).findById("tenant_missing");
+        verify(tenantRepository).findById(TENANT_MISSING);
         verifyNoInteractions(integrationWebhookService);
     }
 
@@ -139,7 +141,7 @@ class V1IntegrationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authUsername", "boss");
-        request.setAttribute("authTenantId", "tenant_a");
+        request.setAttribute("authTenantId", TENANT_TEST);
         request.addHeader("X-Tenant-Id", "tenant_b");
 
         WebhookRequest payload = new WebhookRequest();
@@ -159,7 +161,7 @@ class V1IntegrationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authRole", "ANALYST");
         request.setAttribute("authUsername", "viewer");
-        request.setAttribute("authTenantId", "tenant_default");
+        request.setAttribute("authTenantId", TENANT_TEST);
 
         ResponseEntity<?> response = controller.feishu(request, new WebhookRequest());
 
@@ -169,3 +171,4 @@ class V1IntegrationControllerTest {
         verifyNoInteractions(tenantRepository, integrationWebhookService);
     }
 }
+

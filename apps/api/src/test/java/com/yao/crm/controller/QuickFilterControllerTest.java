@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,7 +52,7 @@ class QuickFilterControllerTest {
         request.name = "   ";
         request.entityType = "lead";
 
-        ResponseEntity<?> response = controller.createQuickFilter("tenant-1", request);
+        ResponseEntity<?> response = controller.createQuickFilter(TENANT_TEST, request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(quickFilterRepository);
@@ -63,7 +64,7 @@ class QuickFilterControllerTest {
         request.name = "My filter";
         request.entityType = "   ";
 
-        ResponseEntity<?> response = controller.createQuickFilter("tenant-1", request);
+        ResponseEntity<?> response = controller.createQuickFilter(TENANT_TEST, request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(quickFilterRepository);
@@ -83,7 +84,7 @@ class QuickFilterControllerTest {
                 ArgumentCaptor.forClass(com.yao.crm.entity.QuickFilter.class);
         verify(quickFilterRepository).save(captor.capture());
         com.yao.crm.entity.QuickFilter saved = captor.getValue();
-        assertEquals("tenant-1", saved.getTenantId());
+        assertEquals(TENANT_TEST, saved.getTenantId());
         assertEquals("My filter", saved.getName());
         assertEquals("alice", saved.getOwner());
         assertEquals("lead", saved.getEntityType());
@@ -92,7 +93,7 @@ class QuickFilterControllerTest {
 
     @Test
     void getQuickFiltersShouldRejectBlankEntityType() {
-        ResponseEntity<?> response = controller.getQuickFilters("tenant-1", "   ", null);
+        ResponseEntity<?> response = controller.getQuickFilters(TENANT_TEST, "   ", null);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(quickFilterRepository);
@@ -100,16 +101,16 @@ class QuickFilterControllerTest {
 
     @Test
     void deleteQuickFilterShouldReturnNoContentWhenDeleted() {
-        when(quickFilterRepository.deleteByTenantIdAndId("tenant-1", "qf-1")).thenReturn(1);
+        when(quickFilterRepository.deleteByTenantIdAndId(TENANT_TEST, "qf-1")).thenReturn(1);
 
-        ResponseEntity<?> response = controller.deleteQuickFilter("tenant-1", "qf-1");
+        ResponseEntity<?> response = controller.deleteQuickFilter(TENANT_TEST, "qf-1");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
     }
 
     @Test
     void deleteQuickFilterShouldRejectBlankId() {
-        ResponseEntity<?> response = controller.deleteQuickFilter("tenant-1", "   ");
+        ResponseEntity<?> response = controller.deleteQuickFilter(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(quickFilterRepository, never()).deleteByTenantIdAndId(anyString(), anyString());
@@ -118,19 +119,19 @@ class QuickFilterControllerTest {
 
     @Test
     void deleteQuickFilterShouldTrimTenantAndIdBeforeDeleting() {
-        when(quickFilterRepository.deleteByTenantIdAndId("tenant-1", "qf-1")).thenReturn(1);
+        when(quickFilterRepository.deleteByTenantIdAndId(TENANT_TEST, "qf-1")).thenReturn(1);
 
         ResponseEntity<?> response = controller.deleteQuickFilter("  tenant-1  ", "  qf-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(quickFilterRepository).deleteByTenantIdAndId("tenant-1", "qf-1");
+        verify(quickFilterRepository).deleteByTenantIdAndId(TENANT_TEST, "qf-1");
     }
 
     @Test
     void deleteQuickFilterShouldReturnNotFoundWhenMissing() {
-        when(quickFilterRepository.deleteByTenantIdAndId("tenant-1", "qf-404")).thenReturn(0);
+        when(quickFilterRepository.deleteByTenantIdAndId(TENANT_TEST, "qf-404")).thenReturn(0);
 
-        ResponseEntity<?> response = controller.deleteQuickFilter("tenant-1", "qf-404");
+        ResponseEntity<?> response = controller.deleteQuickFilter(TENANT_TEST, "qf-404");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
@@ -139,7 +140,7 @@ class QuickFilterControllerTest {
     void updateQuickFilterShouldRejectBlankId() {
         QuickFilterController.UpdateQuickFilterRequest request = new QuickFilterController.UpdateQuickFilterRequest();
 
-        ResponseEntity<?> response = controller.updateQuickFilter("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.updateQuickFilter(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(quickFilterRepository, never()).findByTenantIdAndId(anyString(), anyString());
@@ -151,17 +152,17 @@ class QuickFilterControllerTest {
     void updateQuickFilterShouldUseTenantScopedLookup() {
         com.yao.crm.entity.QuickFilter filter = new com.yao.crm.entity.QuickFilter();
         filter.setId("qf-1");
-        filter.setTenantId("tenant-1");
+        filter.setTenantId(TENANT_TEST);
         filter.setName("Before");
-        when(quickFilterRepository.findByTenantIdAndId("tenant-1", "qf-1")).thenReturn(Optional.of(filter));
+        when(quickFilterRepository.findByTenantIdAndId(TENANT_TEST, "qf-1")).thenReturn(Optional.of(filter));
 
         QuickFilterController.UpdateQuickFilterRequest request = new QuickFilterController.UpdateQuickFilterRequest();
         request.name = "After";
 
-        ResponseEntity<?> response = controller.updateQuickFilter("tenant-1", "qf-1", request);
+        ResponseEntity<?> response = controller.updateQuickFilter(TENANT_TEST, "qf-1", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(quickFilterRepository).findByTenantIdAndId("tenant-1", "qf-1");
+        verify(quickFilterRepository).findByTenantIdAndId(TENANT_TEST, "qf-1");
         verify(quickFilterRepository, never()).findById(anyString());
         assertNotNull(response.getBody());
     }
@@ -170,18 +171,18 @@ class QuickFilterControllerTest {
     void updateQuickFilterShouldTrimFieldsBeforeSaving() {
         com.yao.crm.entity.QuickFilter filter = new com.yao.crm.entity.QuickFilter();
         filter.setId("qf-1");
-        filter.setTenantId("tenant-1");
+        filter.setTenantId(TENANT_TEST);
         filter.setName("Before");
         filter.setOwner("before-owner");
         filter.setEntityType("before-type");
-        when(quickFilterRepository.findByTenantIdAndId("tenant-1", "qf-1")).thenReturn(Optional.of(filter));
+        when(quickFilterRepository.findByTenantIdAndId(TENANT_TEST, "qf-1")).thenReturn(Optional.of(filter));
 
         QuickFilterController.UpdateQuickFilterRequest request = new QuickFilterController.UpdateQuickFilterRequest();
         request.name = "  After  ";
         request.owner = "  bob  ";
         request.entityType = "  opportunity  ";
 
-        ResponseEntity<?> response = controller.updateQuickFilter("tenant-1", "qf-1", request);
+        ResponseEntity<?> response = controller.updateQuickFilter(TENANT_TEST, "qf-1", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         ArgumentCaptor<com.yao.crm.entity.QuickFilter> captor =
@@ -191,7 +192,8 @@ class QuickFilterControllerTest {
         assertEquals("After", saved.getName());
         assertEquals("bob", saved.getOwner());
         assertEquals("opportunity", saved.getEntityType());
-        verify(quickFilterRepository, times(1)).findByTenantIdAndId("tenant-1", "qf-1");
+        verify(quickFilterRepository, times(1)).findByTenantIdAndId(TENANT_TEST, "qf-1");
         assertNotNull(response.getBody());
     }
 }
+

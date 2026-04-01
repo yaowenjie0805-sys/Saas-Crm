@@ -129,31 +129,31 @@ public class V1AuthController extends BaseApiController {
         }
         String ip = request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
 
-        if (loginRiskService.isLocked(username, ip)) {
+        if (loginRiskService.isLocked(tenantId, username, ip)) {
             Map<String, Object> details = new HashMap<>();
-            details.put("retryAfterSeconds", loginRiskService.remainingSeconds(username, ip));
+            details.put("retryAfterSeconds", loginRiskService.remainingSeconds(tenantId, username, ip));
             return ResponseEntity.status(423).body(errorBody(request, "login_locked", msg(request, "login_locked"), details));
         }
 
         Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId);
         if (!optional.isPresent()) {
-            loginRiskService.recordFailure(username, ip);
+            loginRiskService.recordFailure(tenantId, username, ip);
             return ResponseEntity.status(401).body(errorBody(request, "invalid_credentials", msg(request, "invalid_credentials"), null));
         }
 
         UserAccount user = optional.get();
         if (!passwordEncoder.matches(payload.getPassword(), user.getPassword())) {
-            loginRiskService.recordFailure(username, ip);
+            loginRiskService.recordFailure(tenantId, username, ip);
             return ResponseEntity.status(401).body(errorBody(request, "invalid_credentials", msg(request, "invalid_credentials"), null));
         }
 
         if (mfaService.requiresMfa(user.getRole())) {
             if (!isBlank(payload.getMfaCode())) {
                 if (!mfaService.verify(payload.getMfaCode())) {
-                    loginRiskService.recordFailure(username, ip);
+                    loginRiskService.recordFailure(tenantId, username, ip);
                     return ResponseEntity.status(401).body(errorBody(request, "mfa_invalid", msg(request, "mfa_invalid"), null));
                 }
-                loginRiskService.clear(username, ip);
+                loginRiskService.clear(tenantId, username, ip);
                 Map<String, Object> body = buildAuthBody(request, user, true);
                 return ResponseEntity.ok()
                         .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
@@ -170,7 +170,7 @@ public class V1AuthController extends BaseApiController {
             return ResponseEntity.status(202).body(body);
         }
 
-        loginRiskService.clear(username, ip);
+        loginRiskService.clear(tenantId, username, ip);
         Map<String, Object> body = buildAuthBody(request, user, true);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
@@ -215,7 +215,10 @@ public class V1AuthController extends BaseApiController {
             return ResponseEntity.status(401).body(errorBody(request, "sso_oidc_exchange_failed", msg(request, "sso_oidc_exchange_failed"), null));
         }
 
-        String tenantId = normalizeOptionalValue(payload.getTenantId(), "tenant_default");
+        String tenantId = normalizeRequiredValue(payload.getTenantId());
+        if (tenantId == null) {
+            return validationError(request, "tenantId");
+        }
         if (!tenantRepository.findById(tenantId).isPresent()) {
             return ResponseEntity.status(404).body(errorBody(request, "tenant_not_found", msg(request, "tenant_not_found"), null));
         }

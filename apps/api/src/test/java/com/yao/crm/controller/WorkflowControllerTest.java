@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.eq;
@@ -50,12 +51,12 @@ class WorkflowControllerTest {
 
     @Test
     void getWorkflowsShouldTrimTenantAndNormalizeBlankQueryParams() {
-        when(workflowService.getWorkflows("tenant-1", null, null)).thenReturn(Collections.emptyList());
+        when(workflowService.getWorkflows(TENANT_TEST, null, null)).thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.getWorkflows(" tenant-1 ", "   ", "");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(workflowService).getWorkflows("tenant-1", null, null);
+        verify(workflowService).getWorkflows(TENANT_TEST, null, null);
         verifyNoInteractions(executionService);
     }
 
@@ -64,25 +65,25 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.deleteWorkflow(" tenant-1 ", " wf-1 ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(workflowService).deleteWorkflow("tenant-1", "wf-1");
+        verify(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
         verifyNoInteractions(executionService);
     }
 
     @Test
     void deleteWorkflowShouldReturnNotFoundWhenWorkflowDoesNotExist() {
         doThrow(new IllegalArgumentException("Workflow not found"))
-                .when(workflowService).deleteWorkflow("tenant-1", "wf-1");
+                .when(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
 
-        ResponseEntity<?> response = controller.deleteWorkflow("tenant-1", "wf-1");
+        ResponseEntity<?> response = controller.deleteWorkflow(TENANT_TEST, "wf-1");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(workflowService).deleteWorkflow("tenant-1", "wf-1");
+        verify(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
         verifyNoInteractions(executionService);
     }
 
     @Test
     void deleteWorkflowShouldReturnBadRequestForBlankId() {
-        ResponseEntity<?> response = controller.deleteWorkflow("tenant-1", "   ");
+        ResponseEntity<?> response = controller.deleteWorkflow(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -154,7 +155,7 @@ class WorkflowControllerTest {
 
     @Test
     void getWorkflowDetailShouldReturnBadRequestForBlankId() {
-        ResponseEntity<?> response = controller.getWorkflowDetail("tenant-1", "   ");
+        ResponseEntity<?> response = controller.getWorkflowDetail(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -165,15 +166,29 @@ class WorkflowControllerTest {
         WorkflowController.ActivateRequest request = new WorkflowController.ActivateRequest();
         request.activatedBy = "user-1";
 
-        ResponseEntity<?> response = controller.activateWorkflow("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.activateWorkflow(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
     }
 
     @Test
+    void activateWorkflowShouldReturnConflictWhenServiceThrowsIllegalState() {
+        WorkflowController.ActivateRequest request = new WorkflowController.ActivateRequest();
+        request.activatedBy = "user-1";
+        doThrow(new IllegalStateException("Workflow validation failed"))
+                .when(workflowService).activateWorkflow(TENANT_TEST, "wf-1", "user-1");
+
+        ResponseEntity<?> response = controller.activateWorkflow(TENANT_TEST, "wf-1", request);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        verify(workflowService).activateWorkflow(TENANT_TEST, "wf-1", "user-1");
+        verifyNoInteractions(executionService);
+    }
+
+    @Test
     void deactivateWorkflowShouldReturnBadRequestForBlankId() {
-        ResponseEntity<?> response = controller.deactivateWorkflow("tenant-1", "   ");
+        ResponseEntity<?> response = controller.deactivateWorkflow(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -181,7 +196,7 @@ class WorkflowControllerTest {
 
     @Test
     void validateWorkflowShouldReturnBadRequestForBlankId() {
-        ResponseEntity<?> response = controller.validateWorkflow("tenant-1", "   ");
+        ResponseEntity<?> response = controller.validateWorkflow(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -189,7 +204,7 @@ class WorkflowControllerTest {
 
     @Test
     void getWorkflowStatsShouldReturnBadRequestForBlankId() {
-        ResponseEntity<?> response = controller.getWorkflowStats("tenant-1", "   ");
+        ResponseEntity<?> response = controller.getWorkflowStats(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -199,7 +214,7 @@ class WorkflowControllerTest {
     void addNodeShouldReturnBadRequestForBlankId() {
         WorkflowController.AddNodeRequest request = new WorkflowController.AddNodeRequest();
 
-        ResponseEntity<?> response = controller.addNode("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.addNode(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -209,7 +224,7 @@ class WorkflowControllerTest {
     void testWorkflowShouldReturnBadRequestForBlankId() {
         WorkflowController.TestWorkflowRequest request = new WorkflowController.TestWorkflowRequest();
 
-        ResponseEntity<?> response = controller.testWorkflow("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.testWorkflow(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -219,7 +234,7 @@ class WorkflowControllerTest {
     void executeWorkflowShouldReturnBadRequestForBlankId() {
         WorkflowController.ExecuteWorkflowRequest request = new WorkflowController.ExecuteWorkflowRequest();
 
-        ResponseEntity<?> response = controller.executeWorkflow("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.executeWorkflow(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -236,7 +251,7 @@ class WorkflowControllerTest {
         when(execution.getStatus()).thenReturn("RUNNING");
         when(execution.getStartedAt()).thenReturn(java.time.LocalDateTime.parse("2026-03-28T10:15:30"));
         when(executionService.startExecution(
-                eq("tenant-1"),
+                eq(TENANT_TEST),
                 eq("wf-1"),
                 eq("MANUAL"),
                 eq(null),
@@ -247,13 +262,34 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.executeWorkflow(" tenant-1 ", " wf-1 ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).startExecution("tenant-1", "wf-1", "MANUAL", null, "{\"key\":\"value\"}", request.payload);
+        verify(executionService).startExecution(TENANT_TEST, "wf-1", "MANUAL", null, "{\"key\":\"value\"}", request.payload);
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void executeWorkflowShouldReturnInternalServerErrorWhenServiceThrowsUnexpectedException() throws Exception {
+        WorkflowController.ExecuteWorkflowRequest request = new WorkflowController.ExecuteWorkflowRequest();
+        request.payload = new HashMap<>();
+        request.payload.put("key", "value");
+        doThrow(new RuntimeException("database down"))
+                .when(executionService).startExecution(
+                        eq(TENANT_TEST),
+                        eq("wf-1"),
+                        eq("MANUAL"),
+                        eq(null),
+                        eq("{\"key\":\"value\"}"),
+                        eq(request.payload));
+
+        ResponseEntity<?> response = controller.executeWorkflow(TENANT_TEST, "wf-1", request);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        verify(executionService).startExecution(TENANT_TEST, "wf-1", "MANUAL", null, "{\"key\":\"value\"}", request.payload);
         verifyNoInteractions(workflowService);
     }
 
     @Test
     void getExecutionDetailShouldReturnBadRequestForBlankExecutionId() {
-        ResponseEntity<?> response = controller.getExecutionDetail("tenant-1", "   ");
+        ResponseEntity<?> response = controller.getExecutionDetail(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -262,19 +298,31 @@ class WorkflowControllerTest {
     @Test
     void getExecutionDetailShouldTrimExecutionIdBeforeCallingService() {
         Map<String, Object> detail = Collections.singletonMap("id", "exec-1");
-        when(executionService.getExecutionDetail("tenant-1", "exec-1")).thenReturn(detail);
+        when(executionService.getExecutionDetail(TENANT_TEST, "exec-1")).thenReturn(detail);
 
         ResponseEntity<?> response = controller.getExecutionDetail(" tenant-1 ", " exec-1 ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(detail, response.getBody());
-        verify(executionService).getExecutionDetail("tenant-1", "exec-1");
+        verify(executionService).getExecutionDetail(TENANT_TEST, "exec-1");
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void getExecutionDetailShouldReturnNotFoundWhenExecutionDoesNotExist() {
+        doThrow(new IllegalArgumentException("Execution not found"))
+                .when(executionService).getExecutionDetail(TENANT_TEST, "exec-404");
+
+        ResponseEntity<?> response = controller.getExecutionDetail(TENANT_TEST, "exec-404");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        verify(executionService).getExecutionDetail(TENANT_TEST, "exec-404");
         verifyNoInteractions(workflowService);
     }
 
     @Test
     void getExecutionHistoryShouldReturnBadRequestForBlankWorkflowId() {
-        ResponseEntity<?> response = controller.getExecutionHistory("tenant-1", "   ", null, 0, 20);
+        ResponseEntity<?> response = controller.getExecutionHistory(TENANT_TEST, "   ", null, 0, 20);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -282,13 +330,13 @@ class WorkflowControllerTest {
 
     @Test
     void getExecutionHistoryShouldTrimWorkflowIdBeforeCallingService() {
-        when(executionService.getExecutionHistory("tenant-1", "wf-1", null, 1, 10))
+        when(executionService.getExecutionHistory(TENANT_TEST, "wf-1", null, 1, 10))
                 .thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.getExecutionHistory(" tenant-1 ", " wf-1 ", "   ", 1, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).getExecutionHistory("tenant-1", "wf-1", null, 1, 10);
+        verify(executionService).getExecutionHistory(TENANT_TEST, "wf-1", null, 1, 10);
         verifyNoInteractions(workflowService);
     }
 
@@ -297,7 +345,7 @@ class WorkflowControllerTest {
         WorkflowController.CancelExecutionRequest request = new WorkflowController.CancelExecutionRequest();
         request.cancelledBy = "user-1";
 
-        ResponseEntity<?> response = controller.cancelExecution("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.cancelExecution(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -311,13 +359,27 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.cancelExecution(" tenant-1 ", " exec-1 ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).cancelExecution("tenant-1", "exec-1", "user-1");
+        verify(executionService).cancelExecution(TENANT_TEST, "exec-1", "user-1");
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void cancelExecutionShouldReturnConflictWhenExecutionStatusDisallowsCancel() {
+        WorkflowController.CancelExecutionRequest request = new WorkflowController.CancelExecutionRequest();
+        request.cancelledBy = "user-1";
+        doThrow(new IllegalStateException("Cannot cancel execution with status: COMPLETED"))
+                .when(executionService).cancelExecution(TENANT_TEST, "exec-1", "user-1");
+
+        ResponseEntity<?> response = controller.cancelExecution(TENANT_TEST, "exec-1", request);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        verify(executionService).cancelExecution(TENANT_TEST, "exec-1", "user-1");
         verifyNoInteractions(workflowService);
     }
 
     @Test
     void retryExecutionShouldReturnBadRequestForBlankExecutionId() {
-        ResponseEntity<?> response = controller.retryExecution("tenant-1", "   ");
+        ResponseEntity<?> response = controller.retryExecution(TENANT_TEST, "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -328,12 +390,24 @@ class WorkflowControllerTest {
         WorkflowExecution execution = mock(WorkflowExecution.class);
         when(execution.getId()).thenReturn("exec-2");
         when(execution.getStatus()).thenReturn("RUNNING");
-        when(executionService.retryExecution("tenant-1", "exec-1")).thenReturn(execution);
+        when(executionService.retryExecution(TENANT_TEST, "exec-1")).thenReturn(execution);
 
         ResponseEntity<?> response = controller.retryExecution(" tenant-1 ", " exec-1 ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).retryExecution("tenant-1", "exec-1");
+        verify(executionService).retryExecution(TENANT_TEST, "exec-1");
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void retryExecutionShouldReturnNotFoundWhenExecutionDoesNotExist() {
+        doThrow(new IllegalArgumentException("Execution not found"))
+                .when(executionService).retryExecution(TENANT_TEST, "exec-missing");
+
+        ResponseEntity<?> response = controller.retryExecution(TENANT_TEST, "exec-missing");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        verify(executionService).retryExecution(TENANT_TEST, "exec-missing");
         verifyNoInteractions(workflowService);
     }
 
@@ -344,7 +418,7 @@ class WorkflowControllerTest {
         request.action = "APPROVE";
         request.approverId = "user-1";
 
-        ResponseEntity<?> response = controller.handleApprovalCallback("tenant-1", "   ", request);
+        ResponseEntity<?> response = controller.handleApprovalCallback(TENANT_TEST, "   ", request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(workflowService, executionService);
@@ -361,7 +435,37 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.handleApprovalCallback(" tenant-1 ", " exec-1 ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).handleApprovalCallback("tenant-1", "exec-1", "node-1", "APPROVE", "user-1", "ok");
+        verify(executionService).handleApprovalCallback(TENANT_TEST, "exec-1", "node-1", "APPROVE", "user-1", "ok");
         verifyNoInteractions(workflowService);
     }
+
+    @Test
+    void handleApprovalCallbackShouldReturnInternalServerErrorWhenUnexpectedExceptionThrown() {
+        WorkflowController.ApprovalCallbackRequest request = new WorkflowController.ApprovalCallbackRequest();
+        request.nodeId = "node-1";
+        request.action = "APPROVE";
+        request.approverId = "user-1";
+        request.comments = "ok";
+        doThrow(new RuntimeException("service unavailable"))
+                .when(executionService).handleApprovalCallback(TENANT_TEST, "exec-1", "node-1", "APPROVE", "user-1", "ok");
+
+        ResponseEntity<?> response = controller.handleApprovalCallback(TENANT_TEST, "exec-1", request);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        verify(executionService).handleApprovalCallback(TENANT_TEST, "exec-1", "node-1", "APPROVE", "user-1", "ok");
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void deleteWorkflowShouldReturnInternalServerErrorWhenServiceThrowsUnexpectedException() {
+        doThrow(new RuntimeException("db failure"))
+                .when(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
+
+        ResponseEntity<?> response = controller.deleteWorkflow(TENANT_TEST, "wf-1");
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        verify(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
+        verifyNoInteractions(executionService);
+    }
 }
+

@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -73,7 +74,7 @@ class V1ProductControllerTest {
         request = new MockHttpServletRequest();
         request.setAttribute("authRole", "MANAGER");
         request.setAttribute("authUsername", "manager-1");
-        request.setAttribute("authTenantId", "tenant-1");
+        request.setAttribute("authTenantId", TENANT_TEST);
     }
 
     @Test
@@ -81,11 +82,11 @@ class V1ProductControllerTest {
     void patchProductShouldTrimIdForLookupAndSelfConflictCheck() {
         Product existing = new Product();
         existing.setId("prd-1");
-        existing.setTenantId("tenant-1");
+        existing.setTenantId(TENANT_TEST);
         existing.setCode("OLD-CODE");
         existing.setName("legacy");
-        when(productRepository.findByIdAndTenantId("prd-1", "tenant-1")).thenReturn(Optional.of(existing));
-        when(productRepository.findByTenantIdAndCode("tenant-1", "NEW-CODE")).thenReturn(Optional.of(existing));
+        when(productRepository.findByIdAndTenantId("prd-1", TENANT_TEST)).thenReturn(Optional.of(existing));
+        when(productRepository.findByTenantIdAndCode(TENANT_TEST, "NEW-CODE")).thenReturn(Optional.of(existing));
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ProductPatchRequest payload = new ProductPatchRequest();
@@ -96,8 +97,8 @@ class V1ProductControllerTest {
         ResponseEntity<?> response = controller.patchProduct(request, payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(productRepository).findByIdAndTenantId("prd-1", "tenant-1");
-        verify(productRepository).findByTenantIdAndCode("tenant-1", "NEW-CODE");
+        verify(productRepository).findByIdAndTenantId("prd-1", TENANT_TEST);
+        verify(productRepository).findByTenantIdAndCode(TENANT_TEST, "NEW-CODE");
         ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
         verify(productRepository).save(captor.capture());
         assertEquals("NEW-CODE", captor.getValue().getCode());
@@ -111,9 +112,9 @@ class V1ProductControllerTest {
     void patchPriceBookShouldTrimIdBeforeTenantScopedLookup() {
         PriceBook existing = new PriceBook();
         existing.setId("pb-1");
-        existing.setTenantId("tenant-1");
+        existing.setTenantId(TENANT_TEST);
         existing.setName("legacy");
-        when(priceBookRepository.findByIdAndTenantId("pb-1", "tenant-1")).thenReturn(Optional.of(existing));
+        when(priceBookRepository.findByIdAndTenantId("pb-1", TENANT_TEST)).thenReturn(Optional.of(existing));
         when(priceBookRepository.save(any(PriceBook.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PriceBookPatchRequest payload = new PriceBookPatchRequest();
@@ -123,7 +124,7 @@ class V1ProductControllerTest {
         ResponseEntity<?> response = controller.patchPriceBook(request, payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(priceBookRepository).findByIdAndTenantId("pb-1", "tenant-1");
+        verify(priceBookRepository).findByIdAndTenantId("pb-1", TENANT_TEST);
         ArgumentCaptor<PriceBook> captor = ArgumentCaptor.forClass(PriceBook.class);
         verify(priceBookRepository).save(captor.capture());
         assertEquals("Main PB", captor.getValue().getName());
@@ -132,15 +133,15 @@ class V1ProductControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void listPriceBookItemsShouldTrimIdBeforeLookup() {
-        when(priceBookRepository.findByIdAndTenantId("pb-1", "tenant-1")).thenReturn(Optional.of(new PriceBook()));
-        when(priceBookItemRepository.findByTenantIdAndPriceBookIdOrderByUpdatedAtDesc("tenant-1", "pb-1"))
+        when(priceBookRepository.findByIdAndTenantId("pb-1", TENANT_TEST)).thenReturn(Optional.of(new PriceBook()));
+        when(priceBookItemRepository.findByTenantIdAndPriceBookIdOrderByUpdatedAtDesc(TENANT_TEST, "pb-1"))
                 .thenReturn(Collections.<PriceBookItem>emptyList());
 
         ResponseEntity<?> response = controller.listPriceBookItems(request, "  pb-1  ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(priceBookRepository).findByIdAndTenantId("pb-1", "tenant-1");
-        verify(priceBookItemRepository).findByTenantIdAndPriceBookIdOrderByUpdatedAtDesc("tenant-1", "pb-1");
+        verify(priceBookRepository).findByIdAndTenantId("pb-1", TENANT_TEST);
+        verify(priceBookItemRepository).findByTenantIdAndPriceBookIdOrderByUpdatedAtDesc(TENANT_TEST, "pb-1");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertNotNull(body);
         assertEquals("price_book_items_listed", body.get("code"));
@@ -150,12 +151,12 @@ class V1ProductControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void upsertPriceBookItemShouldNormalizeIdsBeforeLookupAndResponse() {
-        when(priceBookRepository.findByIdAndTenantId("pb-1", "tenant-1")).thenReturn(Optional.of(new PriceBook()));
+        when(priceBookRepository.findByIdAndTenantId("pb-1", TENANT_TEST)).thenReturn(Optional.of(new PriceBook()));
         Product product = new Product();
         product.setId("prd-1");
-        product.setTenantId("tenant-1");
-        when(productRepository.findByIdAndTenantId("prd-1", "tenant-1")).thenReturn(Optional.of(product));
-        when(priceBookItemRepository.findByTenantIdAndPriceBookIdAndProductId("tenant-1", "pb-1", "prd-1"))
+        product.setTenantId(TENANT_TEST);
+        when(productRepository.findByIdAndTenantId("prd-1", TENANT_TEST)).thenReturn(Optional.of(product));
+        when(priceBookItemRepository.findByTenantIdAndPriceBookIdAndProductId(TENANT_TEST, "pb-1", "prd-1"))
                 .thenReturn(Optional.empty());
         when(priceBookItemRepository.save(any(PriceBookItem.class))).thenAnswer(invocation -> {
             PriceBookItem saved = invocation.getArgument(0);
@@ -171,9 +172,9 @@ class V1ProductControllerTest {
         ResponseEntity<?> response = controller.upsertPriceBookItem(request, "  pb-1  ", payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(priceBookRepository).findByIdAndTenantId("pb-1", "tenant-1");
-        verify(productRepository).findByIdAndTenantId("prd-1", "tenant-1");
-        verify(priceBookItemRepository).findByTenantIdAndPriceBookIdAndProductId("tenant-1", "pb-1", "prd-1");
+        verify(priceBookRepository).findByIdAndTenantId("pb-1", TENANT_TEST);
+        verify(productRepository).findByIdAndTenantId("prd-1", TENANT_TEST);
+        verify(priceBookItemRepository).findByTenantIdAndPriceBookIdAndProductId(TENANT_TEST, "pb-1", "prd-1");
         ArgumentCaptor<PriceBookItem> itemCaptor = ArgumentCaptor.forClass(PriceBookItem.class);
         verify(priceBookItemRepository).save(itemCaptor.capture());
         assertEquals("pb-1", itemCaptor.getValue().getPriceBookId());
@@ -190,7 +191,7 @@ class V1ProductControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void upsertPriceBookItemShouldReturnBadRequestWhenProductIdBlankAfterNormalization() {
-        when(priceBookRepository.findByIdAndTenantId("pb-1", "tenant-1")).thenReturn(Optional.of(new PriceBook()));
+        when(priceBookRepository.findByIdAndTenantId("pb-1", TENANT_TEST)).thenReturn(Optional.of(new PriceBook()));
 
         PriceBookItemRequest payload = new PriceBookItemRequest();
         payload.setProductId("   ");
@@ -216,3 +217,4 @@ class V1ProductControllerTest {
         verifyNoInteractions(priceBookRepository, priceBookItemRepository);
     }
 }
+

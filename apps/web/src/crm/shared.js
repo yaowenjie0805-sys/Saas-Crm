@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // API 配置 | API Configuration
 // ============================================
 
@@ -22,6 +22,13 @@ export const API_CACHE_CONFIG = {
   enabled: true,
   ttl: 60 * 1000,        // 缓存 TTL: 60秒
   maxSize: 100,           // 最大缓存条目数
+  preloadEnabled: true,    // 启用预加载
+  versionedCache: true,    // 启用版本控制
+  priorityLevels: {
+    high: 5 * 60 * 1000,   // 高优先级缓存: 5分钟
+    medium: 60 * 1000,     // 中优先级缓存: 1分钟
+    low: 10 * 1000         // 低优先级缓存: 10秒
+  }
 };
 
 // 内部请求缓存（按 URL + method + body 哈希）
@@ -31,10 +38,29 @@ const requestCacheMeta = new Map();
 /**
  * 生成请求缓存 key
  */
-const getCacheKey = (path, options) => {
-  const method = options.method || 'GET';
+const TENANT_HEADER_KEYS = ['X-Tenant-Id', 'x-tenant-id'];
+
+const readHeaderValue = (headers, key) => {
+  if (!headers) return null;
+  if (typeof headers.get === 'function') return headers.get(key);
+  return headers[key];
+};
+
+const getCacheContext = (options = {}, lang) => {
+  const headerTenant = TENANT_HEADER_KEYS.reduce((value, key) => {
+    if (value) return value;
+    const headerValue = readHeaderValue(options.headers, key);
+    return headerValue ? String(headerValue).trim() : value;
+  }, '');
+  const tenantId = headerTenant || getTenantId();
+  const normalizedLang = String(lang || '').trim() || 'en';
+  return { tenantId: tenantId || '__NO_TENANT__', lang: normalizedLang };
+};
+
+const getCacheKey = (path, options = {}, context) => {
+  const method = (options.method || 'GET').toUpperCase();
   const body = options.body ? JSON.stringify(options.body) : '';
-  return `${method}:${path}:${body}`;
+  return `${method}:${context.tenantId}:${context.lang}:${path}:${body}`;
 };
 
 /**
@@ -48,6 +74,45 @@ const cleanExpiredCache = () => {
       requestCacheMeta.delete(key);
     }
   }
+};
+
+const PRIORITY_RANK = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+
+const getPriorityRank = (priority) => {
+  const normalized = String(priority || '').toLowerCase();
+  return Object.prototype.hasOwnProperty.call(PRIORITY_RANK, normalized)
+    ? PRIORITY_RANK[normalized]
+    : PRIORITY_RANK.medium;
+};
+
+const evictCacheEntries = () => {
+  const maxSize = API_CACHE_CONFIG.maxSize;
+  if (maxSize <= 0) return;
+  const entries = Array.from(requestCacheMeta.entries()).sort(([, metaA], [, metaB]) => {
+    const priorityDiff = getPriorityRank(metaA.priority) - getPriorityRank(metaB.priority);
+    if (priorityDiff !== 0) return priorityDiff;
+    return (metaA.timestamp || 0) - (metaB.timestamp || 0);
+  });
+  for (const [key] of entries) {
+    if (requestCache.size < maxSize) break;
+    requestCache.delete(key);
+    requestCacheMeta.delete(key);
+  }
+};
+
+const ensureCacheCapacity = (cacheKey) => {
+  const maxSize = API_CACHE_CONFIG.maxSize;
+  if (maxSize <= 0) return false;
+  if (requestCache.has(cacheKey)) return true;
+  if (requestCache.size < maxSize) return true;
+  cleanExpiredCache();
+  if (requestCache.size < maxSize) return true;
+  evictCacheEntries();
+  return requestCache.size < maxSize;
 };
 
 export const FILTERS_KEY = 'crm_filters_v2'
@@ -244,8 +309,12 @@ const pendingRequests = new Map()
 
 export async function api(path, options = {}, token, lang = 'en') {
   // 只对 GET 请求去重
+  const requestContext = getCacheContext(options, lang)
   const method = (options.method || 'GET').toUpperCase()
-  const dedupeKey = method === 'GET' ? `${method}:${path}` : null
+  const dedupeKey =
+    method === 'GET'
+      ? `${method}:${requestContext.tenantId}:${requestContext.lang}:${path}`
+      : null
 
   // 如果有相同的 GET 请求正在进行，直接返回该 Promise
   if (dedupeKey && pendingRequests.has(dedupeKey)) {
@@ -255,7 +324,7 @@ export async function api(path, options = {}, token, lang = 'en') {
   const requestPromise = (async () => {
     const body = options.body
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
-    const headers = { 'Accept-Language': lang, ...(options.headers || {}) }
+    const headers = { 'Accept-Language': requestContext.lang, ...(options.headers || {}) }
     if (!isFormData && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
     if (isFormData && headers['Content-Type']) delete headers['Content-Type']
     if (token && token !== 'COOKIE_SESSION') headers.Authorization = `Bearer ${token}`
@@ -271,12 +340,21 @@ export async function api(path, options = {}, token, lang = 'en') {
         const lastTenant = String(localStorage.getItem('crm_last_tenant') || '').trim()
         if (lastTenant) headers['X-Tenant-Id'] = lastTenant
       }
-      if (!headers['X-Tenant-Id']) headers['X-Tenant-Id'] = 'tenant_default'
+    }
+    if (requiresTenant(path) && !String(headers['X-Tenant-Id'] || '').trim()) {
+      const fallback = requestContext.lang === 'zh'
+        ? '缺少租户上下文，请重新选择租户后再试'
+        : 'Missing tenant context; please select a tenant and retry'
+      const err = new Error(fallback)
+      err.code = 'TENANT_REQUIRED'
+      err.status = 400
+      err.path = path
+      throw err
     }
     const res = await fetch(`${API_BASE}${path}`, { ...options, credentials: 'include', headers, body })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      const fallback = lang === 'zh' ? '\u8bf7\u6c42\u5931\u8d25' : 'Request failed'
+      const fallback = requestContext.lang === 'zh' ? '\u8bf7\u6c42\u5931\u8d25' : 'Request failed'
       const err = new Error(body.message || fallback)
       err.code = body.code || ''
       err.details = body.details || {}
@@ -323,35 +401,39 @@ const initCacheCleanup = () => {
  * @param {string} lang - 语言
  * @param {boolean} useCache - 是否使用缓存（仅 GET 请求生效）
  */
-export async function apiCached(path, options = {}, token, lang = 'en', useCache = true) {
+export async function apiCached(path, options = {}, token, lang = 'en', useCache = true, priority = 'medium') {
   const method = (options.method || 'GET').toUpperCase();
-  const isCacheable = useCache && method === 'GET' && API_CACHE_CONFIG.enabled;
-  const cacheKey = getCacheKey(path, options);
-  
+  const requestContext = getCacheContext(options, lang);
+  const requestLang = requestContext.lang;
+  const cacheKey = getCacheKey(path, options, requestContext);
+  const isCacheable =
+    useCache && method === 'GET' && API_CACHE_CONFIG.enabled && API_CACHE_CONFIG.maxSize > 0;
+  const priorityTtl = API_CACHE_CONFIG.priorityLevels[priority] || API_CACHE_CONFIG.ttl;
+
   // 检查缓存
   if (isCacheable) {
     initCacheCleanup();
-    
+
     const cached = requestCache.get(cacheKey);
-    if (cached && Date.now() < requestCacheMeta.get(cacheKey)?.expiresAt) {
-      return { ...cached, fromCache: true };
+    const meta = requestCacheMeta.get(cacheKey);
+    if (cached && meta && Date.now() < meta.expiresAt) {
+      return cached;
     }
   }
-  
+
   // 执行请求
-  const result = await api(path, options, token, lang);
-  
+  const result = await api(path, options, token, requestLang);
+
   // 存入缓存
-  if (isCacheable && result) {
-    if (requestCache.size >= API_CACHE_CONFIG.maxSize) {
-      cleanExpiredCache();
-    }
+  if (isCacheable && result && ensureCacheCapacity(cacheKey)) {
     requestCache.set(cacheKey, result);
     requestCacheMeta.set(cacheKey, {
-      expiresAt: Date.now() + API_CACHE_CONFIG.ttl
+      expiresAt: Date.now() + priorityTtl,
+      priority,
+      timestamp: Date.now()
     });
   }
-  
+
   return result;
 }
 
@@ -371,6 +453,52 @@ export const invalidateApiCache = (pathPrefix = null) => {
     requestCacheMeta.clear();
   }
 };
+
+/**
+ * 预加载API数据
+ * @param {Array} requests - 请求配置数组 [{ path, options, priority }]
+ * @param {string} token - 认证 token
+ * @param {string} lang - 语言
+ */
+export async function preloadApiData(requests = [], token, lang = 'en') {
+  if (!API_CACHE_CONFIG.preloadEnabled) return;
+  
+  const preloadPromises = requests.map(async (req) => {
+    try {
+      await apiCached(req.path, req.options || {}, token, lang, true, req.priority || 'medium');
+    } catch (error) {
+      console.warn('Preload API failed:', req.path, error);
+    }
+  });
+  
+  await Promise.all(preloadPromises);
+}
+
+/**
+ * 批量执行API请求
+ * @param {Array} requests - 请求配置数组 [{ path, options, useCache, priority }]
+ * @param {string} token - 认证 token
+ * @param {string} lang - 语言
+ */
+export async function batchApiRequests(requests = [], token, lang = 'en') {
+  const batchPromises = requests.map(async (req) => {
+    try {
+      const result = await apiCached(
+        req.path,
+        req.options || {},
+        token,
+        lang,
+        req.useCache !== false,
+        req.priority || 'medium'
+      );
+      return { path: req.path, success: true, data: result };
+    } catch (error) {
+      return { path: req.path, success: false, error: error.message };
+    }
+  });
+  
+  return Promise.all(batchPromises);
+}
 
 // ============================================
 // Storage Keys | 本地存储 Key 统一管理
@@ -416,8 +544,16 @@ const getTenantId = () => {
   }
   const lastTenant = String(localStorage.getItem(STORAGE_KEYS.LAST_TENANT) || '').trim();
   if (lastTenant) return lastTenant;
-  return 'tenant_default';
+  return '';
 };
+
+const TENANT_OPTIONAL_PATH_PREFIXES = ['/auth/', '/v1/auth/']
+
+const requiresTenant = (path = '') => {
+  const normalized = String(path || '').trim()
+  if (!normalized) return true
+  return !TENANT_OPTIONAL_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
 
 /**
  * 获取语言设置
@@ -447,6 +583,16 @@ const getCommonHeaders = (lang = 'en') => {
 export async function apiDownload(path, filename = 'download') {
   const lang = getLang();
   const headers = getCommonHeaders(lang);
+  if (requiresTenant(path) && !String(headers['X-Tenant-Id'] || '').trim()) {
+    const fallback = lang === 'zh'
+      ? '缺少租户上下文，请重新选择租户后再试'
+      : 'Missing tenant context; please select a tenant and retry'
+    const err = new Error(fallback)
+    err.code = 'TENANT_REQUIRED'
+    err.status = 400
+    err.path = path
+    throw err
+  }
 
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'GET',
@@ -481,6 +627,16 @@ export async function apiDownload(path, filename = 'download') {
 export async function apiUpload(path, formData, options = {}) {
   const lang = getLang();
   const headers = getCommonHeaders(lang);
+  if (requiresTenant(path) && !String(headers['X-Tenant-Id'] || '').trim()) {
+    const fallback = lang === 'zh'
+      ? '缺少租户上下文，请重新选择租户后再试'
+      : 'Missing tenant context; please select a tenant and retry'
+    const err = new Error(fallback)
+    err.code = 'TENANT_REQUIRED'
+    err.status = 400
+    err.path = path
+    throw err
+  }
   // FormData 不需要设置 Content-Type，让浏览器自动处理
   delete headers['Content-Type'];
 

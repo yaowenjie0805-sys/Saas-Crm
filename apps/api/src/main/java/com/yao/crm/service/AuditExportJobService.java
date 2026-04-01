@@ -3,6 +3,9 @@ package com.yao.crm.service;
 import com.yao.crm.entity.AuditLog;
 import com.yao.crm.repository.AuditLogRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ public class AuditExportJobService {
     private final AtomicLong totalDone = new AtomicLong(0L);
     private final AtomicLong totalFailed = new AtomicLong(0L);
     private final ConcurrentLinkedQueue<Long> durationHistoryMs = new ConcurrentLinkedQueue<Long>();
+    private static final int MAX_BACKGROUND_EXPORT_ROWS = 10000;
 
     public AuditExportJobService(AuditLogRepository auditLogRepository,
                                @Qualifier("auditExportExecutor") ThreadPoolTaskExecutor executor) {
@@ -51,13 +55,15 @@ public class AuditExportJobService {
     }
 
     public List<Map<String, Object>> list(String requester, String tenantId, boolean canViewAll, int limit, String status) {
-        Map<String, Object> paged = listPaged(requester, tenantId, canViewAll, 1, Math.max(1, limit), status);
+        String normalizedTenantId = requireTenantId(tenantId);
+        Map<String, Object> paged = listPaged(requester, normalizedTenantId, canViewAll, 1, Math.max(1, limit), status);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) paged.get("items");
         return items;
     }
 
     public Map<String, Object> listPaged(String requester, String tenantId, boolean canViewAll, int page, int size, String status) {
+        String normalizedTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         List<JobRecord> rows = new ArrayList<JobRecord>(jobs.values());
         rows.sort(new Comparator<JobRecord>() {
@@ -72,7 +78,7 @@ public class AuditExportJobService {
         String statusFilter = normalizeStatus(status);
         List<Map<String, Object>> filtered = new ArrayList<Map<String, Object>>();
         for (JobRecord row : rows) {
-            if (!Objects.equals(row.tenantId, tenantId)) {
+            if (!Objects.equals(row.tenantId, normalizedTenantId)) {
                 continue;
             }
             if (!canViewAll && !Objects.equals(row.requestedBy, requester)) {
@@ -105,12 +111,13 @@ public class AuditExportJobService {
     }
 
     public Map<String, Object> retry(String jobId, String requester, String tenantId, boolean canViewAll) {
+        String normalizedTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         JobRecord source = jobs.get(jobId);
         if (source == null) {
             throw new IllegalArgumentException("export_job_not_found");
         }
-        if (!Objects.equals(source.tenantId, tenantId)) {
+        if (!Objects.equals(source.tenantId, normalizedTenantId)) {
             throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(source.requestedBy, requester)) {
@@ -136,12 +143,13 @@ public class AuditExportJobService {
     }
 
     public Map<String, Object> status(String jobId, String requester, String tenantId, boolean canViewAll) {
+        String normalizedTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         JobRecord record = jobs.get(jobId);
         if (record == null) {
             throw new IllegalArgumentException("export_job_not_found");
         }
-        if (!Objects.equals(record.tenantId, tenantId)) {
+        if (!Objects.equals(record.tenantId, normalizedTenantId)) {
             throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(record.requestedBy, requester)) {
@@ -151,12 +159,13 @@ public class AuditExportJobService {
     }
 
     public String download(String jobId, String requester, String tenantId, boolean canViewAll) {
+        String normalizedTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         JobRecord record = jobs.get(jobId);
         if (record == null) {
             throw new IllegalArgumentException("export_job_not_found");
         }
-        if (!Objects.equals(record.tenantId, tenantId)) {
+        if (!Objects.equals(record.tenantId, normalizedTenantId)) {
             throw new IllegalArgumentException("forbidden");
         }
         if (!canViewAll && !Objects.equals(record.requestedBy, requester)) {
@@ -169,13 +178,14 @@ public class AuditExportJobService {
     }
 
     public Map<String, Object> metricsSnapshot(String tenantId) {
+        String normalizedTenantId = requireTenantId(tenantId);
         cleanupOldFinishedJobs();
         int pending = 0;
         int running = 0;
         int done = 0;
         int failed = 0;
         for (JobRecord row : jobs.values()) {
-            if (!Objects.equals(row.tenantId, tenantId)) continue;
+            if (!Objects.equals(row.tenantId, normalizedTenantId)) continue;
             if ("PENDING".equals(row.status)) pending++;
             else if ("RUNNING".equals(row.status)) running++;
             else if ("DONE".equals(row.status)) done++;
@@ -185,7 +195,7 @@ public class AuditExportJobService {
         Collections.sort(durations);
 
         Map<String, Object> out = new HashMap<String, Object>();
-        out.put("tenantId", tenantId);
+        out.put("tenantId", normalizedTenantId);
         out.put("queuePending", pending);
         out.put("queueRunning", running);
         out.put("finishedDone", done);
@@ -224,7 +234,7 @@ public class AuditExportJobService {
         record.status = "PENDING";
         record.progress = 5;
         record.createdAt = LocalDateTime.now();
-        record.tenantId = tenantId == null || tenantId.trim().isEmpty() ? "tenant_default" : tenantId.trim();
+        record.tenantId = requireTenantId(tenantId);
         record.filterRole = role == null ? "" : role;
         record.filterUsername = username == null ? "" : username;
         record.filterAction = action == null ? "" : action;
@@ -258,12 +268,23 @@ public class AuditExportJobService {
                 if (record.to != null) {
                     predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), record.to));
                 }
-                return cb.and(predicates.toArray(new Predicate[predicates.size()]));
-
+                return cb.and(predicates.toArray(Predicate[]::new));
             };
 
-            List<AuditLog> logs = auditLogRepository.findAll(spec);
-            record.progress = 75;
+            long eligibleRows = auditLogRepository.count(spec);
+            if (eligibleRows > MAX_BACKGROUND_EXPORT_ROWS) {
+                record.status = "FAILED";
+                record.progress = 100;
+                record.error = "export_row_limit_exceeded";
+                record.finishedAt = LocalDateTime.now();
+                totalFailed.incrementAndGet();
+                addDuration(record);
+                return;
+            }
+
+            int rowCount = 0;
+            int page = 0;
+            int batchSize = 500;
 
             boolean zh = String.valueOf(record.language).toLowerCase(Locale.ROOT).startsWith("zh");
             StringBuilder csv = new StringBuilder();
@@ -273,20 +294,36 @@ public class AuditExportJobService {
             } else {
                 csv.append("id,username,role,action,resource,resourceId,details,createdAt\n");
             }
-            for (AuditLog log : logs) {
-                csv.append(escapeCsv(log.getId())).append(',')
-                        .append(escapeCsv(log.getUsername())).append(',')
-                        .append(escapeCsv(log.getRole())).append(',')
-                        .append(escapeCsv(log.getAction())).append(',')
-                        .append(escapeCsv(log.getResource())).append(',')
-                        .append(escapeCsv(log.getResourceId())).append(',')
-                        .append(escapeCsv(log.getDetails())).append(',')
-                        .append(escapeCsv(log.getCreatedAt() == null ? "" : log.getCreatedAt().toString()))
-                        .append('\n');
+            while (true) {
+                Page<AuditLog> batch = auditLogRepository.findAll(
+                        spec,
+                        PageRequest.of(page, batchSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+                );
+                if (batch.isEmpty()) {
+                    break;
+                }
+                for (AuditLog log : batch.getContent()) {
+                    csv.append(escapeCsv(log.getId())).append(',')
+                            .append(escapeCsv(log.getUsername())).append(',')
+                            .append(escapeCsv(log.getRole())).append(',')
+                            .append(escapeCsv(log.getAction())).append(',')
+                            .append(escapeCsv(log.getResource())).append(',')
+                            .append(escapeCsv(log.getResourceId())).append(',')
+                            .append(escapeCsv(log.getDetails())).append(',')
+                            .append(escapeCsv(log.getCreatedAt() == null ? "" : log.getCreatedAt().toString()))
+                            .append('\n');
+                }
+                rowCount += batch.getNumberOfElements();
+                int progress = 15 + (int) (60L * (page + 1) / Math.max(1, batch.getTotalPages()));
+                record.progress = Math.min(95, progress);
+                if (!batch.hasNext()) {
+                    break;
+                }
+                page++;
             }
 
             record.csv = csv.toString();
-            record.rowCount = logs.size();
+            record.rowCount = rowCount;
             record.progress = 100;
             record.status = "DONE";
             record.finishedAt = LocalDateTime.now();
@@ -358,6 +395,13 @@ public class AuditExportJobService {
 
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
+    }
+
+    private String requireTenantId(String tenantId) {
+        if (isBlank(tenantId)) {
+            throw new IllegalStateException("tenant_id_required");
+        }
+        return tenantId.trim();
     }
 
     private long percentile(List<Long> values, int p) {

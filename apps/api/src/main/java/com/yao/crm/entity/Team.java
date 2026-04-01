@@ -50,7 +50,7 @@ public class Team {
         if (id == null) id = java.util.UUID.randomUUID().toString();
         if (createdAt == null) createdAt = now;
         if (updatedAt == null) updatedAt = now;
-        if (tenantId == null || tenantId.trim().isEmpty()) tenantId = "tenant_default";
+        if (tenantId == null || tenantId.trim().isEmpty()) throw new IllegalStateException("tenant_id_required");
     }
 
     @PreUpdate

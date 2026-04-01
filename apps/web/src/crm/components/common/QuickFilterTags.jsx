@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { api } from '../../shared'
 
 /**
  * 快捷筛选标签组件 - 国内特色
@@ -33,18 +34,12 @@ export function QuickFilterTags({ entityType, onFilterChange }) {
     loadAbortControllerRef.current = controller
     setIsLoading(true)
     try {
-      const response = await fetch(
-        `/api/v2/filters/quick?entityType=${currentEntityType}`,
-        {
-          headers: {
-            'X-Tenant-Id': 'tenant_default',
-          },
-          signal: controller.signal,
-        }
+      const data = await api(
+        `/v2/filters/quick?entityType=${currentEntityType}`,
+        { signal: controller.signal },
       )
 
-      if (response.ok && loadRequestIdRef.current === requestId && !controller.signal.aborted) {
-        const data = await response.json()
+      if (loadRequestIdRef.current === requestId && !controller.signal.aborted) {
         setFilters(data.filters || [])
       }
     } catch (error) {
