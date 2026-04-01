@@ -6,6 +6,7 @@ import com.yao.crm.config.AiConfig;
 import com.yao.crm.service.AiService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -38,6 +39,7 @@ public class OpenAiServiceImpl implements AiService {
     private final long retryBackoffMs;
     private final RetrySleeper retrySleeper;
 
+    @Autowired
     public OpenAiServiceImpl(
             AiConfig aiConfig,
             @Value("${ai.openai.connect-timeout-ms:3000}") int connectTimeoutMs,
