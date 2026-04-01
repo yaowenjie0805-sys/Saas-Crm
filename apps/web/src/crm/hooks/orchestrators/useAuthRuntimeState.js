@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useRuntimeSectionFields } from './useRuntimeSectionFields'
 
 export function useAuthRuntimeState() {
+  const defaultTenant = String(import.meta.env.VITE_DEFAULT_TENANT || '').trim()
   const defaults = useMemo(() => ({
     loading: false,
     error: '',
@@ -9,7 +10,7 @@ export function useAuthRuntimeState() {
     crudErrors: { lead: '', customer: '', opportunity: '', followUp: '', contact: '', contract: '', payment: '' },
     crudFieldErrors: { lead: {}, customer: {}, opportunity: {}, followUp: {}, contact: {}, contract: {}, payment: {} },
     loginForm: () => ({
-      tenantId: localStorage.getItem('crm_last_tenant') || '',
+      tenantId: localStorage.getItem('crm_last_tenant') || defaultTenant || 'tenant_default',
       username: '',
       password: '',
       mfaCode: '',
