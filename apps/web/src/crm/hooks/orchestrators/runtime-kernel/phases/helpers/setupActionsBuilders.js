@@ -37,6 +37,7 @@ export function buildAuthActionsHookInput(ctx, data) {
     lang: ctx.lang,
     t: ctx.t,
     validateLogin: data.validateLogin,
+    validateRegister: data.validateRegister,
     validateSso: data.validateSso,
     saveAuth: data.saveAuth,
     handleLoginError: data.handleLoginError,
@@ -105,6 +106,7 @@ export function buildSetupActionsResult(crudDomainActions, authActions, domainAc
   return {
     crudDomainActions,
     submitLogin: authActions.submitLogin,
+    submitRegister: authActions.submitRegister,
     submitSsoLogin: authActions.submitSsoLogin,
     startOidcLogin: authActions.startOidcLogin,
     domainActions,

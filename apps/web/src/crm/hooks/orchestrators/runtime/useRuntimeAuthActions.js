@@ -4,10 +4,12 @@ export function useRuntimeAuthActions({
   lang,
   t,
   loginForm,
+  registerForm,
   ssoForm,
   ssoConfig,
   mfaChallengeId,
   validateLogin,
+  validateRegister,
   validateSso,
   setLoginError,
   setFormErrors,
@@ -97,6 +99,54 @@ export function useRuntimeAuthActions({
     }
   }
 
+  const submitRegister = async (e) => {
+    e.preventDefault()
+    logoutGuardRef.current = false
+    setLoginError('')
+    const nextErrors = validateRegister()
+    setFormErrors((p) => ({ ...p, register: nextErrors }))
+    if (Object.keys(nextErrors).length > 0) return
+
+    const tenantId = loginForm.tenantId?.trim() || ''
+    const payload = {
+      username: registerForm.username?.trim() || '',
+      password: registerForm.password || '',
+      confirmPassword: registerForm.confirmPassword || '',
+      displayName: registerForm.displayName?.trim() || '',
+    }
+
+    try {
+      await api(
+        '/auth/register',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: { 'X-Tenant-Id': tenantId },
+        },
+        null,
+        lang,
+      )
+      setFormErrors((p) => ({ ...p, register: {} }))
+    } catch (err) {
+      const code = String(err?.code || '').trim().toUpperCase()
+      if (code === 'TENANT_HEADER_REQUIRED') {
+        setFormErrors((p) => ({
+          ...p,
+          register: { ...p.register, tenantId: t('fieldRequired') },
+        }))
+        return
+      }
+      if (code === 'USERNAME_EXISTS') {
+        setFormErrors((p) => ({
+          ...p,
+          register: { ...p.register, username: t('usernameExists') },
+        }))
+        return
+      }
+      handleLoginError(err)
+    }
+  }
+
   const startOidcLogin = () => {
     logoutGuardRef.current = false
     if (!ssoConfig?.authorizeEndpoint || !ssoConfig?.clientId) {
@@ -120,6 +170,7 @@ export function useRuntimeAuthActions({
 
   return {
     submitLogin,
+    submitRegister,
     submitSsoLogin,
     startOidcLogin,
   }

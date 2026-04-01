@@ -19,9 +19,10 @@ import static org.mockito.Mockito.when;
 class DataInitializerSeedUserPasswordTest {
 
     @Test
-    void upsertUserShouldNotOverridePasswordForExistingUser() {
+    void upsertUserShouldNotOverridePasswordForExistingUserWhenResetDisabled() {
         DataInitializer initializer = new DataInitializer();
         ReflectionTestUtils.setField(initializer, "seedTenantId", "tenant_test");
+        ReflectionTestUtils.setField(initializer, "resetBootstrapPassword", false);
         UserAccountRepository repository = mock(UserAccountRepository.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
 
@@ -52,9 +53,45 @@ class DataInitializerSeedUserPasswordTest {
     }
 
     @Test
+    void upsertUserShouldResetPasswordForExistingUserWhenResetEnabled() {
+        DataInitializer initializer = new DataInitializer();
+        ReflectionTestUtils.setField(initializer, "seedTenantId", "tenant_test");
+        ReflectionTestUtils.setField(initializer, "resetBootstrapPassword", true);
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+        UserAccount existing = new UserAccount();
+        existing.setId("existing-id");
+        existing.setUsername("admin");
+        existing.setPassword("existing-hash");
+        existing.setTenantId("tenant_test");
+        when(repository.findByUsernameAndTenantId("admin", "tenant_test")).thenReturn(Optional.of(existing));
+        when(encoder.encode("seed-password")).thenReturn("encoded-seed-password");
+
+        ReflectionTestUtils.invokeMethod(
+                initializer,
+                "upsertUser",
+                repository,
+                encoder,
+                "u_admin",
+                "admin",
+                "seed-password",
+                "ADMIN",
+                "System Admin",
+                ""
+        );
+
+        ArgumentCaptor<UserAccount> captor = ArgumentCaptor.forClass(UserAccount.class);
+        verify(repository).save(captor.capture());
+        verify(encoder).encode("seed-password");
+        assertEquals("encoded-seed-password", captor.getValue().getPassword());
+    }
+
+    @Test
     void upsertUserShouldSetPasswordWhenCreatingUser() {
         DataInitializer initializer = new DataInitializer();
         ReflectionTestUtils.setField(initializer, "seedTenantId", "tenant_test");
+        ReflectionTestUtils.setField(initializer, "resetBootstrapPassword", false);
         UserAccountRepository repository = mock(UserAccountRepository.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
 

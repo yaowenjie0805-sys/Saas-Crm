@@ -47,6 +47,8 @@ public class DataInitializer {
     private String bootstrapDefaultPassword;
     @Value("${app.seed.tenant-id:}")
     private String seedTenantId;
+    @Value("${app.seed.reset-bootstrap-password:false}")
+    private boolean resetBootstrapPassword;
 
     @Bean
     public CommandLineRunner seedData(CustomerRepository customerRepository,
@@ -183,9 +185,9 @@ public class DataInitializer {
             });
 
             upsertUser(userAccountRepository, passwordEncoder, "u_admin", "admin", bootstrapDefaultPassword, "ADMIN", "\u7cfb\u7edf\u7ba1\u7406\u5458", "");
-            upsertUser(userAccountRepository, passwordEncoder, "u_manager", "manager", bootstrapDefaultPassword, "MANAGER", "\u9500\u552e\u7ecf\u7406", "");
-            upsertUser(userAccountRepository, passwordEncoder, "u_sales", "sales", bootstrapDefaultPassword, "SALES", "\u9500\u552e", "sales");
-            upsertUser(userAccountRepository, passwordEncoder, "u_analyst", "analyst", bootstrapDefaultPassword, "ANALYST", "\u6570\u636e\u5206\u6790\u5e08", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_manager", "manager", "manager123", "MANAGER", "\u9500\u552e\u7ecf\u7406", "");
+            upsertUser(userAccountRepository, passwordEncoder, "u_sales", "sales", "sales123", "SALES", "\u9500\u552e", "sales");
+            upsertUser(userAccountRepository, passwordEncoder, "u_analyst", "analyst", "analyst123", "ANALYST", "\u6570\u636e\u5206\u6790\u5e08", "");
 
             backfillLegacySeedTexts(taskRepository, followUpRepository, contactRepository, contractRepository, paymentRepository, userAccountRepository);
 
@@ -645,7 +647,7 @@ public class DataInitializer {
         UserAccount user = existing.orElseGet(() -> makeUser(id, username, "", role, displayName, ownerScope));
         user.setId(id);
         user.setUsername(username);
-        if (!existing.isPresent()) {
+        if (!existing.isPresent() || resetBootstrapPassword) {
             user.setPassword(encoder.encode(rawPassword));
         }
         user.setRole(role);

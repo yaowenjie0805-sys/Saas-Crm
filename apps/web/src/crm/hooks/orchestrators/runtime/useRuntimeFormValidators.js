@@ -10,6 +10,7 @@ export function useRuntimeFormValidators({
   t,
   auth,
   loginForm,
+  registerForm = {},
   ssoForm,
   contactForm,
   customerForm,
@@ -30,6 +31,22 @@ export function useRuntimeFormValidators({
     const next = {}
     if (!ssoForm.username?.trim()) next.username = t('fieldRequired')
     if (!ssoForm.code?.trim()) next.code = t('fieldRequired')
+    return next
+  }
+
+  const validateRegister = () => {
+    const next = {}
+    if (!loginForm.tenantId?.trim()) next.tenantId = t('fieldRequired')
+    if (!registerForm.username?.trim()) next.username = t('fieldRequired')
+    if (!registerForm.password?.trim()) next.password = t('fieldRequired')
+    if (!registerForm.confirmPassword?.trim()) next.confirmPassword = t('fieldRequired')
+    if (
+      registerForm.password?.trim() &&
+      registerForm.confirmPassword?.trim() &&
+      registerForm.password !== registerForm.confirmPassword
+    ) {
+      next.confirmPassword = t('passwordNotMatch')
+    }
     return next
   }
 
@@ -96,6 +113,7 @@ export function useRuntimeFormValidators({
 
   return {
     validateLogin,
+    validateRegister,
     validateSso,
     validateContactForm,
     validateCustomerForm,

@@ -81,7 +81,7 @@ class AuthFlowIntegrationTest {
 
         String response = mockMvc.perform(post("/api/auth/sso/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"sso_demo\",\"displayName\":\"SSO Demo\",\"code\":\"SSO-ACCESS\"}"))
+                        .content("{\"tenantId\":\"" + TENANT_TEST + "\",\"username\":\"sso_demo\",\"displayName\":\"SSO Demo\",\"code\":\"SSO-ACCESS\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isString())
                 .andReturn().getResponse().getContentAsString();
@@ -1486,7 +1486,7 @@ class AuthFlowIntegrationTest {
     void legacyAuthInvalidCredentialsShouldContainCompatibilityErrorFields() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"admin\",\"password\":\"bad\"}"))
+                        .content("{\"tenantId\":\"" + TENANT_TEST + "\",\"username\":\"admin\",\"password\":\"bad\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").isString())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
@@ -2502,7 +2502,7 @@ class AuthFlowIntegrationTest {
     }
 
     private String login(String username, String password) throws Exception {
-        String body = "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}";
+        String body = "{\"tenantId\":\"" + TENANT_TEST + "\",\"username\":\"" + username + "\",\"password\":\"" + password + "\"}";
         String response = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))

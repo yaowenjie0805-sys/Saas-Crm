@@ -138,6 +138,7 @@ export const ZH = {
   "ownerScopeTooLong": "\u6570\u636e\u8303\u56f4\u957f\u5ea6\u4e0d\u80fd\u8d85\u8fc7 64",
   "invalidRoleText": "\u89d2\u8272\u4e0d\u5408\u6cd5",
   "passwordNotMatch": "\u4e24\u6b21\u8f93\u5165\u7684\u5bc6\u7801\u4e0d\u4e00\u81f4",
+  "usernameExists": "\u7528\u6237\u540d\u5df2\u5b58\u5728",
   "contactName": "\u8054\u7cfb\u4eba\u59d3\u540d",
   "contractNo": "\u5408\u540c\u7f16\u53f7",
   "signDate": "\u7b7e\u7ea6\u65e5\u671f",

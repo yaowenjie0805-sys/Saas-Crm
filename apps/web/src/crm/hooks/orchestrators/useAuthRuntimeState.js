@@ -15,6 +15,12 @@ export function useAuthRuntimeState() {
       password: '',
       mfaCode: '',
     }),
+    registerForm: {
+      username: '',
+      password: '',
+      confirmPassword: '',
+      displayName: '',
+    },
     mfaChallengeId: '',
     ssoConfig: { enabled: false, providerName: '', mode: 'mock' },
     ssoForm: { username: 'sso_user', code: 'SSO-ACCESS', displayName: '' },

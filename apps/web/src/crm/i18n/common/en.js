@@ -138,6 +138,7 @@ export const EN = {
   "ownerScopeTooLong": "ownerScope length must be <= 64",
   "invalidRoleText": "invalid role",
   "passwordNotMatch": "passwords do not match",
+  "usernameExists": "Username already exists",
   "contactName": "Contact Name",
   "contractNo": "Contract No",
   "signDate": "Sign Date",

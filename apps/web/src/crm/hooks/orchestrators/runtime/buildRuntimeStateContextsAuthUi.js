@@ -6,6 +6,8 @@ export function buildRuntimeStateContextsAuthUi(runtime) {
       setLoginError: runtime.setLoginError,
       loginForm: runtime.loginForm,
       setLoginForm: runtime.setLoginForm,
+      registerForm: runtime.registerForm,
+      setRegisterForm: runtime.setRegisterForm,
       mfaChallengeId: runtime.mfaChallengeId,
       setMfaChallengeId: runtime.setMfaChallengeId,
       ssoConfig: runtime.ssoConfig,

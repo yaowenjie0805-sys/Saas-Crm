@@ -196,13 +196,39 @@ function LoginView({
         ) : (
           <form onSubmit={submitRegister} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <h1>{t('register')}</h1>
+
+            <div>
+              <input
+                data-testid="register-tenant-id"
+                className={formErrors.register.tenantId ? 'input-invalid' : ''}
+                placeholder={t('tenantId')}
+                value={loginForm.tenantId}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setLoginForm((p) => ({ ...p, tenantId: value }))
+                  if (value.trim()) {
+                    setFormErrors((p) => ({ ...p, register: { ...p.register, tenantId: '' } }))
+                  }
+                }}
+              />
+              <div className="small-tip">{t('tenantHint')}</div>
+              {formErrors.register.tenantId && (
+                <div className="field-error">{formErrors.register.tenantId}</div>
+              )}
+            </div>
             
             <div>
               <input
                 className={formErrors.register.username ? 'input-invalid' : ''}
                 placeholder={t('username')}
                 value={registerForm.username}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, username: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setRegisterForm((p) => ({ ...p, username: value }))
+                  if (value.trim()) {
+                    setFormErrors((p) => ({ ...p, register: { ...p.register, username: '' } }))
+                  }
+                }}
                 autoComplete="username"
               />
               {formErrors.register.username && (
@@ -216,7 +242,13 @@ function LoginView({
                 className={formErrors.register.password ? 'input-invalid' : ''}
                 placeholder={t('password')}
                 value={registerForm.password}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setRegisterForm((p) => ({ ...p, password: value }))
+                  if (value.trim()) {
+                    setFormErrors((p) => ({ ...p, register: { ...p.register, password: '' } }))
+                  }
+                }}
                 autoComplete="new-password"
               />
               {formErrors.register.password && (
@@ -230,7 +262,13 @@ function LoginView({
                 className={formErrors.register.confirmPassword ? 'input-invalid' : ''}
                 placeholder={t('confirmPassword')}
                 value={registerForm.confirmPassword}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setRegisterForm((p) => ({ ...p, confirmPassword: value }))
+                  if (value.trim()) {
+                    setFormErrors((p) => ({ ...p, register: { ...p.register, confirmPassword: '' } }))
+                  }
+                }}
                 autoComplete="new-password"
               />
               {formErrors.register.confirmPassword && (
