@@ -28,7 +28,7 @@ function main() {
   npmRun('validate:env')
   npmRun('test:e2e', {
     ...process.env,
-    E2E_TEST_GLOB: 'apps/web/tests/e2e/smoke.spec.js',
+    E2E_TEST_GLOB: 'apps/web/tests/e2e/smoke.spec.js,apps/web/tests/e2e/topbar-ai-shortcut.spec.js',
   })
   console.log('CI_PR_OK')
 }
