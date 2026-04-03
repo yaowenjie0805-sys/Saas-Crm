@@ -491,6 +491,31 @@
   width: min(980px, calc(100vw - 32px));
 }
 
+.modal-card-product {
+  width: min(680px, calc(100vw - 32px));
+  background: var(--panel-bg);
+  border-color: var(--border-subtle);
+}
+
+.modal-card-commerce {
+  width: min(720px, calc(100vw - 32px));
+  background: var(--panel-bg);
+  border-color: var(--border-subtle);
+}
+
+.forms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-focus-ring {
+  outline: 2px solid color-mix(in srgb, var(--accent-cyan) 65%, white 35%);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 28%, transparent 72%);
+  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+}
+
 .batch-summary-strip {
   display: flex;
   flex-wrap: wrap;

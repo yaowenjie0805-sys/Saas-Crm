@@ -124,7 +124,11 @@ function AiFollowUpSummarySection({ t, apiContext, initialInteractionDetails = '
   }
 
   return (
-    <section className="panel" data-testid="ai-followup-summary-panel">
+    <section
+      className="panel"
+      id="ai-followup-summary-section"
+      data-testid="ai-followup-summary-panel"
+    >
       <div className="panel-head">
         <h2>{t('aiFollowUpSummaryTitle')}</h2>
       </div>

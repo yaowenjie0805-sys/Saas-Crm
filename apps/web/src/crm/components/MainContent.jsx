@@ -103,6 +103,31 @@ function MainContent() {
     setNotice: setSearchNotice,
     t,
   })
+  const onGoToAi = useCallback(() => {
+    if (activePage !== 'dashboard') {
+      refreshPage('dashboard', 'topbar_ai_shortcut')
+      base.onWorkbenchNavigate?.('dashboard')
+    }
+
+    const scrollToAi = () => {
+      const target = document.getElementById('ai-followup-summary-section')
+      if (!target) return false
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      target.classList.add('ai-focus-ring')
+      window.setTimeout(() => target.classList.remove('ai-focus-ring'), 1400)
+      return true
+    }
+
+    if (scrollToAi()) return
+
+    let retries = 0
+    const timer = window.setInterval(() => {
+      retries += 1
+      if (scrollToAi() || retries >= 10) {
+        window.clearInterval(timer)
+      }
+    }, 120)
+  }, [activePage, base, refreshPage])
 
   useEffect(() => {
     if (!searchNotice) return undefined
@@ -122,6 +147,7 @@ function MainContent() {
         onLogout={onLogout}
         onRefreshCurrentPage={() => refreshPage(activePage, 'topbar_refresh')}
         onSearchSubmit={onSearchSubmit}
+        onGoToAi={onGoToAi}
       />
 
       {!canWrite && <div className="info-banner">{t('readOnly')}</div>}

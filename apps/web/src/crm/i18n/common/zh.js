@@ -199,6 +199,7 @@ export const ZH = {
   "savedItems": "\u5df2\u4fdd\u5b58\u660e\u7ec6",
   "globalSearch": "\u641c\u7d22\u5ba2\u6237\u3001\u5408\u540c\u3001\u4efb\u52a1...",
   "notifications": "\u901a\u77e5",
+  "aiShortcut": "AI\u529f\u80fd",
   "aiFollowUpSummaryTitle": "AI\u8ddf\u8fdb\u6458\u8981",
   "aiFollowUpSummaryHint": "\u8f93\u5165\u8ddf\u8fdb\u8be6\u60c5\uff0c\u4e00\u952e\u751f\u6210\u7cbe\u7b80\u6458\u8981\u3002",
   "aiFollowUpSummaryCustomerPlaceholder": "\u5ba2\u6237\uff08\u53ef\u9009\uff09",

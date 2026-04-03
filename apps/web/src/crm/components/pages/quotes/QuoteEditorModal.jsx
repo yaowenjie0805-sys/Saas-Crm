@@ -8,7 +8,7 @@ function QuoteEditorModal({
 }) {
   return (
     <div className="modal-mask">
-      <div className="modal-card">
+      <div className="modal-card modal-card-commerce">
         <div className="panel-head">
           <h2>{form.id ? t('editQuote') : t('createQuote')}</h2>
           <button className="mini-btn" onClick={() => setOpenModal(false)}>{t('closeModal')}</button>

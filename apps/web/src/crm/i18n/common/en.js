@@ -199,6 +199,7 @@ export const EN = {
   "savedItems": "Saved Items",
   "globalSearch": "Search customer, contract, task...",
   "notifications": "Notifications",
+  "aiShortcut": "AI",
   "aiFollowUpSummaryTitle": "AI Follow-up Summary",
   "aiFollowUpSummaryHint": "Paste follow-up notes and generate a concise summary.",
   "aiFollowUpSummaryCustomerPlaceholder": "Customer (optional)",

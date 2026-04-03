@@ -10,6 +10,7 @@ function TopBar({
   onLogout,
   onRefreshCurrentPage,
   onSearchSubmit,
+  onGoToAi,
 }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,6 +65,13 @@ function TopBar({
           />
         </div>
         <div className="topbar-secondary-actions">
+          <button
+            className="mini-btn topbar-quiet-btn"
+            data-testid="topbar-ai-shortcut"
+            onClick={() => onGoToAi?.()}
+          >
+            {t('aiShortcut')}
+          </button>
           <button className="mini-btn topbar-quiet-btn">{t('notifications')}</button>
           <button
             className="mini-btn topbar-quiet-btn"
