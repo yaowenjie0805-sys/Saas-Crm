@@ -24,7 +24,9 @@ node_modules/
 dist/
 dist-ssr/
 apps/web/dist/
+apps/web/coverage/
 apps/api/target/
+apps/api/apps/
 bin-debug/
 bin-release/
 [Oo]bj/
