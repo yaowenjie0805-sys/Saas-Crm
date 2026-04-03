@@ -17,6 +17,7 @@ describe('routeConfig', () => {
     expect(PATH_TO_PAGE['/reports/designer']).toBe('reportDesigner')
     expect(PAGE_DOMAIN_MAP.approvals).toBe('approval')
     expect(REFRESH_REASONS.has('sidebar_nav')).toBe(true)
+    expect(REFRESH_REASONS.has('topbar_ai_shortcut')).toBe(true)
   })
 
   it('provides page preloaders as lazy functions', async () => {

@@ -53,6 +53,7 @@ export const REFRESH_REASONS = new Set([
   'topbar_refresh',
   'topbar_search',
   'topbar_search_clear',
+  'topbar_ai_shortcut',
   'panel_action',
   'workbench_jump',
   'sidebar_nav',
