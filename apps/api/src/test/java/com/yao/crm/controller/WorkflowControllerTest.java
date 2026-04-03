@@ -51,12 +51,12 @@ class WorkflowControllerTest {
 
     @Test
     void getWorkflowsShouldTrimTenantAndNormalizeBlankQueryParams() {
-        when(workflowService.getWorkflows(TENANT_TEST, null, null)).thenReturn(Collections.emptyList());
+        when(workflowService.getWorkflows("tenant-1", null, null)).thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.getWorkflows(" tenant-1 ", "   ", "");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(workflowService).getWorkflows(TENANT_TEST, null, null);
+        verify(workflowService).getWorkflows("tenant-1", null, null);
         verifyNoInteractions(executionService);
     }
 
@@ -65,7 +65,7 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.deleteWorkflow(" tenant-1 ", " wf-1 ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
+        verify(workflowService).deleteWorkflow("tenant-1", "wf-1");
         verifyNoInteractions(executionService);
     }
 
@@ -251,7 +251,7 @@ class WorkflowControllerTest {
         when(execution.getStatus()).thenReturn("RUNNING");
         when(execution.getStartedAt()).thenReturn(java.time.LocalDateTime.parse("2026-03-28T10:15:30"));
         when(executionService.startExecution(
-                eq(TENANT_TEST),
+                eq("tenant-1"),
                 eq("wf-1"),
                 eq("MANUAL"),
                 eq(null),
@@ -262,7 +262,7 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.executeWorkflow(" tenant-1 ", " wf-1 ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).startExecution(TENANT_TEST, "wf-1", "MANUAL", null, "{\"key\":\"value\"}", request.payload);
+        verify(executionService).startExecution("tenant-1", "wf-1", "MANUAL", null, "{\"key\":\"value\"}", request.payload);
         verifyNoInteractions(workflowService);
     }
 
@@ -298,13 +298,13 @@ class WorkflowControllerTest {
     @Test
     void getExecutionDetailShouldTrimExecutionIdBeforeCallingService() {
         Map<String, Object> detail = Collections.singletonMap("id", "exec-1");
-        when(executionService.getExecutionDetail(TENANT_TEST, "exec-1")).thenReturn(detail);
+        when(executionService.getExecutionDetail("tenant-1", "exec-1")).thenReturn(detail);
 
         ResponseEntity<?> response = controller.getExecutionDetail(" tenant-1 ", " exec-1 ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(detail, response.getBody());
-        verify(executionService).getExecutionDetail(TENANT_TEST, "exec-1");
+        verify(executionService).getExecutionDetail("tenant-1", "exec-1");
         verifyNoInteractions(workflowService);
     }
 
@@ -330,13 +330,13 @@ class WorkflowControllerTest {
 
     @Test
     void getExecutionHistoryShouldTrimWorkflowIdBeforeCallingService() {
-        when(executionService.getExecutionHistory(TENANT_TEST, "wf-1", null, 1, 10))
+        when(executionService.getExecutionHistory("tenant-1", "wf-1", null, 1, 10))
                 .thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.getExecutionHistory(" tenant-1 ", " wf-1 ", "   ", 1, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).getExecutionHistory(TENANT_TEST, "wf-1", null, 1, 10);
+        verify(executionService).getExecutionHistory("tenant-1", "wf-1", null, 1, 10);
         verifyNoInteractions(workflowService);
     }
 
@@ -359,7 +359,7 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.cancelExecution(" tenant-1 ", " exec-1 ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).cancelExecution(TENANT_TEST, "exec-1", "user-1");
+        verify(executionService).cancelExecution("tenant-1", "exec-1", "user-1");
         verifyNoInteractions(workflowService);
     }
 
@@ -390,12 +390,12 @@ class WorkflowControllerTest {
         WorkflowExecution execution = mock(WorkflowExecution.class);
         when(execution.getId()).thenReturn("exec-2");
         when(execution.getStatus()).thenReturn("RUNNING");
-        when(executionService.retryExecution(TENANT_TEST, "exec-1")).thenReturn(execution);
+        when(executionService.retryExecution("tenant-1", "exec-1")).thenReturn(execution);
 
         ResponseEntity<?> response = controller.retryExecution(" tenant-1 ", " exec-1 ");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).retryExecution(TENANT_TEST, "exec-1");
+        verify(executionService).retryExecution("tenant-1", "exec-1");
         verifyNoInteractions(workflowService);
     }
 
@@ -435,7 +435,7 @@ class WorkflowControllerTest {
         ResponseEntity<?> response = controller.handleApprovalCallback(" tenant-1 ", " exec-1 ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(executionService).handleApprovalCallback(TENANT_TEST, "exec-1", "node-1", "APPROVE", "user-1", "ok");
+        verify(executionService).handleApprovalCallback("tenant-1", "exec-1", "node-1", "APPROVE", "user-1", "ok");
         verifyNoInteractions(workflowService);
     }
 
@@ -468,4 +468,3 @@ class WorkflowControllerTest {
         verifyNoInteractions(executionService);
     }
 }
-

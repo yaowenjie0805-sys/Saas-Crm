@@ -37,16 +37,19 @@ class ReportExportServiceTest {
     @DisplayName("shouldExportCsvWithCorrectFormat_whenExportOverviewCsv")
     void shouldExportCsvWithCorrectFormat_whenExportOverviewCsv() {
         // Arrange
+        String tenantId = "tenant-1";
         LocalDate fromDate = LocalDate.of(2026, 1, 1);
         LocalDate toDate = LocalDate.of(2026, 1, 31);
         String role = "ADMIN";
+        String owner = "";
+        String department = "";
 
         Map<String, Object> mockReport = createMockReport();
-        when(reportService.overviewByTenant(anyString(), any(LocalDate.class), any(LocalDate.class), anyString(), anyString(), anyString()))
+        when(reportService.overviewByTenant(tenantId, fromDate, toDate, role, owner, department))
                 .thenReturn(mockReport);
 
         // Act
-        String csv = exportService.exportOverviewCsv(fromDate, toDate, role);
+        String csv = exportService.exportOverviewCsvByTenant(tenantId, fromDate, toDate, role, owner, department, "en");
 
         // Assert
         assertNotNull(csv);
@@ -63,16 +66,19 @@ class ReportExportServiceTest {
     @DisplayName("shouldExportEmptyReport_whenNoData")
     void shouldExportEmptyReport_whenNoData() {
         // Arrange
+        String tenantId = "tenant-1";
         LocalDate fromDate = null;
         LocalDate toDate = null;
         String role = "";
+        String owner = "";
+        String department = "";
 
         Map<String, Object> emptyReport = createEmptyReport();
-        when(reportService.overviewByTenant(anyString(), isNull(), isNull(), anyString(), anyString(), anyString()))
+        when(reportService.overviewByTenant(tenantId, null, null, role, owner, department))
                 .thenReturn(emptyReport);
 
         // Act
-        String csv = exportService.exportOverviewCsv(fromDate, toDate, role);
+        String csv = exportService.exportOverviewCsvByTenant(tenantId, fromDate, toDate, role, owner, department, "en");
 
         // Assert
         assertNotNull(csv);
@@ -163,16 +169,19 @@ class ReportExportServiceTest {
     @DisplayName("shouldEscapeSpecialCharactersInCsv_whenDataContainsCommas")
     void shouldEscapeSpecialCharactersInCsv_whenDataContainsCommas() {
         // Arrange
+        String tenantId = "tenant-1";
         LocalDate fromDate = LocalDate.of(2026, 1, 1);
         LocalDate toDate = LocalDate.of(2026, 1, 31);
         String role = "ADMIN";
+        String owner = "";
+        String department = "";
 
         Map<String, Object> mockReport = createMockReportWithSpecialChars();
-        when(reportService.overviewByTenant(anyString(), any(LocalDate.class), any(LocalDate.class), anyString(), anyString(), anyString()))
+        when(reportService.overviewByTenant(tenantId, fromDate, toDate, role, owner, department))
                 .thenReturn(mockReport);
 
         // Act
-        String csv = exportService.exportOverviewCsv(fromDate, toDate, role);
+        String csv = exportService.exportOverviewCsvByTenant(tenantId, fromDate, toDate, role, owner, department, "en");
 
         // Assert
         assertNotNull(csv);

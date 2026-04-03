@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { E2E_CREDENTIALS, ensureLoggedIn } from './helpers/auth'
+import { E2E_CREDENTIALS, ensureLoggedIn } from './helpers/auth.js'
 
 const API_BASE_URL = process.env.E2E_API_BASE_URL || 'http://127.0.0.1:8080/api'
 
@@ -190,11 +190,13 @@ test.describe('API Integration', () => {
       },
     })
 
-    expect(response.ok()).toBeTruthy()
-    const body = await response.json()
-    // Should either be empty or not include default tenant's data
-    const customers = Array.isArray(body) ? body : (body.data || [])
-    expect(customers.length).toBe(0)
+    // Strict tenant mode may return 403; relaxed mode may return isolated empty dataset.
+    expect([200, 403]).toContain(response.status())
+    if (response.status() === 200) {
+      const body = await response.json()
+      const customers = Array.isArray(body) ? body : (body.data || [])
+      expect(customers.length).toBe(0)
+    }
   })
 
   test('should fetch reports data via API', async ({ request }) => {

@@ -84,7 +84,7 @@ class QuickFilterControllerTest {
                 ArgumentCaptor.forClass(com.yao.crm.entity.QuickFilter.class);
         verify(quickFilterRepository).save(captor.capture());
         com.yao.crm.entity.QuickFilter saved = captor.getValue();
-        assertEquals(TENANT_TEST, saved.getTenantId());
+        assertEquals("tenant-1", saved.getTenantId());
         assertEquals("My filter", saved.getName());
         assertEquals("alice", saved.getOwner());
         assertEquals("lead", saved.getEntityType());
@@ -119,12 +119,12 @@ class QuickFilterControllerTest {
 
     @Test
     void deleteQuickFilterShouldTrimTenantAndIdBeforeDeleting() {
-        when(quickFilterRepository.deleteByTenantIdAndId(TENANT_TEST, "qf-1")).thenReturn(1);
+        when(quickFilterRepository.deleteByTenantIdAndId("tenant-1", "qf-1")).thenReturn(1);
 
         ResponseEntity<?> response = controller.deleteQuickFilter("  tenant-1  ", "  qf-1  ");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(quickFilterRepository).deleteByTenantIdAndId(TENANT_TEST, "qf-1");
+        verify(quickFilterRepository).deleteByTenantIdAndId("tenant-1", "qf-1");
     }
 
     @Test
@@ -196,4 +196,3 @@ class QuickFilterControllerTest {
         assertNotNull(response.getBody());
     }
 }
-

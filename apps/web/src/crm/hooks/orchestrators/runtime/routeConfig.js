@@ -25,14 +25,14 @@ export const PAGE_TO_PATH = {
 export const PATH_TO_PAGE = Object.entries(PAGE_TO_PATH).reduce((acc, [page, path]) => ({ ...acc, [path]: page }), {})
 
 export const PAGE_CHUNK_PRELOADERS = {
-  dashboard: () => import('../../../components/pages/DashboardPanel'),
-  pipeline: () => import('../../../components/pages/PipelinePanel'),
-  reports: () => import('../../../components/pages/DashboardPanel'),
-  reportDesigner: () => import('../../../components/pages/ReportDesignerPanel'),
+  dashboard: () => import('../../../components/pages/dashboard'),
+  pipeline: () => import('../../../components/pages/pipeline'),
+  reports: () => import('../../../components/pages/dashboard'),
+  reportDesigner: () => import('../../../components/pages/reportDesigner'),
   customers: () => import('../../../components/pages/customers'),
-  quotes: () => import('../../../components/pages/QuotesPanel'),
-  orders: () => import('../../../components/pages/OrdersPanel'),
-  approvals: () => import('../../../components/pages/ApprovalsPageContainer'),
+  quotes: () => import('../../../components/pages/quotes'),
+  orders: () => import('../../../components/pages/orders'),
+  approvals: () => import('../../../components/pages/approvals'),
 }
 
 export const PAGE_DOMAIN_PRELOADERS = {

@@ -73,7 +73,7 @@
 - 前端应用主目录：`apps/web/src/crm/`
 - 页面组件：`apps/web/src/crm/components/pages/`
 - 通用组件：`apps/web/src/crm/components/common/`
-- API Hook：`apps/web/src/crm/hooks/useApi.js`
+- `hooks/api/` 分层：`apps/web/src/crm/hooks/api/`（按领域拆分，统一使用 `useXxxApi` 命名），统一导出入口：`apps/web/src/crm/hooks/orchestrators/`
 - 全局状态：`apps/web/src/crm/store/appStore.js`
 - 打包分块策略：`apps/web/vite.config.js`
 
@@ -83,7 +83,7 @@
 
 排查建议：
 - 页面空白/跳转异常：先看 Router 与页面懒加载导入。
-- 数据不刷新：先看 store 更新，再看 useApi 调用参数。
+- 数据不刷新：先看 store 更新，再看对应 `useXxxApi` 调用参数。
 - 构建告警：优先看 `vite.config.js` 的 `manualChunks`。
 - 组件频繁重渲染：检查是否需要 `React.memo` 包裹或依赖项优化。
 

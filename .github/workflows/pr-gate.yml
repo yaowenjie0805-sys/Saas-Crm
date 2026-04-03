@@ -49,6 +49,12 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Runtime Kernel Import Check
+        run: npm run check:runtime-kernel-imports --workspace apps/web
+
+      - name: Pages Entry Export Check
+        run: npm run check:pages-entry-exports --workspace apps/web
+
       - name: Lint
         run: npm run lint
 
@@ -69,6 +75,9 @@ jobs:
 
       - name: Install Frontend Dependencies
         run: npm ci
+
+      - name: Runtime Kernel Import Check
+        run: npm run check:runtime-kernel-imports --workspace apps/web
 
       - name: Frontend Unit Tests
         run: npm run test:frontend:coverage
@@ -99,6 +108,9 @@ jobs:
           distribution: "temurin"
           java-version: "17"
           cache: "maven"
+
+      - name: API Integration Test
+        run: npm run test:api:integration
 
       - name: Backend Tests
         run: npm run test:backend:coverage

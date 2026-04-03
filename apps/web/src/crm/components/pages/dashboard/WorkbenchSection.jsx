@@ -52,7 +52,7 @@ function WorkbenchSection({
   }
 
   return (
-    <section className="panel">
+    <section className="panel" data-testid="dashboard-workbench">
       <div className="panel-head">
         <h2>{t('workbenchToday')}</h2>
         <div className="inline-tools">
@@ -65,7 +65,7 @@ function WorkbenchSection({
         </div>
       </div>
 
-      <div className="stats-grid">
+      <div className="stats-grid" data-testid="dashboard-workbench-cards">
         {workbenchCards.map((card) => {
           const meta = cardMeta[card.key] || {
             targetPage: 'dashboard',
@@ -76,6 +76,7 @@ function WorkbenchSection({
             <article
               key={card.key}
               className={`stat-card workbench-card level-${String(card.level || 'info').toLowerCase()}`}
+              data-testid="dashboard-workbench-card"
             >
               <p>{cardLabel(card)}</p>
               <h3>{card.value || 0}</h3>
@@ -108,14 +109,15 @@ function WorkbenchSection({
         </button>
       </div>
 
-      <div className="workbench-grid">
-        <div className="workbench-col">
+      <div className="workbench-grid" data-testid="dashboard-workbench-grid">
+        <div className="workbench-col" data-testid="dashboard-workbench-todo">
           <h4>{t('todayTodo')}</h4>
           {todoItems.map((item) => (
             <button
               key={`${item.type}-${item.id}`}
               className="workbench-item"
               onClick={() => handleTodoClick(item)}
+              data-testid="dashboard-workbench-todo-item"
             >
               <span>{item.title}</span>
               <small>{item.statusText} · {item.ownerText}</small>
@@ -123,13 +125,14 @@ function WorkbenchSection({
           ))}
           {todoItems.length === 0 && <div className="empty-tip">{t('noData')}</div>}
         </div>
-        <div className="workbench-col">
+        <div className="workbench-col" data-testid="dashboard-workbench-warning">
           <h4>{t('warningList')}</h4>
           {warningItems.map((item) => (
             <button
               key={`${item.type}-${item.id}`}
               className="workbench-item warning"
               onClick={() => handleWarningClick(item)}
+              data-testid="dashboard-workbench-warning-item"
             >
               <span>{item.title}</span>
               <small>{item.statusText} · {item.ownerText}</small>

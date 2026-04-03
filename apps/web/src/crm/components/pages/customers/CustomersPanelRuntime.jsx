@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import useCustomer360Data from './customer360/useCustomer360Data'
+import { useCustomer360Data } from './customer360'
 import { CustomersFullDetailSection, CustomersListSection } from './CustomersPanelSections'
 import { useCustomerBatchOperations, useCustomersDetailNavigation, useCustomersListModel } from './hooks'
 

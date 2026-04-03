@@ -98,7 +98,7 @@ class ChartControllerTest {
 
         controller.getChartData("  tenant-1  ", "CUSTOMERS", null, null, null, null);
 
-        verify(chartService).getChartData(eq(TENANT_TEST), eq("CUSTOMERS"), anyMap());
+        verify(chartService).getChartData(eq("tenant-1"), eq("CUSTOMERS"), anyMap());
     }
 
     @Test
@@ -113,11 +113,11 @@ class ChartControllerTest {
         ResponseEntity<ChartTemplate> response = controller.createTemplate("  tenant-1  ", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(TENANT_TEST, response.getBody().getTenantId());
+        assertEquals("tenant-1", response.getBody().getTenantId());
 
         ArgumentCaptor<ChartTemplate> captor = ArgumentCaptor.forClass(ChartTemplate.class);
         verify(chartService).createTemplate(captor.capture());
-        assertEquals(TENANT_TEST, captor.getValue().getTenantId());
+        assertEquals("tenant-1", captor.getValue().getTenantId());
     }
 
     @Test
@@ -135,13 +135,13 @@ class ChartControllerTest {
         List<ChartTemplate> tenantTemplates = new ArrayList<>();
         tenantTemplates.add(tenantTemplate);
 
-        when(chartService.getSystemTemplates(TENANT_TEST)).thenReturn(systemTemplates);
-        when(chartService.getTemplates(TENANT_TEST, null)).thenReturn(tenantTemplates);
+        when(chartService.getSystemTemplates("tenant-1")).thenReturn(systemTemplates);
+        when(chartService.getTemplates("tenant-1", null)).thenReturn(tenantTemplates);
 
         ResponseEntity<List<ChartTemplate>> response = controller.getTemplates(" tenant-1 ", null, true);
 
-        verify(chartService).getSystemTemplates(TENANT_TEST);
-        verify(chartService).getTemplates(TENANT_TEST, null);
+        verify(chartService).getSystemTemplates("tenant-1");
+        verify(chartService).getTemplates("tenant-1", null);
         assertEquals(1, systemTemplates.size());
         assertSame(systemTemplate, systemTemplates.get(0));
         assertEquals(2, response.getBody().size());
@@ -150,4 +150,3 @@ class ChartControllerTest {
         assertTrue(response.getBody() != systemTemplates);
     }
 }
-

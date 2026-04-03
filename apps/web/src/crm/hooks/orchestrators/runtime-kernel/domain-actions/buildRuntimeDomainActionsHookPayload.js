@@ -1,4 +1,4 @@
-import { buildRuntimeDomainActionsHookInput } from '../../runtime/buildRuntimeDomainActionsHookInput'
+import { buildRuntimeDomainActionsHookInput } from '../../runtime'
 import { buildRuntimeDomainActionsInputPayload } from './buildRuntimeDomainActionsInputPayload'
 
 export function buildRuntimeDomainActionsHookPayload(input) {

@@ -67,7 +67,7 @@ class ContractControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         assertNull(response.getBody());
         verify(contractRepository, times(1)).deleteByIdAndTenantId("cr-1", TENANT_TEST);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTRACT"), eq("cr-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTRACT"), eq("cr-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -78,7 +78,7 @@ class ContractControllerTest {
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(contractRepository).deleteByIdAndTenantId("cr-1", TENANT_TEST);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTRACT"), eq("cr-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTRACT"), eq("cr-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -89,7 +89,7 @@ class ContractControllerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(contractRepository, times(1)).deleteByIdAndTenantId("cr-1", TENANT_TEST);
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -98,7 +98,7 @@ class ContractControllerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(contractRepository, never()).deleteByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -108,7 +108,7 @@ class ContractControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(contractRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(contractRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -120,7 +120,6 @@ class ContractControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(contractRepository).findByIdAndTenantId("cr-1", TENANT_TEST);
         verify(contractRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
-

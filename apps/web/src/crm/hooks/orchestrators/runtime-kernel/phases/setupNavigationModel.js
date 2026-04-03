@@ -1,5 +1,5 @@
 import { useAppNavigationModel } from '../../../useAppNavigationModel'
-import { PAGE_TO_PATH, PATH_TO_PAGE } from '../../runtime/routeConfig'
+import { PAGE_TO_PATH, PATH_TO_PAGE } from '../../runtime'
 import { buildAppNavigationModelInput } from '../runtimeEngineBuilders'
 
 export function useSetupNavigationModel(ctx) {

@@ -1,23 +1,24 @@
-import { lazy, memo } from 'react'
+import { memo } from 'react'
+import lazyNamed from './pages/shared/lazyNamed'
 
-const DashboardPanel = lazy(() => import('./pages/DashboardPanel'))
-const PermissionsPanel = lazy(() => import('./pages/PermissionsPanel'))
-const AuditPanel = lazy(() => import('./pages/AuditPanel'))
-const CustomersPanel = lazy(() => import('./pages/customers'))
-const PipelinePanel = lazy(() => import('./pages/PipelinePanel'))
-const TasksPanel = lazy(() => import('./pages/TasksPanel'))
-const FollowUpsPanel = lazy(() => import('./pages/FollowUpsPanel'))
-const ContactsPanel = lazy(() => import('./pages/ContactsPanel'))
-const ContractsPanel = lazy(() => import('./pages/ContractsPanel'))
-const PaymentsPanel = lazy(() => import('./pages/PaymentsPanel'))
-const LeadsPanel = lazy(() => import('./pages/LeadsPanel'))
-const ReportDesignerPanel = lazy(() => import('./pages/ReportDesignerPanel'))
-const ProductsPanel = lazy(() => import('./pages/ProductsPanel'))
-const PriceBooksPanel = lazy(() => import('./pages/PriceBooksPanel'))
-const QuotesPanel = lazy(() => import('./pages/QuotesPanel'))
-const OrdersPanel = lazy(() => import('./pages/OrdersPanel'))
-const ApprovalsPageContainer = lazy(() => import('./pages/ApprovalsPageContainer'))
-const GovernancePageContainer = lazy(() => import('./pages/GovernancePageContainer'))
+const DashboardPanel = lazyNamed(() => import('./pages/dashboard'), 'DashboardPanel')
+const PermissionsPanel = lazyNamed(() => import('./pages/permissions'), 'PermissionsPanel')
+const AuditPanel = lazyNamed(() => import('./pages/audit'), 'AuditPanel')
+const CustomersPanel = lazyNamed(() => import('./pages/customers'), 'CustomersPanelRuntime')
+const PipelinePanel = lazyNamed(() => import('./pages/pipeline'), 'PipelinePanel')
+const TasksPanel = lazyNamed(() => import('./pages/tasks'), 'TasksPanel')
+const FollowUpsPanel = lazyNamed(() => import('./pages/follow-ups'), 'FollowUpsPanel')
+const ContactsPanel = lazyNamed(() => import('./pages/contacts'), 'ContactsPanel')
+const ContractsPanel = lazyNamed(() => import('./pages/contracts'), 'ContractsPanel')
+const PaymentsPanel = lazyNamed(() => import('./pages/payments'), 'PaymentsPanel')
+const LeadsPanel = lazyNamed(() => import('./pages/leads'), 'LeadsPanel')
+const ReportDesignerPanel = lazyNamed(() => import('./pages/reportDesigner'), 'ReportDesignerPanel')
+const ProductsPanel = lazyNamed(() => import('./pages/products'), 'ProductsPanel')
+const PriceBooksPanel = lazyNamed(() => import('./pages/price-books'), 'PriceBooksPanel')
+const QuotesPanel = lazyNamed(() => import('./pages/quotes'), 'QuotesPanel')
+const OrdersPanel = lazyNamed(() => import('./pages/orders'), 'OrdersPanel')
+const ApprovalsPageContainer = lazyNamed(() => import('./pages/approvals'), 'ApprovalsPageContainer')
+const GovernancePageContainer = lazyNamed(() => import('./pages/governance'), 'GovernancePageContainer')
 
 function MainContentPanels({
   activePage,

@@ -64,7 +64,7 @@
 
 1. 前端入口与面板装配：`apps/web/src/crm/components/MainContentPanels.jsx`
 2. 对应页面：`apps/web/src/crm/components/pages/*`
-3. API 调用封装：`apps/web/src/crm/hooks/useApi.js`
+3. API 调用封装：`apps/web/src/crm/hooks/api/`（按领域拆分，统一使用 `useXxxApi` 命名），统一编排入口：`apps/web/src/crm/hooks/orchestrators/`
 4. 后端路由层：`apps/api/src/main/java/com/yao/crm/controller/*`
 5. 业务实现：`apps/api/src/main/java/com/yao/crm/service/*`
 6. 迁移与表结构：`apps/api/src/main/resources/db/migration/*`

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
-import { useApprovalMapper } from '../mainContentMappers/useApprovalMapper'
+import { useApprovalMapper } from '../mainContentMappers'
 
 export function useApprovalOrchestrator() {
   const setApprovalDomainState = useAppStore((state) => state.setApprovalDomainState)

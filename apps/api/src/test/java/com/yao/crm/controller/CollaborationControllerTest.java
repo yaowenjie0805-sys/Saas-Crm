@@ -17,7 +17,6 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 
-import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -56,7 +55,7 @@ class CollaborationControllerTest {
         Comment saved = new Comment();
         saved.setId("comment-1");
         when(collaborationService.addComment(
-                eq(TENANT_TEST),
+                eq("tenant-1"),
                 eq("customer"),
                 eq("cust-1"),
                 eq("alice"),
@@ -66,11 +65,11 @@ class CollaborationControllerTest {
                 isNull()
         )).thenReturn(saved);
 
-        ResponseEntity<?> response = controller.addComment(request, TENANT_TEST, body);
+        ResponseEntity<?> response = controller.addComment(request, "tenant-1", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(collaborationService).addComment(
-                eq(TENANT_TEST),
+                eq("tenant-1"),
                 eq("customer"),
                 eq("cust-1"),
                 eq("alice"),
@@ -95,7 +94,7 @@ class CollaborationControllerTest {
         Comment saved = new Comment();
         saved.setId("comment-1");
         when(collaborationService.addComment(
-                eq(TENANT_TEST),
+                eq("tenant-1"),
                 eq("customer"),
                 eq("cust-1"),
                 eq("alice"),
@@ -109,7 +108,7 @@ class CollaborationControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(collaborationService).addComment(
-                eq(TENANT_TEST),
+                eq("tenant-1"),
                 eq("customer"),
                 eq("cust-1"),
                 eq("alice"),
@@ -129,7 +128,7 @@ class CollaborationControllerTest {
         body.entityId = "cust-1";
         body.content = "hello world";
 
-        ResponseEntity<?> response = controller.addComment(request, TENANT_TEST, body);
+        ResponseEntity<?> response = controller.addComment(request, "tenant-1", body);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -164,7 +163,7 @@ class CollaborationControllerTest {
         body.authorName = "Alice";
         body.content = "reply";
 
-        ResponseEntity<?> response = controller.replyToComment(request, TENANT_TEST, "   ", body);
+        ResponseEntity<?> response = controller.replyToComment(request, "tenant-1", "   ", body);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -176,12 +175,12 @@ class CollaborationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
 
-        when(collaborationService.deleteComment(TENANT_TEST, "comment-1", "alice")).thenReturn(true);
+        when(collaborationService.deleteComment("tenant-1", "comment-1", "alice")).thenReturn(true);
 
-        ResponseEntity<?> response = controller.deleteComment(request, TENANT_TEST, "comment-1", "legacy-user");
+        ResponseEntity<?> response = controller.deleteComment(request, "tenant-1", "comment-1", "legacy-user");
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-        verify(collaborationService).deleteComment(TENANT_TEST, "comment-1", "alice");
+        verify(collaborationService).deleteComment("tenant-1", "comment-1", "alice");
     }
 
     @Test
@@ -189,19 +188,19 @@ class CollaborationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
 
-        when(collaborationService.deleteComment(TENANT_TEST, "comment-1", "alice")).thenReturn(false);
+        when(collaborationService.deleteComment("tenant-1", "comment-1", "alice")).thenReturn(false);
 
-        ResponseEntity<?> response = controller.deleteComment(request, TENANT_TEST, "comment-1", "legacy-user");
+        ResponseEntity<?> response = controller.deleteComment(request, "tenant-1", "comment-1", "legacy-user");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(collaborationService).deleteComment(TENANT_TEST, "comment-1", "alice");
+        verify(collaborationService).deleteComment("tenant-1", "comment-1", "alice");
     }
 
     @Test
     void deleteCommentShouldReturnBadRequestWhenUserContextIsMissing() {
         MockHttpServletRequest request = new MockHttpServletRequest();
 
-        ResponseEntity<?> response = controller.deleteComment(request, TENANT_TEST, "comment-1", null);
+        ResponseEntity<?> response = controller.deleteComment(request, "tenant-1", "comment-1", null);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -219,24 +218,24 @@ class CollaborationControllerTest {
         Comment updated = new Comment();
         updated.setId("comment-1");
         updated.setContent("updated");
-        when(collaborationService.editComment(TENANT_TEST, "comment-1", "alice", "updated")).thenReturn(updated);
+        when(collaborationService.editComment("tenant-1", "comment-1", "alice", "updated")).thenReturn(updated);
 
-        ResponseEntity<?> response = controller.editComment(request, TENANT_TEST, "comment-1", body);
+        ResponseEntity<?> response = controller.editComment(request, "tenant-1", "comment-1", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).editComment(TENANT_TEST, "comment-1", "alice", "updated");
+        verify(collaborationService).editComment("tenant-1", "comment-1", "alice", "updated");
     }
 
     @Test
     void getMentionsShouldPreferAuthUsernameOverQueryUserId() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
-        when(collaborationService.getMentions(TENANT_TEST, "alice", 0, 20)).thenReturn(Collections.emptyList());
+        when(collaborationService.getMentions("tenant-1", "alice", 0, 20)).thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.getMentions(request, " tenant-1 ", "legacy-user", 0, 20);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).getMentions(TENANT_TEST, "alice", 0, 20);
+        verify(collaborationService).getMentions("tenant-1", "alice", 0, 20);
     }
 
     @Test
@@ -253,7 +252,7 @@ class CollaborationControllerTest {
 
     @Test
     void getCommentsShouldReturnBadRequestWhenEntityTypeIsBlank() {
-        ResponseEntity<?> response = controller.getComments(TENANT_TEST, "  ", "cust-1", 0, 20, true);
+        ResponseEntity<?> response = controller.getComments("tenant-1", "  ", "cust-1", 0, 20, true);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -264,12 +263,12 @@ class CollaborationControllerTest {
     void getMyDiscussionsShouldPreferAuthUsernameOverQueryUserId() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
-        when(collaborationService.getMyDiscussions(TENANT_TEST, "alice", 20)).thenReturn(new ArrayList<>());
+        when(collaborationService.getMyDiscussions("tenant-1", "alice", 20)).thenReturn(new ArrayList<>());
 
-        ResponseEntity<?> response = controller.getMyDiscussions(request, TENANT_TEST, "legacy-user", 20);
+        ResponseEntity<?> response = controller.getMyDiscussions(request, "tenant-1", "legacy-user", 20);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).getMyDiscussions(TENANT_TEST, "alice", 20);
+        verify(collaborationService).getMyDiscussions("tenant-1", "alice", 20);
     }
 
     @Test
@@ -291,24 +290,24 @@ class CollaborationControllerTest {
 
         Team team = new Team();
         team.setId("team-1");
-        when(collaborationService.getUserTeams(TENANT_TEST, "alice")).thenReturn(Collections.singletonList(team));
+        when(collaborationService.getUserTeams("tenant-1", "alice")).thenReturn(Collections.singletonList(team));
 
-        ResponseEntity<?> response = controller.getTeams(request, TENANT_TEST, "legacy-user");
+        ResponseEntity<?> response = controller.getTeams(request, "tenant-1", "legacy-user");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).getUserTeams(TENANT_TEST, "alice");
+        verify(collaborationService).getUserTeams("tenant-1", "alice");
     }
 
     @Test
     void getTeamsShouldFallbackToQueryUserIdWhenAuthUsernameMissing() {
         MockHttpServletRequest request = new MockHttpServletRequest();
 
-        when(collaborationService.getUserTeams(TENANT_TEST, "legacy-user")).thenReturn(Collections.emptyList());
+        when(collaborationService.getUserTeams("tenant-1", "legacy-user")).thenReturn(Collections.emptyList());
 
-        ResponseEntity<?> response = controller.getTeams(request, TENANT_TEST, "legacy-user");
+        ResponseEntity<?> response = controller.getTeams(request, "tenant-1", "legacy-user");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).getUserTeams(TENANT_TEST, "legacy-user");
+        verify(collaborationService).getUserTeams("tenant-1", "legacy-user");
     }
 
     @Test
@@ -338,7 +337,7 @@ class CollaborationControllerTest {
         body.userId = "bob";
         body.role = "MEMBER";
 
-        ResponseEntity<?> response = controller.addTeamMember(TENANT_TEST, "   ", body);
+        ResponseEntity<?> response = controller.addTeamMember("tenant-1", "   ", body);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -347,7 +346,7 @@ class CollaborationControllerTest {
 
     @Test
     void removeTeamMemberShouldReturnBadRequestWhenTeamIdIsBlank() {
-        ResponseEntity<?> response = controller.removeTeamMember(TENANT_TEST, " ", "user-1");
+        ResponseEntity<?> response = controller.removeTeamMember("tenant-1", " ", "user-1");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -356,7 +355,7 @@ class CollaborationControllerTest {
 
     @Test
     void removeTeamMemberShouldReturnBadRequestWhenUserIdIsBlank() {
-        ResponseEntity<?> response = controller.removeTeamMember(TENANT_TEST, "team-1", "   ");
+        ResponseEntity<?> response = controller.removeTeamMember("tenant-1", "team-1", "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -365,7 +364,7 @@ class CollaborationControllerTest {
 
     @Test
     void getDelegationHistoryShouldReturnBadRequestWhenTaskIdIsBlank() {
-        ResponseEntity<?> response = controller.getDelegationHistory(TENANT_TEST, "   ");
+        ResponseEntity<?> response = controller.getDelegationHistory("tenant-1", "   ");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -374,7 +373,7 @@ class CollaborationControllerTest {
 
     @Test
     void getTransferHistoryShouldReturnBadRequestWhenTaskIdIsBlank() {
-        ResponseEntity<?> response = controller.getTransferHistory(TENANT_TEST, "\t");
+        ResponseEntity<?> response = controller.getTransferHistory("tenant-1", "\t");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -394,13 +393,13 @@ class CollaborationControllerTest {
 
         Team team = new Team();
         team.setId("team-1");
-        when(collaborationService.createTeam(TENANT_TEST, "Ops Team", "Operations", "alice", body.memberIds))
+        when(collaborationService.createTeam("tenant-1", "Ops Team", "Operations", "alice", body.memberIds))
                 .thenReturn(team);
 
-        ResponseEntity<?> response = controller.createTeam(request, TENANT_TEST, body);
+        ResponseEntity<?> response = controller.createTeam(request, "tenant-1", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).createTeam(TENANT_TEST, "Ops Team", "Operations", "alice", body.memberIds);
+        verify(collaborationService).createTeam("tenant-1", "Ops Team", "Operations", "alice", body.memberIds);
     }
 
     @Test
@@ -415,13 +414,13 @@ class CollaborationControllerTest {
 
         Team team = new Team();
         team.setId("team-1");
-        when(collaborationService.createTeam(TENANT_TEST, "Ops Team", "Operations", "alice", body.memberIds))
+        when(collaborationService.createTeam("tenant-1", "Ops Team", "Operations", "alice", body.memberIds))
                 .thenReturn(team);
 
         ResponseEntity<?> response = controller.createTeam(request, " tenant-1 ", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(collaborationService).createTeam(TENANT_TEST, "Ops Team", "Operations", "alice", body.memberIds);
+        verify(collaborationService).createTeam("tenant-1", "Ops Team", "Operations", "alice", body.memberIds);
     }
 
     @Test
@@ -454,12 +453,12 @@ class CollaborationControllerTest {
 
         ApprovalDelegationService.DelegationResult result = new ApprovalDelegationService.DelegationResult();
         result.setSuccess(true);
-        when(delegationService.delegateTask(TENANT_TEST, "task-1", "alice", "bob", "handoff")).thenReturn(result);
+        when(delegationService.delegateTask("tenant-1", "task-1", "alice", "bob", "handoff")).thenReturn(result);
 
-        ResponseEntity<?> response = controller.delegateTask(request, TENANT_TEST, "task-1", body);
+        ResponseEntity<?> response = controller.delegateTask(request, "tenant-1", "task-1", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(delegationService).delegateTask(TENANT_TEST, "task-1", "alice", "bob", "handoff");
+        verify(delegationService).delegateTask("tenant-1", "task-1", "alice", "bob", "handoff");
     }
 
     @Test
@@ -475,12 +474,12 @@ class CollaborationControllerTest {
 
         ApprovalDelegationService.AddSignResult result = new ApprovalDelegationService.AddSignResult();
         result.setSuccess(true);
-        when(delegationService.addSign(TENANT_TEST, "task-1", "alice", "bob", "need review", "AFTER")).thenReturn(result);
+        when(delegationService.addSign("tenant-1", "task-1", "alice", "bob", "need review", "AFTER")).thenReturn(result);
 
-        ResponseEntity<?> response = controller.addSign(request, TENANT_TEST, "task-1", body);
+        ResponseEntity<?> response = controller.addSign(request, "tenant-1", "task-1", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(delegationService).addSign(TENANT_TEST, "task-1", "alice", "bob", "need review", "AFTER");
+        verify(delegationService).addSign("tenant-1", "task-1", "alice", "bob", "need review", "AFTER");
     }
 
     @Test
@@ -495,12 +494,12 @@ class CollaborationControllerTest {
 
         ApprovalDelegationService.TransferResult result = new ApprovalDelegationService.TransferResult();
         result.setSuccess(true);
-        when(delegationService.transferTask(TENANT_TEST, "task-1", "alice", "bob", "handoff")).thenReturn(result);
+        when(delegationService.transferTask("tenant-1", "task-1", "alice", "bob", "handoff")).thenReturn(result);
 
-        ResponseEntity<?> response = controller.transferTask(request, TENANT_TEST, "task-1", body);
+        ResponseEntity<?> response = controller.transferTask(request, "tenant-1", "task-1", body);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(delegationService).transferTask(TENANT_TEST, "task-1", "alice", "bob", "handoff");
+        verify(delegationService).transferTask("tenant-1", "task-1", "alice", "bob", "handoff");
     }
 
     @Test
@@ -513,7 +512,7 @@ class CollaborationControllerTest {
         body.toUserId = "bob";
         body.reason = "handoff";
 
-        ResponseEntity<?> response = controller.delegateTask(request, TENANT_TEST, " ", body);
+        ResponseEntity<?> response = controller.delegateTask(request, "tenant-1", " ", body);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -531,7 +530,7 @@ class CollaborationControllerTest {
         body.reason = "need review";
         body.type = "AFTER";
 
-        ResponseEntity<?> response = controller.addSign(request, TENANT_TEST, "   ", body);
+        ResponseEntity<?> response = controller.addSign(request, "tenant-1", "   ", body);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -548,7 +547,7 @@ class CollaborationControllerTest {
         body.toUserId = "bob";
         body.reason = "handoff";
 
-        ResponseEntity<?> response = controller.transferTask(request, TENANT_TEST, "\t", body);
+        ResponseEntity<?> response = controller.transferTask(request, "tenant-1", "\t", body);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -559,12 +558,12 @@ class CollaborationControllerTest {
     void recallDelegationShouldPreferAuthUsernameOverLegacyUserId() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
-        when(delegationService.recallDelegation(TENANT_TEST, "delegation-1", "alice")).thenReturn(true);
+        when(delegationService.recallDelegation("tenant-1", "delegation-1", "alice")).thenReturn(true);
 
-        ResponseEntity<?> response = controller.recallDelegation(request, TENANT_TEST, "delegation-1", "legacy-user");
+        ResponseEntity<?> response = controller.recallDelegation(request, "tenant-1", "delegation-1", "legacy-user");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(delegationService).recallDelegation(TENANT_TEST, "delegation-1", "alice");
+        verify(delegationService).recallDelegation("tenant-1", "delegation-1", "alice");
     }
 
     @Test
@@ -572,7 +571,7 @@ class CollaborationControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
 
-        ResponseEntity<?> response = controller.recallDelegation(request, TENANT_TEST, "  ", "legacy-user");
+        ResponseEntity<?> response = controller.recallDelegation(request, "tenant-1", "  ", "legacy-user");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(collaborationService);
@@ -583,25 +582,27 @@ class CollaborationControllerTest {
     void getDelegatableUsersShouldPreferAuthUsernameOverLegacyCurrentUserId() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
-        when(delegationService.getDelegatableUsers(TENANT_TEST, "alice")).thenReturn(Collections.emptyList());
+        when(delegationService.getDelegatableUsers("tenant-1", "alice")).thenReturn(Collections.emptyList());
 
-        ResponseEntity<?> response = controller.getDelegatableUsers(request, TENANT_TEST, "legacy-user");
+        ResponseEntity<?> response = controller.getDelegatableUsers(request, "tenant-1", "legacy-user");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(delegationService).getDelegatableUsers(TENANT_TEST, "alice");
+        verify(delegationService).getDelegatableUsers("tenant-1", "alice");
     }
 
     @Test
     void getDelegatableUsersShouldTrimTenantIdBeforePassingToService() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute("authUsername", "alice");
-        when(delegationService.getDelegatableUsers(TENANT_TEST, "alice")).thenReturn(Collections.emptyList());
+        when(delegationService.getDelegatableUsers("tenant-1", "alice")).thenReturn(Collections.emptyList());
 
         ResponseEntity<?> response = controller.getDelegatableUsers(request, "  tenant-1  ", "legacy-user");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(delegationService).getDelegatableUsers(TENANT_TEST, "alice");
+        verify(delegationService).getDelegatableUsers("tenant-1", "alice");
     }
 }
+
+
 
 

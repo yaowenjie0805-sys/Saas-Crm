@@ -5,8 +5,14 @@ import { useBatchActions } from '../useBatchActions'
 import BatchResultModal from '../BatchResultModal'
 import VirtualListTable from '../VirtualListTable'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
-import { QuoteRow } from './quotes/QuotePanelRows'
-import { EMPTY_FORM, EMPTY_ROWS, formatRequestError, getQuoteStatusOptions, NOOP } from './quotes/quotePanelHelpers'
+import {
+  EMPTY_FORM,
+  EMPTY_ROWS,
+  formatRequestError,
+  getQuoteStatusOptions,
+  NOOP,
+  QuoteRow,
+} from './quotes/sections'
 
 const QuoteItemsSection = lazy(() => import('./quotes/QuoteItemsSection'))
 const QuoteEditorModal = lazy(() => import('./quotes/QuoteEditorModal'))

@@ -1,6 +1,8 @@
-import { useGovernancePageActions } from './pageActions/useGovernancePageActions'
-import { useApprovalPageActions } from './pageActions/useApprovalPageActions'
-import { useReportingPageActions } from './pageActions/useReportingPageActions'
+import {
+  useApprovalPageActions,
+  useGovernancePageActions,
+  useReportingPageActions,
+} from './pageActions'
 
 export function useAppPageActions(params) {
   const governanceActions = useGovernancePageActions(params)

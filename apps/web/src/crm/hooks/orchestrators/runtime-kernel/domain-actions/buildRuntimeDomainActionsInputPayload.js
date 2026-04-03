@@ -1,4 +1,4 @@
-import { mergeRuntimeInput } from '../shared/mergeRuntimeInput'
+import { mergeRuntimeInput } from '../shared'
 
 export function buildRuntimeDomainActionsInputPayload(input) {
   return mergeRuntimeInput(input)

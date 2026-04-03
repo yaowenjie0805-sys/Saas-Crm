@@ -1,11 +1,13 @@
-import RuntimeShellBranch from './runtime/RuntimeShellBranch'
+import {
+  RuntimeShellBranch,
+} from './runtime'
 import {
   useSetupRuntimeContext,
   useSetupNavigationModel,
   useSetupDataLoaders,
   useSetupActions,
   useBuildShellViewModel,
-} from './runtime-kernel/useAppRuntimeEnginePhases'
+} from './runtime-kernel'
 import '../../../App.css'
 
 function AppRuntimeEngine() {

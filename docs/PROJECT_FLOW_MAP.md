@@ -1,4 +1,4 @@
-# 项目全景调用图（Project Flow Map）
+﻿# 项目全景调用图（Project Flow Map）
 
 本文用于快速回答三个问题：
 
@@ -17,6 +17,22 @@ Browser (React/Vite)
   -> Repository (JPA)
   -> MySQL tables (Flyway V1~V20)
 ```
+
+### 1.1 `runtime` / `runtime-kernel` 单向依赖
+
+这条关系是前端分层里最容易被误解的地方，这里单独列出来，避免二次开发时把依赖方向写反。
+
+```mermaid
+flowchart LR
+  runtime-kernel["runtime-kernel\n编排/聚合层"]
+  runtime["runtime\n基础运行时层"]
+
+  runtime-kernel --> runtime
+```
+
+- 允许：`runtime-kernel -> runtime`
+- 不允许：`runtime -> runtime-kernel`
+- 原则：上层只负责组合、收口和对外导出，不把下层能力反向耦合回去。
 
 补充：
 

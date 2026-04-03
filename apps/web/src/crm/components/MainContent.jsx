@@ -20,7 +20,7 @@ import {
   useTasksPageModel,
   useTenantsPageModel,
   useUsersPageModel,
-} from '../hooks/pageModels/useMainContentPageModels'
+} from '../hooks/pageModels'
 import { useGlobalSearchBridge } from '../hooks/useGlobalSearchBridge'
 import MainContentPanels from './MainContentPanels'
 

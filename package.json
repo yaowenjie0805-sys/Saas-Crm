@@ -47,6 +47,7 @@
     "security:scan:java": "node -e \"process.env.SECURITY_SCAN_JAVA_ENABLED='true'; import('./scripts/security-scan.mjs')\"",
     "staging:release:summary": "node scripts/staging-release-summary.mjs",
     "test:api": "node scripts/run-maven.mjs -f apps/api/pom.xml -DskipTests package && node scripts/api-smoke-test.mjs",
+    "test:api:integration": "npm run test:api",
     "test:backend": "node scripts/run-maven.mjs -f apps/api/pom.xml test",
     "test:backend:unit": "npm run test:backend",
     "test:backend:coverage": "node scripts/run-maven.mjs -f apps/api/pom.xml verify",

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ensureLoggedIn } from './helpers/auth'
+import { ensureLoggedIn } from './helpers/auth.js'
 
 /**
  * Sidebar Navigation Tests
@@ -52,7 +52,7 @@ test.describe('Sidebar Navigation', () => {
 
   test('should navigate to all main pages', async ({ page }) => {
     const navigationMap = [
-      { nav: 'nav-dashboard', page: 'page-title', expected: /Dashboard|工作台|仪表盘/i },
+      { nav: 'nav-dashboard', page: 'page-title', expected: /Dashboard/i },
       { nav: 'nav-customers', page: 'customers-page', expected: /Customers|客户/i },
       { nav: 'nav-leads', page: 'leads-page', expected: /Leads|线索/i },
       { nav: 'nav-opportunities', page: 'opportunities-page', expected: /Opportunities|商机/i },
@@ -163,3 +163,4 @@ test.describe('Sidebar Navigation', () => {
     }
   })
 })
+

@@ -1,187 +1,145 @@
 import { test, expect } from '@playwright/test'
-import { ensureLoggedIn } from './helpers/auth'
+import { ensureLoggedIn } from './helpers/auth.js'
 import { generateUniqueLeadName } from './helpers/testData'
 
-/**
- * Lead Management Tests
- * Tests lead creation, editing, status updates, and deletion
- */
+const LEADS_TITLE_PATTERN = /Leads|线索/i
+
+async function openLeadsPage(page) {
+  const navLeads = page.getByTestId('nav-leads')
+  if (await navLeads.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await navLeads.click()
+  } else {
+    await page.goto('/leads')
+  }
+  await expect(page.getByTestId('leads-page')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('page-title')).toContainText(LEADS_TITLE_PATTERN)
+  await expect(page.getByTestId('leads-list-header')).toBeVisible()
+}
+
+async function searchLead(page, keyword) {
+  await page.getByTestId('leads-search-input').fill(keyword)
+  await page.getByTestId('leads-search-submit').click()
+}
+
+function leadRowByName(page, leadName) {
+  return page.getByTestId('leads-list').locator('.table-row').filter({ hasText: leadName }).first()
+}
+
+async function expectLeadsListOrEmpty(page) {
+  const empty = page.getByTestId('leads-empty')
+  if (await empty.isVisible().catch(() => false)) {
+    await expect(empty).toBeVisible()
+    return
+  }
+  const list = page.getByTestId('leads-list')
+  await expect(list).toBeVisible()
+}
+
+async function createLead(page, leadName, status = 'NEW') {
+  await page.getByTestId('lead-form-name').fill(leadName)
+  await page.getByTestId('lead-form-owner').fill('E2E Test Owner')
+  await page.getByTestId('lead-form-status').selectOption(status)
+  await page.getByTestId('lead-form-submit').click()
+  await expect(page.getByTestId('lead-form-name')).toHaveValue('')
+  await searchLead(page, leadName)
+  await expect(leadRowByName(page, leadName)).toBeVisible({ timeout: 10000 })
+}
+
+async function ensureCanWrite(page) {
+  const canWrite = await page.getByTestId('lead-form').isVisible().catch(() => false)
+  test.skip(!canWrite, 'Lead form is not visible for current role')
+}
+
 test.describe('Lead Management', () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedIn(page)
-    await page.getByTestId('nav-leads').click()
-    await expect(page.getByTestId('leads-page')).toBeVisible({ timeout: 10000 })
+    await openLeadsPage(page)
   })
 
   test('should display leads page title', async ({ page }) => {
-    await expect(page.getByTestId('page-title')).toBeVisible()
-    const title = await page.getByTestId('page-title').textContent()
-    expect(title).toMatch(/Leads|线索/i)
+    await expect(page.getByTestId('page-title')).toContainText(LEADS_TITLE_PATTERN)
   })
 
   test('should display leads list or empty state', async ({ page }) => {
-    const leadsList = page.locator('[data-testid="leads-list"], .leads-list, .table, [class*="list"]')
-    await expect(leadsList).toBeVisible({ timeout: 5000 })
+    await expectLeadsListOrEmpty(page)
   })
 
   test('should display lead form', async ({ page }) => {
-    const leadForm = page.locator('[data-testid="lead-form"], .lead-form, form')
-    await expect(leadForm.first()).toBeVisible({ timeout: 5000 })
+    await ensureCanWrite(page)
+    await expect(page.getByTestId('lead-form')).toBeVisible()
   })
 
   test('should create a new lead', async ({ page }) => {
+    await ensureCanWrite(page)
     const leadName = generateUniqueLeadName()
-
-    // Fill lead form
-    const nameInput = page.getByTestId('lead-form-name')
-    if (await nameInput.isVisible()) {
-      await nameInput.fill(leadName)
-
-      // Fill other fields if available
-      const ownerInput = page.getByTestId('lead-form-owner')
-      if (await ownerInput.isVisible()) {
-        await ownerInput.fill('E2E Test Owner')
-      }
-
-      const statusSelect = page.getByTestId('lead-form-status')
-      if (await statusSelect.isVisible()) {
-        await statusSelect.selectOption('New')
-      }
-
-      const valueInput = page.getByTestId('lead-form-value')
-      if (await valueInput.isVisible()) {
-        await valueInput.fill('10000')
-      }
-
-      // Submit form
-      const submitBtn = page.getByTestId('lead-form-submit')
-      await submitBtn.click()
-
-      await page.waitForTimeout(1000)
-
-      // Lead should appear in list
-      const leadRow = page.locator('.table-row, [class*="row"]').filter({ hasText: leadName }).first()
-      await expect(leadRow).toBeVisible({ timeout: 5000 })
-    }
+    await createLead(page, leadName)
   })
 
   test('should update lead status', async ({ page }) => {
-    // Create a lead first
+    await ensureCanWrite(page)
     const leadName = generateUniqueLeadName()
-    const nameInput = page.getByTestId('lead-form-name')
-    if (await nameInput.isVisible()) {
-      await nameInput.fill(leadName)
-      await page.getByTestId('lead-form-submit').click()
-      await page.waitForTimeout(1000)
+    await createLead(page, leadName)
 
-      // Find the lead in the list
-      const leadRow = page.locator('.table-row').filter({ hasText: leadName }).first()
-      if (await leadRow.isVisible({ timeout: 3000 }).catch(() => false)) {
-        // Click edit button
-        const editBtn = leadRow.getByRole('button', { name: /Edit|编辑/i })
-        await editBtn.click()
-        await page.waitForTimeout(500)
+    const leadRow = leadRowByName(page, leadName)
+    await leadRow.getByRole('button').first().click()
+    await expect(page.getByTestId('lead-form-name')).toHaveValue(leadName)
 
-        // Change status
-        const statusSelect = page.getByTestId('lead-form-status')
-        if (await statusSelect.isVisible()) {
-          await statusSelect.selectOption('Contacted')
-          await page.getByTestId('lead-form-submit').click()
-          await page.waitForTimeout(1000)
-        }
-      }
-    }
+    await page.getByTestId('lead-form-status').selectOption('QUALIFIED')
+    await page.getByTestId('lead-form-submit').click()
+    await searchLead(page, leadName)
+    await expect(leadRowByName(page, leadName)).toContainText(/Qualified|已甄别|合格/i)
   })
 
-  test('should delete a lead', async ({ page }) => {
-    // Create a lead first
+  test('should open lead detail from list', async ({ page }) => {
+    await ensureCanWrite(page)
     const leadName = generateUniqueLeadName()
-    const nameInput = page.getByTestId('lead-form-name')
-    if (await nameInput.isVisible()) {
-      await nameInput.fill(leadName)
-      await page.getByTestId('lead-form-submit').click()
-      await page.waitForTimeout(1000)
+    await createLead(page, leadName)
 
-      // Find and delete the lead
-      const leadRow = page.locator('.table-row').filter({ hasText: leadName }).first()
-      if (await leadRow.isVisible({ timeout: 3000 }).catch(() => false)) {
-        const deleteBtn = leadRow.getByRole('button', { name: /Delete|删除/i })
-        await deleteBtn.click()
-        await page.waitForTimeout(1000)
-
-        // Lead should be removed
-        await expect(leadRow).not.toBeVisible({ timeout: 3000 })
-      }
-    }
+    const leadRow = leadRowByName(page, leadName)
+    await leadRow.getByRole('button').first().click()
+    await expect(page.getByTestId('lead-form-name')).toHaveValue(leadName)
   })
 
   test('should search leads', async ({ page }) => {
-    const searchInput = page.getByTestId('leads-search-input')
-    if (await searchInput.isVisible()) {
-      // Type a search term
-      await searchInput.fill('Test')
-      await page.waitForTimeout(500)
-
-      const submitBtn = page.getByTestId('leads-search-submit')
-      if (await submitBtn.isVisible()) {
-        await submitBtn.click()
-        await page.waitForTimeout(1000)
-      }
-
-      // Results should be filtered
-      await expect(page.locator('[data-testid="leads-list"], .leads-list, .table')).toBeVisible()
-    }
+    await ensureCanWrite(page)
+    const leadName = generateUniqueLeadName()
+    await createLead(page, leadName)
+    await searchLead(page, leadName)
+    await expect(leadRowByName(page, leadName)).toBeVisible()
   })
 
   test('should filter leads by status', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="leads-status-filter"], [class*="status-filter"], select').first()
-    if (await statusFilter.isVisible()) {
-      await statusFilter.selectOption('New')
-      await page.waitForTimeout(1000)
-
-      // Results should be filtered
-      await expect(page.locator('[data-testid="leads-list"], .leads-list, .table')).toBeVisible()
-    }
+    await page.getByTestId('leads-status-filter').selectOption('NEW')
+    await page.getByTestId('leads-search-submit').click()
+    await expectLeadsListOrEmpty(page)
   })
 
   test('should refresh leads list', async ({ page }) => {
-    const refreshBtn = page.getByTestId('leads-refresh')
-    if (await refreshBtn.isVisible()) {
-      await refreshBtn.click()
-      await page.waitForTimeout(1000)
-
-      // List should still be visible
-      await expect(page.locator('[data-testid="leads-list"], .leads-list, .table')).toBeVisible()
-    }
+    await page.getByTestId('leads-refresh').click()
+    await expectLeadsListOrEmpty(page)
   })
 
   test('should validate required fields', async ({ page }) => {
-    // Try to submit empty form
-    const submitBtn = page.getByTestId('lead-form-submit')
-    await submitBtn.click()
-    await page.waitForTimeout(500)
-
-    // Should show validation error
-    const errorMsg = page.locator('[class*="error"], [class*="required"], [class*="invalid"]').first()
-    const errorVisible = await errorMsg.isVisible({ timeout: 2000 }).catch(() => false)
-
-    if (errorVisible) {
-      await expect(errorMsg).toBeVisible()
-    }
+    await ensureCanWrite(page)
+    await page.getByTestId('lead-form-name').fill('')
+    await page.getByTestId('lead-form-submit').click()
+    await expect(page.getByTestId('lead-form-error')).toBeVisible()
+    await expect(page.getByTestId('lead-form-name')).toHaveClass(/input-invalid/)
   })
 
   test('should paginate leads', async ({ page }) => {
-    const pagination = page.locator('[data-testid="pagination"], .pagination, [class*="pagination"]')
-    if (await pagination.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Check if next page button exists
-      const nextBtn = pagination.locator('button:has-text("Next"), button:has-text("下一页"), button:has-text(">")')
-      if (await nextBtn.isVisible()) {
-        await nextBtn.click()
-        await page.waitForTimeout(1000)
+    const pagination = page.getByTestId('leads-pagination')
+    const hasPagination = await pagination.isVisible().catch(() => false)
+    if (!hasPagination) test.skip(true, 'Pagination is hidden when there are no lead rows')
 
-        // Should show different results
-        await expect(page.locator('[data-testid="leads-list"], .leads-list, .table')).toBeVisible()
-      }
+    const prevBtn = pagination.locator('button').first()
+    const nextBtn = pagination.locator('button').nth(1)
+    if (await nextBtn.isEnabled()) {
+      await nextBtn.click()
+      await expect(prevBtn).toBeEnabled()
+    } else {
+      await expect(nextBtn).toBeDisabled()
     }
   })
 })
+

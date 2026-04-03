@@ -28,7 +28,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.Collections;
 import java.util.Optional;
 
-import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -110,8 +109,8 @@ class V1LeadControllerTest {
         Lead lead = new Lead();
         lead.setId("ld-1");
         lead.setOwner("old-owner");
-        when(leadRepository.findByIdAndTenantId("ld-1", TENANT_TEST)).thenReturn(Optional.of(lead));
-        when(leadAssignmentService.assignLeadOwner(TENANT_TEST, "manager-1", lead, "alice", false)).thenReturn("alice");
+        when(leadRepository.findByIdAndTenantId("ld-1", "tenant-1")).thenReturn(Optional.of(lead));
+        when(leadAssignmentService.assignLeadOwner("tenant-1", "manager-1", lead, "alice", false)).thenReturn("alice");
         V1LeadAssignRequest payload = new V1LeadAssignRequest();
         payload.setOwner("  alice  ");
         payload.setUseRule(false);
@@ -119,20 +118,22 @@ class V1LeadControllerTest {
         ResponseEntity<?> response = controller.assignLead(request, "  ld-1  ", payload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(leadRepository).findByIdAndTenantId("ld-1", TENANT_TEST);
-        verify(leadAssignmentService).assignLeadOwner(TENANT_TEST, "manager-1", lead, "alice", false);
-        verify(leadAutomationService).onLeadEvent(TENANT_TEST, "LEAD_ASSIGNED", lead, "manager-1");
+        verify(leadRepository).findByIdAndTenantId("ld-1", "tenant-1");
+        verify(leadAssignmentService).assignLeadOwner("tenant-1", "manager-1", lead, "alice", false);
+        verify(leadAutomationService).onLeadEvent("tenant-1", "LEAD_ASSIGNED", lead, "manager-1");
     }
 
     @Test
     void listImportJobsShouldNormalizeStatusAndPagingBeforeServiceCall() {
-        when(leadImportService.listJobs(TENANT_TEST, "RUNNING", 1, 1)).thenReturn(Collections.emptyMap());
+        when(leadImportService.listJobs("tenant-1", "RUNNING", 1, 1)).thenReturn(Collections.emptyMap());
 
         ResponseEntity<?> response = controller.listImportJobs(request, " running ", 0, 0);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(leadImportService).listJobs(TENANT_TEST, "RUNNING", 1, 1);
+        verify(leadImportService).listJobs("tenant-1", "RUNNING", 1, 1);
         verify(leadImportService, never()).listJobs(" tenant-1 ", " running ", 0, 0);
     }
 }
+
+
 

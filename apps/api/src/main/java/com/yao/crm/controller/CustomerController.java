@@ -19,10 +19,11 @@ import javax.persistence.criteria.Predicate;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.*;
+import org.springframework.transaction.annotation.Transactional;
 
 @Tag(name = "Customers", description = "Customer management operations")
 @RestController
-@RequestMapping("/api")
+@RequestMapping({"/api", "/api/v1"})
 public class CustomerController extends BaseApiController {
 
     private final CustomerRepository customerRepository;
@@ -54,6 +55,7 @@ public class CustomerController extends BaseApiController {
         Page<Customer> result = customerRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
+        body.put("data", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
         body.put("size", safeSize);
@@ -113,6 +115,7 @@ public class CustomerController extends BaseApiController {
         Page<Customer> result = customerRepository.findAll(spec, pageable);
         Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
+        body.put("data", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
         body.put("size", safeSize);
@@ -147,6 +150,7 @@ public class CustomerController extends BaseApiController {
         return ResponseEntity.status(201).body(saved);
     }
 
+    @PutMapping("/customers/{id}")
     @PatchMapping("/customers/{id}")
     public ResponseEntity<?> updateCustomer(HttpServletRequest request, @PathVariable String id, @Valid @RequestBody UpdateCustomerRequest patch) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER", "SALES")) {
@@ -182,6 +186,7 @@ public class CustomerController extends BaseApiController {
         return ResponseEntity.ok(saved);
     }
 
+    @Transactional
     @DeleteMapping("/customers/{id}")
     public ResponseEntity<?> deleteCustomer(HttpServletRequest request, @PathVariable String id) {
         if (!hasAnyRole(request, "ADMIN", "MANAGER")) {

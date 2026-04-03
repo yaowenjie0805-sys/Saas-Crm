@@ -103,7 +103,7 @@ function TenantsGovernanceSection({ t, tenants, onRefresh }) {
         <span>{t('tenantConfig')}</span>
       </div>
       {isMobile ? (
-        <div className="tenant-mobile-list">
+        <div className="tenant-mobile-list" data-testid="tenant-mobile-list">
           {tenantRows.map((row) => renderTenantRow(row))}
         </div>
       ) : (

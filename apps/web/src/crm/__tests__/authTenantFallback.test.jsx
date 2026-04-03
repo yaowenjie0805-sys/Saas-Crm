@@ -2,8 +2,8 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import InvitationAcceptView from '../components/InvitationAcceptView'
-import { useAuthRuntimeState } from '../hooks/orchestrators/useAuthRuntimeState'
-import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime/useRuntimeAuthActions'
+import { useAuthRuntimeState } from '../hooks/orchestrators'
+import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime'
 
 const useRuntimeSectionFieldsMock = vi.hoisted(() =>
   vi.fn((_domain, _section, defaults) => defaults),
@@ -15,6 +15,7 @@ vi.mock('../hooks/orchestrators/useRuntimeSectionFields', () => ({
 }))
 
 vi.mock('../shared', () => ({
+  LANG_KEY: 'crm_lang_test',
   OIDC_STATE_KEY: 'oidc_state_test',
   api: (...args) => apiMock(...args),
 }))
@@ -52,16 +53,19 @@ afterEach(async () => {
 describe('tenant fallback cleanup', () => {
   it('useAuthRuntimeState loginForm defaults tenantId to tenant_default when cache is absent', async () => {
     localStorage.removeItem('crm_last_tenant')
-    let capturedState
+    const capturedStateRef = { current: null }
 
     function Probe() {
-      capturedState = useAuthRuntimeState()
+      const state = useAuthRuntimeState()
+      React.useEffect(() => {
+        capturedStateRef.current = state
+      }, [state])
       return null
     }
 
     await render(<Probe />)
 
-    expect(capturedState.loginForm().tenantId).toBe('tenant_default')
+    expect(capturedStateRef.current.loginForm().tenantId).toBe('tenant_default')
   })
 
   it('useRuntimeAuthActions.submitSsoLogin blocks request and sets tenant field error when tenant is blank', async () => {

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
-import { useMainBaseMapper } from '../mainContentMappers/useMainBaseMapper'
+import { useMainBaseMapper } from '../mainContentMappers'
 
 export function useAuthOrchestrator() {
   const auth = useAppStore((state) => state.auth.session)

@@ -1,8 +1,9 @@
-import { lazy, memo, Suspense, useCallback } from 'react'
+import { memo, Suspense, useCallback } from 'react'
+import { lazyNamed } from './shared'
 
-const UsersGovernanceSection = lazy(() => import('./governance/UsersGovernanceSection'))
-const SalesAutomationSection = lazy(() => import('./governance/SalesAutomationSection'))
-const TenantsGovernanceSection = lazy(() => import('./governance/TenantsGovernanceSection'))
+const UsersGovernanceSection = lazyNamed(() => import('./governance/sections'), 'UsersGovernanceSection')
+const SalesAutomationSection = lazyNamed(() => import('./governance/sections'), 'SalesAutomationSection')
+const TenantsGovernanceSection = lazyNamed(() => import('./governance/sections'), 'TenantsGovernanceSection')
 
 function GovernancePageContainer({
   activePage,

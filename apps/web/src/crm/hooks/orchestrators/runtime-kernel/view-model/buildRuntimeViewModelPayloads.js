@@ -1,8 +1,8 @@
-import { buildRuntimePageModelConfig } from '../../runtime/buildRuntimePageModelConfig'
 import {
+  buildRuntimePageModelConfig,
   buildRuntimePageModelCustomerSection,
   buildRuntimePageModelGovernanceSection,
-} from '../../runtime/buildRuntimePageModelSections'
+} from '../../runtime'
 
 export function buildRuntimePageModelContextPayload(params) {
   const customerPageModelSection = buildRuntimePageModelCustomerSection({

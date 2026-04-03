@@ -1,6 +1,8 @@
-import { useCustomerPipelineCrudActions } from './crudActions/useCustomerPipelineCrudActions'
-import { useFollowUpContactTaskCrudActions } from './crudActions/useFollowUpContactTaskCrudActions'
-import { useContractPaymentCrudActions } from './crudActions/useContractPaymentCrudActions'
+import {
+  useContractPaymentCrudActions,
+  useCustomerPipelineCrudActions,
+  useFollowUpContactTaskCrudActions,
+} from './crudActions'
 import { useLeadCrudActions } from './useLeadCrudActions'
 
 export function useAppCrudActions({

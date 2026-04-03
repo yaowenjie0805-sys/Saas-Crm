@@ -69,7 +69,7 @@ class FollowUpControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(followUpRepository).deleteByIdAndTenantId("fu-1", TENANT_TEST);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("FOLLOW_UP"), eq("fu-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("FOLLOW_UP"), eq("fu-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -81,7 +81,7 @@ class FollowUpControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(followUpRepository).deleteByIdAndTenantId("fu-1", TENANT_TEST);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("FOLLOW_UP"), eq("fu-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("FOLLOW_UP"), eq("fu-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -91,7 +91,7 @@ class FollowUpControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(followUpRepository, never()).deleteByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -101,7 +101,7 @@ class FollowUpControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(followUpRepository, never()).save(any(FollowUp.class));
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -113,7 +113,7 @@ class FollowUpControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(followUpRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(followUpRepository).deleteByIdAndTenantId("fu-1", TENANT_TEST);
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -134,7 +134,7 @@ class FollowUpControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(customerRepository).findByIdAndTenantId("cust-1", TENANT_TEST);
         verify(followUpRepository, never()).save(any(FollowUp.class));
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -159,7 +159,6 @@ class FollowUpControllerTest {
         verify(followUpRepository).findByIdAndTenantId("fu-1", TENANT_TEST);
         verify(customerRepository).findByIdAndTenantId("cust-1", TENANT_TEST);
         verify(followUpRepository, never()).deleteByIdAndTenantId("fu-1", TENANT_TEST);
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
-

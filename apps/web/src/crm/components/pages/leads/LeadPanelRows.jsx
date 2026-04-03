@@ -3,18 +3,19 @@ import { translateOwnerAlias } from '../../../shared'
 
 export const LeadRow = memo(function LeadRow({ row, checked, onToggle, canWrite, t, editLead, convertLead }) {
   return (
-    <div className="table-row table-row-6">
+    <div className="table-row table-row-6" data-testid={`lead-row-${row.id}`}>
       <span><input type="checkbox" checked={checked} onChange={onToggle} /></span>
-      <span>{row.name}</span>
+      <span data-testid={`lead-row-name-${row.id}`}>{row.name}</span>
       <span>{row.company || '-'}</span>
       <span>{row.statusLabel || '-'}</span>
       <span>{translateOwnerAlias(t, row.owner || '-')}</span>
       <span>
         <div className="inline-tools">
-          <button className="mini-btn" onClick={() => editLead(row)}>{t('detail')}</button>
+          <button className="mini-btn" data-testid={`lead-row-detail-${row.id}`} onClick={() => editLead(row)}>{t('detail')}</button>
           {canWrite && (
             <button
               className="mini-btn"
+              data-testid={`lead-row-convert-${row.id}`}
               disabled={String(row.status || '').toUpperCase() === 'CONVERTED'}
               onClick={() => convertLead(row.id)}
             >

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ensureLoggedIn } from './helpers/auth'
+import { ensureLoggedIn } from './helpers/auth.js'
 import { generateUniqueCustomerName } from './helpers/testData'
 
 /**

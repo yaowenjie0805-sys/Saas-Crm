@@ -65,7 +65,7 @@ class ContactControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(contactRepository).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTACT"), eq("ct-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTACT"), eq("ct-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -77,7 +77,7 @@ class ContactControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(contactRepository).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTACT"), eq("ct-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CONTACT"), eq("ct-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -87,7 +87,7 @@ class ContactControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(contactRepository, never()).deleteByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -100,7 +100,7 @@ class ContactControllerTest {
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(contactRepository, never()).save(org.mockito.ArgumentMatchers.any(Contact.class));
         verify(customerRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -126,7 +126,7 @@ class ContactControllerTest {
         ArgumentCaptor<Contact> savedContact = ArgumentCaptor.forClass(Contact.class);
         verify(contactRepository).save(savedContact.capture());
         assertEquals("cust-2", savedContact.getValue().getCustomerId());
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("UPDATE"), eq("CONTACT"), eq("ct-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("UPDATE"), eq("CONTACT"), eq("ct-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -145,7 +145,7 @@ class ContactControllerTest {
         verify(contactRepository).findByIdAndTenantId("ct-1", TENANT_TEST);
         verify(customerRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(contactRepository, never()).save(any(Contact.class));
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -157,7 +157,7 @@ class ContactControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(contactRepository).deleteByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).findByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -176,7 +176,6 @@ class ContactControllerTest {
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         verify(contactRepository).findByIdAndTenantId("ct-1", TENANT_TEST);
         verify(contactRepository, never()).deleteByIdAndTenantId("ct-1", TENANT_TEST);
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
-

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { PAGE_DOMAIN_MAP } from '../runtime/routeConfig'
+import { PAGE_DOMAIN_MAP } from '../runtime'
 import { usePageDataPolicy } from '../../usePageDataPolicy'
 import { useNavPerf } from '../../useNavPerf'
 
@@ -80,4 +80,3 @@ export function useRuntimeKernelState({
     canManageSalesAutomation,
   }
 }
-

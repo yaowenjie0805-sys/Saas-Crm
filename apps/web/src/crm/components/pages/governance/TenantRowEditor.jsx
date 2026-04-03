@@ -10,7 +10,7 @@ function TenantRowEditor({
   TENANT_APPROVAL_MODE_OPTIONS,
 }) {
   return (
-    <div className="table-row table-row-5 compact tenant-row">
+    <div className="table-row table-row-5 compact tenant-row" data-testid="tenant-row">
       <span>{row.id}</span>
       <span><input className="tool-input" value={row.name || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, name: e.target.value } : x))} /></span>
       <span>
@@ -21,7 +21,7 @@ function TenantRowEditor({
       </span>
       <span><input className="tool-input" value={row.quotaUsers || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, quotaUsers: e.target.value } : x))} /></span>
       <span className="tenant-config-cell">
-        <div className="tenant-config-grid">
+        <div className="tenant-config-grid" data-testid="tenant-config-grid">
           <div className="config-item">
             <label className="config-label">{t('reportTimezone')}:</label>
             <input className="tool-input config-value" value={row.timezone || ''} onChange={(e) => tenants.setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, timezone: e.target.value } : x))} />
@@ -65,7 +65,7 @@ function TenantRowEditor({
             </select>
           </div>
           <div className="config-item config-item-full">
-            <button className="mini-btn tenant-save-btn" onClick={() => tenants.updateTenant(row)}>{t('save')}</button>
+            <button className="mini-btn tenant-save-btn" data-testid="tenant-save-btn" onClick={() => tenants.updateTenant(row)}>{t('save')}</button>
           </div>
         </div>
       </span>

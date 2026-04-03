@@ -1,6 +1,5 @@
 package com.yao.crm.security;
 
-import static com.yao.crm.support.TestTenant.TENANT_TEST;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.entity.Tenant;
@@ -30,7 +29,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AuthInterceptorTest {
-    private static final String TENANT_MISSING = TENANT_TEST + "-missing";
+    private static final String TENANT_MISSING = "tenant-1" + "-missing";
 
     @Mock
     private TokenService tokenService;
@@ -75,13 +74,13 @@ class AuthInterceptorTest {
 
     @Test
     void shouldCacheTenantDateFormatForRepeatedRequests() throws Exception {
-        AuthPrincipal principal = new AuthPrincipal("alice", "ADMIN", "alice", TENANT_TEST, true);
+        AuthPrincipal principal = new AuthPrincipal("alice", "ADMIN", "alice", "tenant-1", true);
         when(tokenService.verify("token")).thenReturn(principal);
 
         Tenant tenant = new Tenant();
-        tenant.setId(TENANT_TEST);
+        tenant.setId("tenant-1");
         tenant.setDateFormat("dd/MM/yyyy");
-        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findById("tenant-1")).thenReturn(Optional.of(tenant));
 
         MockHttpServletRequest firstRequest = buildRequest();
         MockHttpServletResponse firstResponse = new MockHttpServletResponse();
@@ -95,7 +94,7 @@ class AuthInterceptorTest {
         assertTrue(interceptor.preHandle(secondRequest, secondResponse, new Object()));
         assertEquals("dd/MM/yyyy", secondRequest.getAttribute("authTenantDateFormat"));
 
-        verify(tenantRepository).findById(TENANT_TEST);
+        verify(tenantRepository).findById("tenant-1");
     }
 
     @Test
@@ -115,19 +114,19 @@ class AuthInterceptorTest {
 
     @Test
     void shouldReuseCachedPrincipalAttributesWithoutVerifyingTokenAgain() throws Exception {
-        AuthPrincipal principal = new AuthPrincipal("alice", "ADMIN", "alice", TENANT_TEST, true);
+        AuthPrincipal principal = new AuthPrincipal("alice", "ADMIN", "alice", "tenant-1", true);
 
         Tenant tenant = new Tenant();
-        tenant.setId(TENANT_TEST);
+        tenant.setId("tenant-1");
         tenant.setDateFormat("dd/MM/yyyy");
-        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findById("tenant-1")).thenReturn(Optional.of(tenant));
 
         MockHttpServletRequest request = buildRequest();
         request.setAttribute("authPrincipal", principal);
         request.setAttribute("authUsername", "alice");
         request.setAttribute("authRole", "ADMIN");
         request.setAttribute("authOwnerScope", "alice");
-        request.setAttribute("authTenantId", TENANT_TEST);
+        request.setAttribute("authTenantId", "tenant-1");
         request.setAttribute("authMfaVerified", Boolean.TRUE);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -135,7 +134,7 @@ class AuthInterceptorTest {
         assertEquals("dd/MM/yyyy", request.getAttribute("authTenantDateFormat"));
 
         verify(tokenService, never()).verify("token");
-        verify(tenantRepository).findById(TENANT_TEST);
+        verify(tenantRepository).findById("tenant-1");
     }
 
     @Test
@@ -157,21 +156,21 @@ class AuthInterceptorTest {
         when(tokenService.verify("token")).thenReturn(principal);
 
         Tenant tenant = new Tenant();
-        tenant.setId(TENANT_TEST);
+        tenant.setId("tenant-1");
         tenant.setDateFormat("dd/MM/yyyy");
-        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(tenant));
+        when(tenantRepository.findById("tenant-1")).thenReturn(Optional.of(tenant));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setMethod("GET");
         request.setRequestURI("/api/v1/customers");
         request.addHeader("Authorization", "Bearer token");
-        request.addHeader("X-Tenant-Id", TENANT_TEST);
+        request.addHeader("X-Tenant-Id", "tenant-1");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         assertTrue(interceptor.preHandle(request, response, new Object()));
-        assertEquals(TENANT_TEST, request.getAttribute("authTenantId"));
+        assertEquals("tenant-1", request.getAttribute("authTenantId"));
         assertEquals("dd/MM/yyyy", request.getAttribute("authTenantDateFormat"));
-        verify(tenantRepository).findById(TENANT_TEST);
+        verify(tenantRepository).findById("tenant-1");
     }
 
     @Test
@@ -197,7 +196,7 @@ class AuthInterceptorTest {
         request.setMethod("GET");
         request.setRequestURI("/api/v1/customers");
         request.addHeader("Authorization", "Bearer token");
-        request.addHeader("X-Tenant-Id", TENANT_TEST);
+        request.addHeader("X-Tenant-Id", "tenant-1");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         assertFalse(interceptor.preHandle(request, response, new Object()));
@@ -213,7 +212,7 @@ class AuthInterceptorTest {
         request.setMethod("GET");
         request.setRequestURI("/api/dashboard");
         request.addHeader("Authorization", "Bearer token");
-        request.addHeader("X-Tenant-Id", TENANT_TEST);
+        request.addHeader("X-Tenant-Id", "tenant-1");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         assertFalse(interceptor.preHandle(request, response, new Object()));
@@ -248,4 +247,6 @@ class AuthInterceptorTest {
         return request;
     }
 }
+
+
 

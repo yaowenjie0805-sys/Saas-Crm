@@ -28,7 +28,7 @@ export function useAuthRuntimeState() {
     sessionBootstrapping: true,
     formErrors: { login: {}, register: {}, sso: {} },
     activePage: 'dashboard',
-  }), [])
+  }), [defaultTenant])
 
   return useRuntimeSectionFields('auth', 'ui', defaults)
 }

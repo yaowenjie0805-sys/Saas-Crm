@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -123,6 +124,21 @@ class DataImportExportServiceTest {
     void testGetImportJobStatus_NotFound() {
         DataImportExportService.ImportJobResult status = service.getImportJobStatus("nonexistent_job");
         assertNull(status);
+    }
+
+    @Test
+    void testImportJobResultShouldExposeFailCountForSerialization() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        DataImportExportService.ImportJobResult result =
+                new DataImportExportService.ImportJobResult("job-1", "COMPLETED", 10, 10, 8, 2);
+
+        Method getter = DataImportExportService.ImportJobResult.class.getDeclaredMethod("getFailCount");
+        assertNotNull(getter);
+        assertEquals(2, result.getFailCount());
+
+        String json = objectMapper.writeValueAsString(result);
+
+        assertTrue(json.contains("\"failCount\":2"));
     }
 
     @Test

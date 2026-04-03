@@ -1,4 +1,4 @@
-import { mergeRuntimeInput } from '../shared/mergeRuntimeInput'
+import { mergeRuntimeInput } from '../shared'
 
 export function buildAppAuthModelInput(input) {
   return mergeRuntimeInput(input)

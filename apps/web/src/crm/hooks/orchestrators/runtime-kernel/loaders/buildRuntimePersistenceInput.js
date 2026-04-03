@@ -1,4 +1,4 @@
-import { mergeRuntimeInput } from '../shared/mergeRuntimeInput'
+import { mergeRuntimeInput } from '../shared'
 
 export function buildRuntimePersistenceInput(input) {
   return mergeRuntimeInput(input)

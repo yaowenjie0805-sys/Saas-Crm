@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
-import { useCustomerMappers } from '../mainContentMappers/useCustomerMappers'
+import { useCustomerMappers } from '../mainContentMappers'
 
 export function useCustomerOrchestrator() {
   const setCustomerDomainState = useAppStore((state) => state.setCustomerDomainState)

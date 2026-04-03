@@ -1,4 +1,4 @@
-import { normalizeDateFormat } from '../runtime/routeConfig'
+import { normalizeDateFormat } from '../runtime'
 import { useCoreListDomainLoaders } from '../../useCoreListDomainLoaders'
 import { useGovernanceDomainLoaders } from '../../useGovernanceDomainLoaders'
 import { useApprovalDomainLoaders } from '../../useApprovalDomainLoaders'
@@ -16,7 +16,7 @@ import {
   buildLeadImportLoadersInput,
   buildReportingAuditLoadersInput,
   buildWorkbenchLoadersInput,
-} from './loaders/buildRuntimeDomainLoaderInputs'
+} from './loaders'
 
 export function useRuntimeDomainLoaders(params) {
   const shared = {

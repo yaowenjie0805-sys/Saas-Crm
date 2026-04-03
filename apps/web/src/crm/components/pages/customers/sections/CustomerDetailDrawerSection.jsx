@@ -1,6 +1,6 @@
 import { formatMoney, translateStatus } from '../../../../shared'
 import RowDetailDrawer from '../../../RowDetailDrawer'
-import Customer360View from '../customer360/Customer360View'
+import { Customer360View } from '../customer360'
 
 export default function CustomerDetailDrawerSection({
   t,

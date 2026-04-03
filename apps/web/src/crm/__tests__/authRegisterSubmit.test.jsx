@@ -1,15 +1,39 @@
+import React, { act, useEffect } from 'react'
+import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime/useRuntimeAuthActions'
-import { useRuntimeFormValidators } from '../hooks/orchestrators/runtime/useRuntimeFormValidators'
+import { useRuntimeAuthActions, useRuntimeFormValidators } from '../hooks/orchestrators/runtime'
 
 const apiMock = vi.hoisted(() => vi.fn())
+const mountedRoots = []
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const render = async (element) => {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  mountedRoots.push({ container, root })
+
+  await act(async () => {
+    root.render(element)
+  })
+
+  return { container }
+}
 
 vi.mock('../shared', () => ({
+  LANG_KEY: 'crm_lang_test',
   OIDC_STATE_KEY: 'oidc_state_test',
   api: (...args) => apiMock(...args),
 }))
 
-afterEach(() => {
+afterEach(async () => {
+  while (mountedRoots.length) {
+    const mounted = mountedRoots.pop()
+    await act(async () => {
+      mounted.root.unmount()
+    })
+    mounted.container.remove()
+  }
   apiMock.mockReset()
 })
 
@@ -22,48 +46,58 @@ const t = (key) => {
   return labels[key] || key
 }
 
-function createAuthActions(overrides = {}) {
+async function createAuthActions(overrides = {}) {
   const formErrorsState = { current: { login: {}, register: {}, sso: {} } }
+  const actionsRef = { current: null }
   const setFormErrors = (updater) => {
     formErrorsState.current = typeof updater === 'function'
       ? updater(formErrorsState.current)
       : updater
   }
 
-  const actions = useRuntimeAuthActions({
-    lang: 'en',
-    t,
-    loginForm: { tenantId: 'tenant_acme', username: '', password: '', mfaCode: '' },
-    registerForm: {
-      username: 'alice',
-      password: 'Secret#123',
-      confirmPassword: 'Secret#123',
-      displayName: 'Alice',
-    },
-    ssoForm: { username: 'sso-user', code: 'SSO-ACCESS', displayName: '' },
-    ssoConfig: {},
-    mfaChallengeId: '',
-    validateLogin: () => ({}),
-    validateRegister: () => ({}),
-    validateSso: () => ({}),
-    setLoginError: vi.fn(),
-    setFormErrors,
-    saveAuth: vi.fn(),
-    setMfaChallengeId: vi.fn(),
-    setError: vi.fn(),
-    handleLoginError: vi.fn(),
-    setOidcAuthorizing: vi.fn(),
-    logoutGuardRef: { current: false },
-    ...overrides,
-  })
+  function Probe() {
+    const actions = useRuntimeAuthActions({
+      lang: 'en',
+      t,
+      loginForm: { tenantId: 'tenant_acme', username: '', password: '', mfaCode: '' },
+      registerForm: {
+        username: 'alice',
+        password: 'Secret#123',
+        confirmPassword: 'Secret#123',
+        displayName: 'Alice',
+      },
+      ssoForm: { username: 'sso-user', code: 'SSO-ACCESS', displayName: '' },
+      ssoConfig: {},
+      mfaChallengeId: '',
+      validateLogin: () => ({}),
+      validateRegister: () => ({}),
+      validateSso: () => ({}),
+      setLoginError: vi.fn(),
+      setFormErrors,
+      saveAuth: vi.fn(),
+      setMfaChallengeId: vi.fn(),
+      setError: vi.fn(),
+      handleLoginError: vi.fn(),
+      setOidcAuthorizing: vi.fn(),
+      logoutGuardRef: { current: false },
+      ...overrides,
+    })
 
-  return { actions, formErrorsState }
+    useEffect(() => {
+      actionsRef.current = actions
+    }, [actions])
+
+    return null
+  }
+
+  await render(<Probe />)
+  return { actions: actionsRef.current, formErrorsState }
 }
 
 describe('register submit flow', () => {
   it('submitRegister posts to /auth/register with tenant header from loginForm', async () => {
     apiMock.mockResolvedValueOnce({ ok: true })
-    const { actions, formErrorsState } = createAuthActions()
+    const { actions, formErrorsState } = await createAuthActions()
 
     await actions.submitRegister({ preventDefault: vi.fn() })
 
@@ -86,7 +120,7 @@ describe('register submit flow', () => {
     err.code = 'TENANT_HEADER_REQUIRED'
     apiMock.mockRejectedValueOnce(err)
 
-    const { actions, formErrorsState } = createAuthActions()
+    const { actions, formErrorsState } = await createAuthActions()
     await actions.submitRegister({ preventDefault: vi.fn() })
 
     expect(formErrorsState.current.register.tenantId).toBe('Required')
@@ -97,14 +131,14 @@ describe('register submit flow', () => {
     err.code = 'username_exists'
     apiMock.mockRejectedValueOnce(err)
 
-    const { actions, formErrorsState } = createAuthActions()
+    const { actions, formErrorsState } = await createAuthActions()
     await actions.submitRegister({ preventDefault: vi.fn() })
 
     expect(formErrorsState.current.register.username).toBe('Username already exists')
   })
 
   it('submitRegister blocks request when tenant validation fails', async () => {
-    const { actions, formErrorsState } = createAuthActions({
+    const { actions, formErrorsState } = await createAuthActions({
       loginForm: { tenantId: '   ', username: '', password: '', mfaCode: '' },
       validateRegister: () => ({ tenantId: 'Required' }),
     })

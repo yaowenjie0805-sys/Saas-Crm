@@ -42,6 +42,31 @@ export default defineConfig([
       'no-var': 'error',
       'prefer-const': 'warn',
       'no-duplicate-imports': 'error',
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['**/hooks/useApi', '**/hooks/useApi.js', '**/hooks/useApi.jsx'],
+            message: 'Do not import the legacy hooks/useApi entry in business code; use the newer API hook entrypoint instead.',
+          },
+        ],
+      }],
+    },
+  },
+  {
+    files: ['src/crm/hooks/orchestrators/runtime/**/*.{js,jsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['**/runtime-kernel', '**/runtime-kernel/**'],
+            message: 'runtime files must not import from runtime-kernel; keep imports one-way from runtime-kernel to runtime.',
+          },
+          {
+            group: ['**/hooks/useApi', '**/hooks/useApi.js', '**/hooks/useApi.jsx'],
+            message: 'Do not import the legacy hooks/useApi entry in business code; use the newer API hook entrypoint instead.',
+          },
+        ],
+      }],
     },
   },
   {
@@ -55,6 +80,7 @@ export default defineConfig([
     rules: {
       'no-console': 'off',
       'no-unused-vars': 'off',
+      'no-restricted-imports': 'off',
     },
   },
 ])

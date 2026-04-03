@@ -1,6 +1,5 @@
-import { CUSTOMER360_MODULE_KEYS } from './customer360/shared'
+import { CUSTOMER360_MODULE_KEYS, Customer360View } from './customer360'
 import BatchResultModal from '../../BatchResultModal'
-import Customer360View from './customer360/Customer360View'
 import {
   CustomerFormBar,
   CustomerFilterBar,

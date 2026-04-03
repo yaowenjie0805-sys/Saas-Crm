@@ -1,9 +1,8 @@
-import { buildRuntimePageModelContext } from '../runtime/useRuntimePageModelContext'
-import { buildRuntimeShellProps } from '../runtime/buildRuntimeShellProps'
+import { buildRuntimePageModelContext, buildRuntimeShellProps } from '../runtime'
 import {
   buildRuntimePageModelContextPayload,
   buildRuntimeShellPropsPayload,
-} from './view-model/buildRuntimeViewModelPayloads'
+} from './view-model'
 
 export function buildRuntimeViewModels(params) {
   const pageModelCtx = buildRuntimePageModelContext(buildRuntimePageModelContextPayload(params))

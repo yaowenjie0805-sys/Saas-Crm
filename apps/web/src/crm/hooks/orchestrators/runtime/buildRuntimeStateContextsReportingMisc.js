@@ -4,7 +4,7 @@ import {
   buildPerfCtx,
   buildPaginationCtx,
   buildFormsCtx,
-} from './runtime-state/buildRuntimeStateContextSections'
+} from './runtime-state'
 
 export function buildRuntimeStateContextsReportingMisc(runtime) {
   return {

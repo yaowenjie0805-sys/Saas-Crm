@@ -1,8 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { ensureI18nNamespaces, getI18nNamespacesForPage, tFactory } from '../../../../i18n'
 import { useAppStateModel } from '../../../useAppStateModel'
-import { useRuntimeRouting } from '../../runtime/useRuntimeRouting'
-import { useRuntimeStateSlices } from '../../runtime/useRuntimeStateSlices'
+import { useRuntimeRouting, useRuntimeStateSlices } from '../../runtime'
 import { useRuntimeKernelState } from '../useRuntimeKernelState'
 
 export function useSetupRuntimeContext() {

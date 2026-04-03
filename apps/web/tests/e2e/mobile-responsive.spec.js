@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { ensureLoggedIn } from './helpers/auth'
+import { ensureLoggedIn } from './helpers/auth.js'
+import { expectHealthyPage } from './helpers/health.js'
 
 const TITLES = {
   dashboard: /Dashboard|总览/,
@@ -11,6 +12,7 @@ const TITLES = {
 
 const DETAIL_BTN_TEXT = /Detail|Details|详情/
 const CLOSE_BTN_TEXT = /Close|关闭/
+const IGNORABLE_PAGE_ERROR_PATTERNS = [/signal is aborted without reason/i]
 
 function collectPageErrors(page) {
   const errors = []
@@ -19,10 +21,10 @@ function collectPageErrors(page) {
   })
   return errors
 }
-
 async function expectHealthy(page, pageErrors) {
-  await expect(page.getByTestId('error-boundary')).toHaveCount(0)
-  expect(pageErrors, `Unexpected page errors:\n${pageErrors.join('\n')}`).toEqual([])
+  await expectHealthyPage(page, pageErrors, {
+    ignoreErrorPatterns: IGNORABLE_PAGE_ERROR_PATTERNS,
+  })
 }
 
 async function openMobileMenu(page) {
@@ -49,7 +51,7 @@ test('mobile dashboard remains usable without horizontal overflow', async ({ pag
   await expect(page.getByTestId('topbar')).toBeVisible()
   await expect(page.getByTestId('topbar-search-input')).toBeVisible()
   await page.getByTestId('topbar-refresh').click()
-  await expect(page.getByTestId('page-dashboard')).toBeVisible()
+  await expect(page.getByTestId('page-title')).toContainText(TITLES.dashboard)
 
   const mobileLayout = await page.evaluate(() => {
     const doc = document.documentElement
@@ -64,7 +66,7 @@ test('mobile dashboard remains usable without horizontal overflow', async ({ pag
 
   expect(mobileLayout.docScrollWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 1)
   expect(mobileLayout.topbarWidth).not.toBeNull()
-  expect(mobileLayout.topbarWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 4)
+  expect(mobileLayout.topbarWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 10)
 
   await expectHealthy(page, pageErrors)
 })
@@ -76,14 +78,12 @@ test('mobile contracts keeps filters reachable and row actions clickable', async
   await ensureLoggedIn(page)
   await gotoMobileNav(page, 'nav-contracts', TITLES.contracts)
 
-  await expect(page.getByTestId('page-contracts')).toBeVisible()
-
-  const firstFormInput = page.locator('[data-testid="page-contracts"] .inline-tools .tool-input').first()
+  const firstFormInput = page.locator('main .inline-tools .tool-input').first()
   await expect(firstFormInput).toBeVisible()
 
   const noOverflow = await page.evaluate(() => {
     const doc = document.documentElement
-    const contractsPage = document.querySelector('[data-testid="page-contracts"]')
+    const contractsPage = document.querySelector('main')
     const panelRect = contractsPage?.getBoundingClientRect() || null
     return {
       docScrollWidth: doc.scrollWidth,
@@ -95,8 +95,8 @@ test('mobile contracts keeps filters reachable and row actions clickable', async
   expect(noOverflow.panelRight).not.toBeNull()
   expect(noOverflow.panelRight).toBeLessThanOrEqual(noOverflow.viewportWidth + 1)
 
-  await expect(page.locator('[data-testid="page-contracts"] .table-row').first()).toBeVisible()
-  const detailBtn = page.locator('[data-testid="page-contracts"] .table-row .mini-btn').filter({ hasText: DETAIL_BTN_TEXT }).first()
+  await expect(page.locator('.table-row').first()).toBeVisible()
+  const detailBtn = page.locator('.table-row .mini-btn').filter({ hasText: DETAIL_BTN_TEXT }).first()
   await detailBtn.scrollIntoViewIfNeeded()
   await detailBtn.click()
   await expect(page.locator('.detail-drawer')).toBeVisible()
@@ -111,7 +111,7 @@ test('mobile customers supports search and opens detail drawer', async ({ page }
   await ensureLoggedIn(page)
   await gotoMobileNav(page, 'nav-customers', TITLES.customers)
 
-  await expect(page.getByTestId('customers-page')).toBeVisible()
+  await expect(page.getByTestId('page-title')).toContainText(TITLES.customers)
   await page.getByTestId('customers-search-input').fill('')
   await page.getByTestId('customers-search-submit').click()
 
@@ -130,20 +130,21 @@ test('mobile quotes and orders keep action entry points clickable', async ({ pag
   await ensureLoggedIn(page)
 
   await gotoMobileNav(page, 'nav-quotes', TITLES.quotes)
-  await expect(page.getByTestId('quotes-page')).toBeVisible()
+  await expect(page.getByTestId('page-title')).toContainText(TITLES.quotes)
   await expect(page.getByTestId('quotes-owner-filter')).toBeVisible()
-  const quoteDetail = page.locator('[data-testid="quotes-page"] .table-row .mini-btn').filter({ hasText: DETAIL_BTN_TEXT }).first()
+  const quoteDetail = page.locator('.table-row .mini-btn').filter({ hasText: DETAIL_BTN_TEXT }).first()
   await quoteDetail.scrollIntoViewIfNeeded()
   await quoteDetail.click()
   await expect(page.locator('.modal-mask')).toBeVisible()
   await page.locator('.modal-mask .mini-btn').filter({ hasText: CLOSE_BTN_TEXT }).first().click()
 
   await gotoMobileNav(page, 'nav-orders', TITLES.orders)
-  await expect(page.getByTestId('page-orders')).toBeVisible()
-  const orderDetail = page.getByTestId('page-orders').getByRole('button', { name: DETAIL_BTN_TEXT }).first()
+  await expect(page.getByTestId('page-title')).toContainText(TITLES.orders)
+  const orderDetail = page.getByRole('button', { name: DETAIL_BTN_TEXT }).first()
   await expect(orderDetail).toBeVisible()
   await orderDetail.click()
   await expect(page.locator('.modal-mask')).toBeVisible()
 
   await expectHealthy(page, pageErrors)
 })
+

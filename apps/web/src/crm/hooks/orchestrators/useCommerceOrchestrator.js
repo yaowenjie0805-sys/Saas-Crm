@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
-import { useCommerceMapper } from '../mainContentMappers/useCommerceMapper'
+import { useCommerceMapper } from '../mainContentMappers'
 
 export function useCommerceOrchestrator() {
   const setCommerceDomainState = useAppStore((state) => state.setCommerceDomainState)

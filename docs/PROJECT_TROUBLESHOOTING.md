@@ -51,7 +51,7 @@ npm run db:flyway:repair
 关键文件：
 
 - `apps/api/src/main/java/com/yao/crm/controller/BaseApiController.java`
-- `apps/web/src/crm/hooks/useApi.js`
+- `apps/web/src/crm/hooks/api/`（按领域拆分，优先核对对应的 `useXxxApi`）
 
 ---
 

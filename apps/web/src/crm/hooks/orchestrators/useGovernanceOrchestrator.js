@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
-import { useGovernanceMapper } from '../mainContentMappers/useGovernanceMapper'
+import { useGovernanceMapper } from '../mainContentMappers'
 
 export function useGovernanceOrchestrator() {
   const setGovernanceDomainState = useAppStore((state) => state.setGovernanceDomainState)

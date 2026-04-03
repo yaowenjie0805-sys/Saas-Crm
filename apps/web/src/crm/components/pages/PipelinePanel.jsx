@@ -7,8 +7,12 @@ import { useBatchActions } from '../useBatchActions'
 import BatchResultModal from '../BatchResultModal'
 import VirtualListTable from '../VirtualListTable'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
-import { OpportunityRow } from './pipeline/PipelineRows'
-import { buildPipelineDetailRows, getPipelineStageOptions, sortPipelineRows } from './pipeline/pipelinePanelHelpers'
+import {
+  OpportunityRow,
+  buildPipelineDetailRows,
+  getPipelineStageOptions,
+  sortPipelineRows,
+} from './pipeline/sections'
 
 function PipelinePanel({
   activePage,

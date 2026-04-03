@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function ServerPager({ t, page, totalPages, size, onPageChange, onSizeChange, sizeOptions = [5, 8, 12, 20] }) {
+function ServerPager({ t, page, totalPages, size, onPageChange, onSizeChange, sizeOptions = [5, 8, 12, 20], testId = 'server-pager' }) {
   const [jump, setJump] = useState('')
 
   const doJump = () => {
@@ -12,7 +12,7 @@ function ServerPager({ t, page, totalPages, size, onPageChange, onSizeChange, si
   }
 
   return (
-    <div className="pager">
+    <div className="pager" data-testid={testId}>
       <button className="mini-btn" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))}>{t('pagePrev')}</button>
       <span>{page}/{totalPages}</span>
       <button className="mini-btn" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))}>{t('pageNext')}</button>

@@ -7,6 +7,7 @@ const DB_USER = process.env.DB_USER || 'root'
 const DB_PASSWORD = process.env.DB_PASSWORD || 'root'
 const API_PORT = process.env.API_PORT || '18080'
 const BASE_URL = `http://127.0.0.1:${API_PORT}`
+const TENANT_ID = process.env.SMOKE_TENANT_ID || process.env.VITE_DEFAULT_TENANT || 'tenant_default'
 const DB_URL = process.env.DB_URL || `jdbc:mysql://127.0.0.1:3306/${DB_NAME}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true`
 
 async function waitHealth(isExited) {
@@ -22,14 +23,18 @@ async function waitHealth(isExited) {
 }
 
 async function req(path, options = {}) {
-  return fetch(`${BASE_URL}${path}`, options)
+  const headers = {
+    'X-Tenant-Id': TENANT_ID,
+    ...(options.headers || {}),
+  }
+  return fetch(`${BASE_URL}${path}`, { ...options, headers })
 }
 
 async function ensureUserAuth(adminToken, username, password, role) {
   const loginTry = await req('/api/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, tenantId: TENANT_ID }),
   })
   if (loginTry.status === 200) {
     const loginBody = await loginTry.json()
@@ -39,7 +44,7 @@ async function ensureUserAuth(adminToken, username, password, role) {
   const registerRes = await req('/api/auth/register', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password, displayName: username }),
+    body: JSON.stringify({ username, password, displayName: username, tenantId: TENANT_ID }),
   })
   if (registerRes.status !== 201 && registerRes.status !== 409) {
     const body = await registerRes.text()
@@ -61,7 +66,7 @@ async function ensureUserAuth(adminToken, username, password, role) {
   const loginRes = await req('/api/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, tenantId: TENANT_ID }),
   })
   const loginBody = await loginRes.json()
   if (loginRes.status !== 200 || !loginBody?.token) {
@@ -74,7 +79,7 @@ async function registerAndLogin(username, password) {
   const registerRes = await req('/api/auth/register', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password, displayName: username }),
+    body: JSON.stringify({ username, password, displayName: username, tenantId: TENANT_ID }),
   })
   if (registerRes.status !== 201 && registerRes.status !== 409) {
     const body = await registerRes.text()
@@ -84,7 +89,7 @@ async function registerAndLogin(username, password) {
   const loginRes = await req('/api/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, tenantId: TENANT_ID }),
   })
   const loginBody = await loginRes.json()
   if (loginRes.status !== 200 || !loginBody?.token) {
@@ -141,7 +146,7 @@ try {
   const login = await req('/api/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: 'admin123', tenantId: TENANT_ID }),
   })
   let auth = await login.json()
   let hasAdmin = login.status === 200 && !!auth?.token
@@ -171,12 +176,22 @@ try {
   const customer = await createCustomer.json()
   if (createCustomer.status !== 201) throw new Error(`create_customer_failed_${createCustomer.status}_${JSON.stringify(customer)}`)
 
-  const patchCustomer = await req(`/api/customers/${customer.id}`, {
+  let patchCustomer = await req(`/api/customers/${customer.id}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify({ status: 'Pending', value: 200 }),
   })
-  if (patchCustomer.status !== 200) throw new Error('patch_customer_failed')
+  if (patchCustomer.status !== 200) {
+    patchCustomer = await req(`/api/customers/${customer.id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ status: 'Pending', value: 200 }),
+    })
+  }
+  if (patchCustomer.status !== 200) {
+    const body = await patchCustomer.text()
+    throw new Error(`patch_customer_failed_${patchCustomer.status}_${body}`)
+  }
 
   const createTask = await req('/api/tasks', {
     method: 'POST',

@@ -61,7 +61,7 @@ class OpportunityControllerTest {
         verify(opportunityRepository).deleteByIdAndTenantId("opp-1", TENANT_TEST);
         verify(opportunityRepository, never()).deleteById(anyString());
         verify(opportunityRepository, never()).existsByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("OPPORTUNITY"), eq("opp-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("OPPORTUNITY"), eq("opp-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -74,7 +74,7 @@ class OpportunityControllerTest {
         verify(opportunityRepository).deleteByIdAndTenantId("opp-1", TENANT_TEST);
         verify(opportunityRepository, never()).deleteById(anyString());
         verify(opportunityRepository, never()).existsByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("OPPORTUNITY"), eq("opp-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("OPPORTUNITY"), eq("opp-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -87,7 +87,7 @@ class OpportunityControllerTest {
         verify(opportunityRepository).deleteByIdAndTenantId("opp-1", TENANT_TEST);
         verify(opportunityRepository, never()).deleteById(anyString());
         verify(opportunityRepository, never()).existsByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -116,4 +116,3 @@ class OpportunityControllerTest {
         verifyNoInteractions(opportunityRepository, auditLogService);
     }
 }
-

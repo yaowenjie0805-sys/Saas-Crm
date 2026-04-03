@@ -33,8 +33,9 @@ const CHUNK_GROUPS = {
     'useBatchActions': 'route-sales-core',
     'QuotesPanel': 'route-commerce',
     'OrdersPanel': 'route-commerce',
-    'quotes': 'route-commerce-detail',
-    'orders': 'route-commerce-detail',
+    // Keep commerce detail modules in the same chunk to avoid circular chunk warnings
+    'quotes': 'route-commerce',
+    'orders': 'route-commerce',
     'PipelinePanel': 'route-sales-core',
     'ApprovalsPageContainer': 'route-approvals',
     'GovernancePageContainer': 'route-governance',

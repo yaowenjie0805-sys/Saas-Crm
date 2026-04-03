@@ -244,7 +244,7 @@ public class DataImportExportService {
         public int getTotalRows() { return totalRows; }
         public int getProcessedRows() { return processedRows; }
         public int getSuccessCount() { return successCount; }
-        public int failCount() { return failCount; }
+        public int getFailCount() { return failCount; }
         public String getErrorMessage() { return errorMessage; }
         public List<ImportError> getErrors() { return errors; }
 

@@ -1,8 +1,9 @@
-import { lazy, memo, Suspense, useCallback, useMemo, useState } from 'react'
+import { memo, Suspense, useCallback, useMemo, useState } from 'react'
+import { lazyNamed } from './shared'
 
-const ApprovalStatsCards = lazy(() => import('./approvals/ApprovalStatsCards'))
-const ApprovalTemplateSection = lazy(() => import('./approvals/ApprovalTemplateSection'))
-const ApprovalTaskSection = lazy(() => import('./approvals/ApprovalTaskSection'))
+const ApprovalStatsCards = lazyNamed(() => import('./approvals/sections'), 'ApprovalStatsCards')
+const ApprovalTemplateSection = lazyNamed(() => import('./approvals/sections'), 'ApprovalTemplateSection')
+const ApprovalTaskSection = lazyNamed(() => import('./approvals/sections'), 'ApprovalTaskSection')
 
 function ApprovalsPageContainer({ activePage, t, approvals, refreshApprovals }) {
   const [editingTemplateId, setEditingTemplateId] = useState('')

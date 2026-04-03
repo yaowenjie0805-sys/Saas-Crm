@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { ensureLoggedIn } from './helpers/auth'
+import { ensureLoggedIn } from './helpers/auth.js'
 
 const TITLES = {
   dashboard: /Dashboard|总览/,

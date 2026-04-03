@@ -84,7 +84,7 @@ class PaymentControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         assertNull(response.getBody());
         verify(paymentRepository, times(1)).deleteByIdAndTenantId("pay-1", TENANT_TEST);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("PAYMENT"), eq("pay-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("PAYMENT"), eq("pay-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -95,7 +95,7 @@ class PaymentControllerTest {
 
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(paymentRepository).deleteByIdAndTenantId("pay-1", TENANT_TEST);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("PAYMENT"), eq("pay-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("PAYMENT"), eq("pay-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -106,7 +106,7 @@ class PaymentControllerTest {
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(paymentRepository, times(1)).deleteByIdAndTenantId("pay-1", TENANT_TEST);
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -115,7 +115,7 @@ class PaymentControllerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(paymentRepository, never()).deleteByIdAndTenantId(anyString(), anyString());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -125,7 +125,7 @@ class PaymentControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verify(paymentRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verify(paymentRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -137,7 +137,6 @@ class PaymentControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         verify(paymentRepository).findByIdAndTenantId("pay-1", TENANT_TEST);
         verify(paymentRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 }
-

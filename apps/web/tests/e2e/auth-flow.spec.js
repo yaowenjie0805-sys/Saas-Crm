@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ensureLoggedIn, E2E_CREDENTIALS } from './helpers/auth'
+import { ensureLoggedIn, E2E_CREDENTIALS } from './helpers/auth.js'
 
 /**
  * Authentication Flow Tests
@@ -84,7 +84,7 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByTestId('app-sidebar')).toBeVisible()
 
     // Click logout button - use first() to handle multiple logout buttons
-    const logoutBtn = page.locator('.logout-btn, [data-testid="logout-btn"], button:has-text("Logout"), button:has-text("退出")').first()
+    const logoutBtn = page.locator('.logout-btn, [data-testid="logout-btn"], button:has-text("Logout")').first()
     await logoutBtn.click()
 
     // Should redirect to login or clear session
@@ -122,3 +122,4 @@ test.describe('Authentication Flow', () => {
     await expect(page.locator('[data-testid="login-page"]')).toBeVisible({ timeout: 10000 })
   })
 })
+

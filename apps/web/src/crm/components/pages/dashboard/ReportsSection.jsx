@@ -52,7 +52,7 @@ function ReportsSection({
 
   return (
     <>
-      <div className="report-summary">
+      <div className="report-summary" data-testid="dashboard-reports-summary">
         <div><b>{t('reportsSummary')}</b></div>
         <div>{t('marketProfile')}: {marketProfile === 'GLOBAL' ? t('marketGlobal') : t('marketCN')}</div>
         <div>{t('approvalModeLabel')}: {approvalMode === 'STAGE_GATE' ? t('approvalModeStageGate') : t('approvalModeStrict')}</div>
@@ -68,20 +68,20 @@ function ReportsSection({
       </div>
       {!tenantConfigSynced && <div className="info-banner">{t('tenantConfigNotSyncedHint')}</div>}
       {localizedFallback && <div className="info-banner">{t('reportsLocalizedFallbackHint')}</div>}
-      <div className="report-grid">
-        <div className="report-card">
+      <div className="report-grid" data-testid="dashboard-reports-grid">
+        <div className="report-card" data-testid="dashboard-report-card">
           <h4>{t('customerByOwner')}</h4>
           {ownerBars.map((b) => <BarChartRow key={b.label} label={b.label} value={b.value} />)}
         </div>
-        <div className="report-card">
+        <div className="report-card" data-testid="dashboard-report-card">
           <h4>{t('revenueByStatus')}</h4>
           {statusBars.map((b) => <BarChartRow key={b.label} label={b.label} value={b.value} money />)}
         </div>
-        <div className="report-card">
+        <div className="report-card" data-testid="dashboard-report-card">
           <h4>{t('opportunityByStage')}</h4>
           {stageBars.map((b) => <BarChartRow key={b.label} label={b.label} value={b.value} />)}
         </div>
-        <div className="report-card">
+        <div className="report-card" data-testid="dashboard-report-card">
           <h4>{t('followByChannel')}</h4>
           {channelBars.map((b) => <BarChartRow key={b.label} label={b.label} value={b.value} />)}
         </div>

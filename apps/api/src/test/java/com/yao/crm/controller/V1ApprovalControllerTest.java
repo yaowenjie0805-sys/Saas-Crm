@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -115,12 +114,12 @@ class V1ApprovalControllerTest {
 
     @Test
     void patchTemplateShouldTrimIdAndTenantBeforeLookup() {
-        when(templateRepository.findByIdAndTenantId("tpl-1", TENANT_TEST)).thenReturn(Optional.empty());
+        when(templateRepository.findByIdAndTenantId("tpl-1", "tenant-1")).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.patchTemplate(request, "  tpl-1  ", new V1ApprovalTemplatePatchRequest());
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(templateRepository).findByIdAndTenantId("tpl-1", TENANT_TEST);
+        verify(templateRepository).findByIdAndTenantId("tpl-1", "tenant-1");
     }
 
     @Test
@@ -136,12 +135,12 @@ class V1ApprovalControllerTest {
 
     @Test
     void approveTaskShouldTrimTaskIdAndTenantBeforeLookup() {
-        when(taskRepository.findByIdAndTenantId("task-1", TENANT_TEST)).thenReturn(Optional.empty());
+        when(taskRepository.findByIdAndTenantId("task-1", "tenant-1")).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.approveTask(request, "  task-1  ", null);
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(taskRepository).findByIdAndTenantId("task-1", TENANT_TEST);
+        verify(taskRepository).findByIdAndTenantId("task-1", "tenant-1");
     }
 
     @Test
@@ -152,7 +151,7 @@ class V1ApprovalControllerTest {
         active.setBizType("QUOTE");
         active.setBizId("biz-1");
         when(instanceRepository.findTopByTenantIdAndBizTypeAndBizIdAndStatusInOrderByCreatedAtDesc(
-                eq(TENANT_TEST),
+                eq("tenant-1"),
                 eq("QUOTE"),
                 eq("biz-1"),
                 eq(Arrays.asList("PENDING", "WAITING"))
@@ -163,7 +162,7 @@ class V1ApprovalControllerTest {
 
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         verify(instanceRepository).findTopByTenantIdAndBizTypeAndBizIdAndStatusInOrderByCreatedAtDesc(
-                TENANT_TEST,
+                "tenant-1",
                 "QUOTE",
                 "biz-1",
                 Arrays.asList("PENDING", "WAITING")
@@ -174,12 +173,12 @@ class V1ApprovalControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void instanceDetailShouldReturnInstanceNotFoundCode() {
-        when(instanceRepository.findByIdAndTenantId("ins-1", TENANT_TEST)).thenReturn(Optional.empty());
+        when(instanceRepository.findByIdAndTenantId("ins-1", "tenant-1")).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = controller.instanceDetail(request, "  ins-1  ");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        verify(instanceRepository).findByIdAndTenantId("ins-1", TENANT_TEST);
+        verify(instanceRepository).findByIdAndTenantId("ins-1", "tenant-1");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("approval_instance_not_found", body.get("code"));
     }
@@ -188,13 +187,13 @@ class V1ApprovalControllerTest {
     void listInstancesShouldUsePagedRepositoryQuery() {
         ApprovalInstance row = new ApprovalInstance();
         row.setId("ins-1");
-        when(instanceRepository.findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class)))
+        when(instanceRepository.findByTenantIdOrderByCreatedAtDesc(eq("tenant-1"), any(Pageable.class)))
                 .thenReturn(Collections.singletonList(row));
 
         ResponseEntity<?> response = controller.listInstances(request, 5);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(instanceRepository).findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class));
+        verify(instanceRepository).findByTenantIdOrderByCreatedAtDesc(eq("tenant-1"), any(Pageable.class));
     }
 
     @Test
@@ -202,13 +201,13 @@ class V1ApprovalControllerTest {
         ApprovalTask task = new ApprovalTask();
         task.setId("task-1");
         task.setStatus("PENDING");
-        when(taskRepository.findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class)))
+        when(taskRepository.findByTenantIdOrderByCreatedAtDesc(eq("tenant-1"), any(Pageable.class)))
                 .thenReturn(Collections.singletonList(task));
 
         ResponseEntity<?> response = controller.listTasks(request, "", false, false, 3);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(taskRepository).findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class));
+        verify(taskRepository).findByTenantIdOrderByCreatedAtDesc(eq("tenant-1"), any(Pageable.class));
     }
 
     @Test
@@ -227,7 +226,7 @@ class V1ApprovalControllerTest {
         overdue.setStatus("PENDING");
         overdue.setDeadlineAt(LocalDateTime.now().minusHours(1));
 
-        when(taskRepository.findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class)))
+        when(taskRepository.findByTenantIdOrderByCreatedAtDesc(eq("tenant-1"), any(Pageable.class)))
                 .thenReturn(firstPage)
                 .thenReturn(Collections.singletonList(overdue))
                 .thenReturn(Collections.emptyList());
@@ -235,50 +234,52 @@ class V1ApprovalControllerTest {
         ResponseEntity<?> response = controller.listTasks(request, "", true, false, 1);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(taskRepository, times(2)).findByTenantIdOrderByCreatedAtDesc(eq(TENANT_TEST), any(Pageable.class));
+        verify(taskRepository, times(2)).findByTenantIdOrderByCreatedAtDesc(eq("tenant-1"), any(Pageable.class));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void statsShouldUseAggregatedRepositoryQueries() {
-        when(instanceRepository.countGroupedByStatus(TENANT_TEST))
+        when(instanceRepository.countGroupedByStatus("tenant-1"))
                 .thenReturn(Arrays.<Object[]>asList(new Object[]{"PENDING", 2L}));
-        when(instanceRepository.countGroupedByBizType(TENANT_TEST))
+        when(instanceRepository.countGroupedByBizType("tenant-1"))
                 .thenReturn(Arrays.<Object[]>asList(new Object[]{"QUOTE", 3L}));
-        when(instanceRepository.countByTenantId(TENANT_TEST)).thenReturn(5L);
+        when(instanceRepository.countByTenantId("tenant-1")).thenReturn(5L);
 
-        when(taskRepository.countGroupedByStatus(TENANT_TEST))
+        when(taskRepository.countGroupedByStatus("tenant-1"))
                 .thenReturn(Arrays.<Object[]>asList(new Object[]{"PENDING", 2L}, new Object[]{"APPROVED", 1L}));
-        when(taskRepository.countBacklogByRole(TENANT_TEST))
+        when(taskRepository.countBacklogByRole("tenant-1"))
                 .thenReturn(Arrays.<Object[]>asList(new Object[]{"MANAGER", 2L}));
-        when(taskRepository.countByTenantId(TENANT_TEST)).thenReturn(4L);
-        when(taskRepository.countByTenantIdAndStatusIgnoreCase(TENANT_TEST, "PENDING")).thenReturn(2L);
-        when(taskRepository.countOverduePendingTasks(eq(TENANT_TEST), any(LocalDateTime.class))).thenReturn(1L);
-        when(taskRepository.countEscalatedTasks(TENANT_TEST)).thenReturn(1L);
+        when(taskRepository.countByTenantId("tenant-1")).thenReturn(4L);
+        when(taskRepository.countByTenantIdAndStatusIgnoreCase("tenant-1", "PENDING")).thenReturn(2L);
+        when(taskRepository.countOverduePendingTasks(eq("tenant-1"), any(LocalDateTime.class))).thenReturn(1L);
+        when(taskRepository.countEscalatedTasks("tenant-1")).thenReturn(1L);
 
         ApprovalTask terminal = new ApprovalTask();
         terminal.setCreatedAt(LocalDateTime.now().minusMinutes(30));
         terminal.setUpdatedAt(LocalDateTime.now());
-        when(taskRepository.findByTenantIdAndStatusInOrderByCreatedAtDesc(eq(TENANT_TEST), anyCollection(), any(Pageable.class)))
+        when(taskRepository.findByTenantIdAndStatusInOrderByCreatedAtDesc(eq("tenant-1"), anyCollection(), any(Pageable.class)))
                 .thenReturn(Collections.singletonList(terminal));
-        when(templateRepository.countByTenantId(TENANT_TEST)).thenReturn(0L);
+        when(templateRepository.countByTenantId("tenant-1")).thenReturn(0L);
 
         ResponseEntity<?> response = controller.stats(request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(instanceRepository).countGroupedByStatus(TENANT_TEST);
-        verify(instanceRepository).countGroupedByBizType(TENANT_TEST);
-        verify(instanceRepository).countByTenantId(TENANT_TEST);
-        verify(taskRepository).countGroupedByStatus(TENANT_TEST);
-        verify(taskRepository).countBacklogByRole(TENANT_TEST);
-        verify(taskRepository).countByTenantId(TENANT_TEST);
-        verify(taskRepository).countByTenantIdAndStatusIgnoreCase(TENANT_TEST, "PENDING");
-        verify(taskRepository).countOverduePendingTasks(eq(TENANT_TEST), any(LocalDateTime.class));
-        verify(taskRepository).countEscalatedTasks(TENANT_TEST);
-        verify(taskRepository).findByTenantIdAndStatusInOrderByCreatedAtDesc(eq(TENANT_TEST), anyCollection(), any(Pageable.class));
-        verify(templateRepository).countByTenantId(TENANT_TEST);
-        verify(instanceRepository, never()).findByTenantIdOrderByCreatedAtDesc(TENANT_TEST);
-        verify(taskRepository, never()).findByTenantIdOrderByCreatedAtDesc(TENANT_TEST);
+        verify(instanceRepository).countGroupedByStatus("tenant-1");
+        verify(instanceRepository).countGroupedByBizType("tenant-1");
+        verify(instanceRepository).countByTenantId("tenant-1");
+        verify(taskRepository).countGroupedByStatus("tenant-1");
+        verify(taskRepository).countBacklogByRole("tenant-1");
+        verify(taskRepository).countByTenantId("tenant-1");
+        verify(taskRepository).countByTenantIdAndStatusIgnoreCase("tenant-1", "PENDING");
+        verify(taskRepository).countOverduePendingTasks(eq("tenant-1"), any(LocalDateTime.class));
+        verify(taskRepository).countEscalatedTasks("tenant-1");
+        verify(taskRepository).findByTenantIdAndStatusInOrderByCreatedAtDesc(eq("tenant-1"), anyCollection(), any(Pageable.class));
+        verify(templateRepository).countByTenantId("tenant-1");
+        verify(instanceRepository, never()).findByTenantIdOrderByCreatedAtDesc("tenant-1");
+        verify(taskRepository, never()).findByTenantIdOrderByCreatedAtDesc("tenant-1");
     }
 }
+
+
 

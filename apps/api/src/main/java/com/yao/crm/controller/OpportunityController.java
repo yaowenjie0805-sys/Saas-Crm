@@ -20,7 +20,7 @@ import javax.validation.Valid;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping({"/api", "/api/v1"})
 public class OpportunityController extends BaseApiController {
 
     private final OpportunityRepository opportunityRepository;
@@ -52,6 +52,7 @@ public class OpportunityController extends BaseApiController {
         org.springframework.data.domain.Page<Opportunity> result = opportunityRepository.findByTenantId(currentTenant(request), pageable);
         Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
+        body.put("data", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
         body.put("size", safeSize);
@@ -102,6 +103,7 @@ public class OpportunityController extends BaseApiController {
         Page<Opportunity> result = opportunityRepository.findAll(spec, pageable);
         Map<String, Object> body = new HashMap<>();
         body.put("items", result.getContent());
+        body.put("data", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
         body.put("size", safeSize);

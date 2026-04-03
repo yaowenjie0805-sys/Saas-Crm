@@ -5,8 +5,13 @@ import { useBatchActions } from '../useBatchActions'
 import BatchResultModal from '../BatchResultModal'
 import VirtualListTable from '../VirtualListTable'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
-import { OrderRow } from './orders/OrderPanelRows'
-import { EMPTY_FORM, EMPTY_ROWS, formatOrderActionError, getOrderStatusOptions } from './orders/orderPanelHelpers'
+import {
+  EMPTY_FORM,
+  EMPTY_ROWS,
+  formatOrderActionError,
+  getOrderStatusOptions,
+  OrderRow,
+} from './orders/sections'
 const OrderEditorModal = lazy(() => import('./orders/OrderEditorModal'))
 
 function OrdersPanel({ activePage, t, canWrite, apiContext, opportunityFilter, refreshPage, commerce }) {

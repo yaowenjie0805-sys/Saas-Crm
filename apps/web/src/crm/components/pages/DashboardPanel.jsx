@@ -1,9 +1,11 @@
 import { memo, useMemo } from 'react'
-import StatsSection from './dashboard/StatsSection'
-import WorkbenchSection from './dashboard/WorkbenchSection'
-import ReportsSection from './dashboard/ReportsSection'
-import ReportExportJobsSection from './dashboard/ReportExportJobsSection'
-import AiFollowUpSummarySection from './dashboard/AiFollowUpSummarySection'
+import {
+  AiFollowUpSummarySection,
+  ReportExportJobsSection,
+  ReportsSection,
+  StatsSection,
+  WorkbenchSection,
+} from './dashboard/sections'
 import { formatStatValue, translateRole, translateStatLabel } from '../../shared'
 
 function DashboardPanel({

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
-import { useReportingMapper } from '../mainContentMappers/useReportingMapper'
+import { useReportingMapper } from '../mainContentMappers'
 
 export function useReportingOrchestrator() {
   const setReportingDomainState = useAppStore((state) => state.setReportingDomainState)

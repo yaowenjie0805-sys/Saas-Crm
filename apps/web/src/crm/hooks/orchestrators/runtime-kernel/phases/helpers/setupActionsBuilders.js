@@ -1,4 +1,4 @@
-import { PAGE_CHUNK_PRELOADERS, PAGE_DOMAIN_PRELOADERS, PAGE_TO_PATH } from '../../../runtime/routeConfig'
+import { PAGE_CHUNK_PRELOADERS, PAGE_DOMAIN_PRELOADERS, PAGE_TO_PATH } from '../../../runtime'
 import { ensureI18nNamespaces, getI18nNamespacesForPage } from '../../../../../i18n'
 import {
   buildRuntimeCrudActionsInput,

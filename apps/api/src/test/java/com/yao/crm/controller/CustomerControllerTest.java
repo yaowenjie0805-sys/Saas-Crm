@@ -70,7 +70,7 @@ class CustomerControllerTest {
         verify(customerRepository).deleteByIdAndTenantId("cust-1", TENANT_TEST);
         verify(customerRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verifyNoMoreInteractions(customerRepository);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CUSTOMER"), eq("cust-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CUSTOMER"), eq("cust-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -83,7 +83,7 @@ class CustomerControllerTest {
         verify(customerRepository).deleteByIdAndTenantId("cust-1", TENANT_TEST);
         verify(customerRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verifyNoMoreInteractions(customerRepository);
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CUSTOMER"), eq("cust-1"), anyString());
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("DELETE"), eq("CUSTOMER"), eq("cust-1"), anyString(), eq(TENANT_TEST));
     }
 
     @Test
@@ -96,7 +96,7 @@ class CustomerControllerTest {
         verify(customerRepository).deleteByIdAndTenantId("cust-1", TENANT_TEST);
         verify(customerRepository, never()).findByIdAndTenantId(anyString(), anyString());
         verifyNoMoreInteractions(customerRepository);
-        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(auditLogService, never()).record(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -196,7 +196,7 @@ class CustomerControllerTest {
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         verify(customerRepository).save(any(Customer.class));
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("CREATE"), eq("CUSTOMER"), eq("c_123"), eq("New Customer"));
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("CREATE"), eq("CUSTOMER"), eq("c_123"), eq("New Customer"), eq(TENANT_TEST));
     }
 
     @Test
@@ -253,7 +253,7 @@ class CustomerControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(customerRepository).findByIdAndTenantId("cust-1", TENANT_TEST);
         verify(customerRepository).save(any(Customer.class));
-        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("UPDATE"), eq("CUSTOMER"), eq("cust-1"), eq("Updated customer fields"));
+        verify(auditLogService).record(eq("manager"), eq("MANAGER"), eq("UPDATE"), eq("CUSTOMER"), eq("cust-1"), eq("Updated customer fields"), eq(TENANT_TEST));
     }
 
     @Test
@@ -280,5 +280,3 @@ class CustomerControllerTest {
         verifyNoInteractions(customerRepository);
     }
 }
-
-

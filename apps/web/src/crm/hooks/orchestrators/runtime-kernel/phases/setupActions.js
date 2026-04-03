@@ -1,12 +1,14 @@
-import { useRuntimeDomainActions } from '../../runtime/useRuntimeDomainActions'
-import { useRuntimeAuthActions } from '../../runtime/useRuntimeAuthActions'
-import { useRuntimeCrudDomainActions } from '../../runtime/useRuntimeCrudDomainActions'
+import {
+  useRuntimeAuthActions,
+  useRuntimeCrudDomainActions,
+  useRuntimeDomainActions,
+} from '../../runtime'
 import {
   buildCrudActionsHookInput,
   buildAuthActionsHookInput,
   buildDomainActionsHookInput,
   buildSetupActionsResult,
-} from './helpers/setupActionsBuilders'
+} from './helpers'
 
 export function useSetupActions(ctx, data) {
   const crudDomainActions = useRuntimeCrudDomainActions(buildCrudActionsHookInput(ctx, data))

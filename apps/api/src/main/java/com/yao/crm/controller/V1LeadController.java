@@ -135,6 +135,7 @@ public class V1LeadController extends BaseApiController {
         Page<Lead> result = leadRepository.findAll(spec, pageable);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("items", result.getContent());
+        body.put("data", result.getContent());
         body.put("total", result.getTotalElements());
         body.put("page", safePage);
         body.put("size", safeSize);
