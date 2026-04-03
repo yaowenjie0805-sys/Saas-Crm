@@ -1,6 +1,6 @@
-# Aster CRM
+﻿# Aster CRM
 
-> 轻量级企业级 CRM 系统 · 全栈单体仓库 · 开箱即用的多租户与审批引擎
+> 杞婚噺绾т紒涓氱骇 CRM 绯荤粺 路 鍏ㄦ爤鍗曚綋浠撳簱 路 寮€绠卞嵆鐢ㄧ殑澶氱鎴蜂笌瀹℃壒寮曟搸
 
 <p align="center">
   <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" />
@@ -13,306 +13,275 @@
 </p>
 
 <p align="center">
-  <a href="./README.en.md">English</a> | <strong>中文</strong>
+  <a href="./README.en.md">English</a> | <strong>涓枃</strong>
 </p>
 
 ---
 
-## 📋 目录
+## 馃搵 鐩綍
 
-- [🎯 为什么选择 Aster CRM](#为什么选择-aster-crm)
-- [✨ 核心功能](#核心功能)
-- [🚀 快速开始](#快速开始)
-- [📦 安装选项](#安装选项)
-- [🛠️ 技术栈](#技术栈)
-- [📖 文档导航](#文档导航)
-- [🧪 测试](#测试)
-- [🐛 常见问题](#常见问题)
-- [🤝 贡献指南](#贡献指南)
-- [📄 许可证](#许可证)
-- [🙏 致谢](#致谢)
-
----
-
-## 🎯 为什么选择 Aster CRM
-
-Aster CRM 是一个面向中小企业的开源全栈 CRM 系统，提供从销售线索到合同签订的完整业务闭环，同时具备灵活的多租户隔离和企业级权限治理能力。
-
-- ✅ **全栈单体仓库**：前后端统一管理，一套命令完成开发、构建、测试全流程
-- ✅ **多租户原生支持**：基于 `X-Tenant-Id` 请求头的强隔离架构，支持 SaaS 化部署
-- ✅ **开箱即用的审批引擎**：内置可配置审批流程，支持多级审核，无需二次开发
-- ✅ **AI 智能分析集成**：原生对接 OpenAI / Claude，提供销售预测与智能报表洞察
-- ✅ **企业即时通讯集成**：支持企业微信、钉钉、飞书三大平台 Webhook 通知
-- ✅ **完善的 CI/CD 体系**：GitHub Actions 多阶段流水线，内置性能门控与安全扫描
+- [馃幆 涓轰粈涔堥€夋嫨 Aster CRM](#涓轰粈涔堥€夋嫨-aster-crm)
+- [鉁?鏍稿績鍔熻兘](#鏍稿績鍔熻兘)
+- [馃殌 蹇€熷紑濮媇(#蹇€熷紑濮?
+- [馃摝 瀹夎閫夐」](#瀹夎閫夐」)
+- [馃洜锔?鎶€鏈爤](#鎶€鏈爤)
+- [馃摉 鏂囨。瀵艰埅](#鏂囨。瀵艰埅)
+- [馃И 娴嬭瘯](#娴嬭瘯)
+- [馃悰 甯歌闂](#甯歌闂)
+- [馃 璐＄尞鎸囧崡](#璐＄尞鎸囧崡)
+- [馃搫 璁稿彲璇乚(#璁稿彲璇?
+- [馃檹 鑷磋阿](#鑷磋阿)
 
 ---
 
-## ✨ 核心功能
+## 馃幆 涓轰粈涔堥€夋嫨 Aster CRM
 
-### 销售管理
-- 客户（Account）全生命周期管理与标签分类
-- 销售管道（Pipeline）可视化，商机（Opportunity）阶段跟踪
-- 联系人（Contact）关系图谱与沟通历史记录
-- 合同与报价单生成、版本管理与电子签署
+Aster CRM 鏄竴涓潰鍚戜腑灏忎紒涓氱殑寮€婧愬叏鏍?CRM 绯荤粺锛屾彁渚涗粠閿€鍞嚎绱㈠埌鍚堝悓绛捐鐨勫畬鏁翠笟鍔￠棴鐜紝鍚屾椂鍏峰鐏垫椿鐨勫绉熸埛闅旂鍜屼紒涓氱骇鏉冮檺娌荤悊鑳藉姏銆?
+- 鉁?**鍏ㄦ爤鍗曚綋浠撳簱**锛氬墠鍚庣缁熶竴绠＄悊锛屼竴濂楀懡浠ゅ畬鎴愬紑鍙戙€佹瀯寤恒€佹祴璇曞叏娴佺▼
+- 鉁?**澶氱鎴峰師鐢熸敮鎸?*锛氬熀浜?`X-Tenant-Id` 璇锋眰澶寸殑寮洪殧绂绘灦鏋勶紝鏀寔 SaaS 鍖栭儴缃?- 鉁?**寮€绠卞嵆鐢ㄧ殑瀹℃壒寮曟搸**锛氬唴缃彲閰嶇疆瀹℃壒娴佺▼锛屾敮鎸佸绾у鏍革紝鏃犻渶浜屾寮€鍙?- 鉁?**AI 鏅鸿兘鍒嗘瀽闆嗘垚**锛氬師鐢熷鎺?OpenAI / Claude锛屾彁渚涢攢鍞娴嬩笌鏅鸿兘鎶ヨ〃娲炲療
+- 鉁?**浼佷笟鍗虫椂閫氳闆嗘垚**锛氭敮鎸佷紒涓氬井淇°€侀拤閽夈€侀涔︿笁澶у钩鍙?Webhook 閫氱煡
+- 鉁?**瀹屽杽鐨?CI/CD 浣撶郴**锛欸itHub Actions 澶氶樁娈垫祦姘寸嚎锛屽唴缃€ц兘闂ㄦ帶涓庡畨鍏ㄦ壂鎻?
+---
 
-### 业务流程
-- 订单管理（创建 → 履约 → 交付 → 结算）
-- 支付管理与对账流水
-- 多级审批流程引擎（可配置节点、条件分支）
-- 任务管理与日程提醒
+## 鉁?鏍稿績鍔熻兘
 
-### 数据分析
-- 实时仪表盘（ECharts 5 可视化）
-- 自定义报表设计器（拖拽字段、条件过滤、聚合计算）
-- 数据导入导出（Excel / CSV）
-- AI 智能分析（销售趋势预测、异常检测）
+### 閿€鍞鐞?- 瀹㈡埛锛圓ccount锛夊叏鐢熷懡鍛ㄦ湡绠＄悊涓庢爣绛惧垎绫?- 閿€鍞閬擄紙Pipeline锛夊彲瑙嗗寲锛屽晢鏈猴紙Opportunity锛夐樁娈佃窡韪?- 鑱旂郴浜猴紙Contact锛夊叧绯诲浘璋变笌娌熼€氬巻鍙茶褰?- 鍚堝悓涓庢姤浠峰崟鐢熸垚銆佺増鏈鐞嗕笌鐢靛瓙绛剧讲
 
-### 权限治理
-- 多租户数据隔离（Row-Level Security）
-- RBAC 角色权限模型
-- 字段级数据脱敏与安全控制
-- 完整审计日志（操作者、时间、变更内容）
+### 涓氬姟娴佺▼
+- 璁㈠崟绠＄悊锛堝垱寤?鈫?灞ョ害 鈫?浜や粯 鈫?缁撶畻锛?- 鏀粯绠＄悊涓庡璐︽祦姘?- 澶氱骇瀹℃壒娴佺▼寮曟搸锛堝彲閰嶇疆鑺傜偣銆佹潯浠跺垎鏀級
+- 浠诲姟绠＄悊涓庢棩绋嬫彁閱?
+### 鏁版嵁鍒嗘瀽
+- 瀹炴椂浠〃鐩橈紙ECharts 5 鍙鍖栵級
+- 鑷畾涔夋姤琛ㄨ璁″櫒锛堟嫋鎷藉瓧娈点€佹潯浠惰繃婊ゃ€佽仛鍚堣绠楋級
+- 鏁版嵁瀵煎叆瀵煎嚭锛圗xcel / CSV锛?- AI 鏅鸿兘鍒嗘瀽锛堥攢鍞秼鍔块娴嬨€佸紓甯告娴嬶級
 
-### 企业集成
-- 企业微信 / 钉钉 / 飞书 Webhook 通知
-- OpenAI / Claude AI 接口对接
-- 标准 REST API + Swagger 文档
-- Excel 批量导入导出
+### 鏉冮檺娌荤悊
+- 澶氱鎴锋暟鎹殧绂伙紙Row-Level Security锛?- RBAC 瑙掕壊鏉冮檺妯″瀷
+- 瀛楁绾ф暟鎹劚鏁忎笌瀹夊叏鎺у埗
+- 瀹屾暣瀹¤鏃ュ織锛堟搷浣滆€呫€佹椂闂淬€佸彉鏇村唴瀹癸級
 
-### 功能状态
+### 浼佷笟闆嗘垚
+- 浼佷笟寰俊 / 閽夐拤 / 椋炰功 Webhook 閫氱煡
+- OpenAI / Claude AI 鎺ュ彛瀵规帴
+- 鏍囧噯 REST API + Swagger 鏂囨。
+- Excel 鎵归噺瀵煎叆瀵煎嚭
 
-| 模块 | 状态 |
+### 鍔熻兘鐘舵€?
+| 妯″潡 | 鐘舵€?|
 |------|------|
-| 客户 / 联系人 / 商机管理 | ✅ Stable |
-| 合同 / 报价单 | ✅ Stable |
-| 订单 / 支付管理 | ✅ Stable |
-| 审批流程引擎 | ✅ Stable |
-| RBAC 权限 + 多租户隔离 | ✅ Stable |
-| 仪表盘 + 基础报表 | ✅ Stable |
-| 审计日志 | ✅ Stable |
-| 自定义报表设计器 | 🚧 Beta |
-| AI 智能分析 | 🚧 Beta |
-| 企业微信 / 钉钉 / 飞书集成 | 🚧 Beta |
-| 移动端适配 | 📋 Planned |
-| 工作流可视化编辑器 | 📋 Planned |
+| 瀹㈡埛 / 鑱旂郴浜?/ 鍟嗘満绠＄悊 | 鉁?Stable |
+| 鍚堝悓 / 鎶ヤ环鍗?| 鉁?Stable |
+| 璁㈠崟 / 鏀粯绠＄悊 | 鉁?Stable |
+| 瀹℃壒娴佺▼寮曟搸 | 鉁?Stable |
+| RBAC 鏉冮檺 + 澶氱鎴烽殧绂?| 鉁?Stable |
+| 浠〃鐩?+ 鍩虹鎶ヨ〃 | 鉁?Stable |
+| 瀹¤鏃ュ織 | 鉁?Stable |
+| 鑷畾涔夋姤琛ㄨ璁″櫒 | 馃毀 Beta |
+| AI 鏅鸿兘鍒嗘瀽 | 馃毀 Beta |
+| 浼佷笟寰俊 / 閽夐拤 / 椋炰功闆嗘垚 | 馃毀 Beta |
+| 绉诲姩绔€傞厤 | 馃搵 Planned |
+| 宸ヤ綔娴佸彲瑙嗗寲缂栬緫鍣?| 馃搵 Planned |
 
 ---
 
-## 🚀 快速开始
+## 馃殌 蹇€熷紑濮?
+### 鐜瑕佹眰
 
-### 环境要求
-
-| 依赖 | 版本 | 说明 |
+| 渚濊禆 | 鐗堟湰 | 璇存槑 |
 |------|------|------|
-| JDK | 17+ | 后端运行时 |
-| Node.js | 18+ | 前端构建与运行 |
-| MySQL | 8.0+ | 主数据库（必需） |
-| Redis | 6+ | 本地缓存（推荐） |
-| RabbitMQ | 3.11+ | 消息队列（推荐） |
+| JDK | 17+ | 鍚庣杩愯鏃?|
+| Node.js | 18+ | 鍓嶇鏋勫缓涓庤繍琛?|
+| MySQL | 8.0+ | 涓绘暟鎹簱锛堝繀闇€锛?|
+| Redis | 6+ | 鏈湴缂撳瓨锛堟帹鑽愶級 |
+| RabbitMQ | 3.11+ | 娑堟伅闃熷垪锛堟帹鑽愶級 |
 
-### 5 分钟启动
+### 5 鍒嗛挓鍚姩
 
-**第一步：克隆仓库**
+**绗竴姝ワ細鍏嬮殕浠撳簱**
 
 ```bash
 git clone https://github.com/your-repo/aster-crm.git
 cd aster-crm
 ```
 
-**第二步：配置环境变量**
+**绗簩姝ワ細閰嶇疆鐜鍙橀噺**
 
 ```bash
 cp .env.example .env
 cp .env.backend.local.example .env.backend.local
 ```
 
-编辑 `.env`，填写数据库连接信息：
-
+缂栬緫 `.env`锛屽～鍐欐暟鎹簱杩炴帴淇℃伅锛?
 ```env
 DB_URL=jdbc:mysql://localhost:3306/aster_crm?useUnicode=true&characterEncoding=utf8
 DB_USER=root
 DB_PASSWORD=your_password
 ```
 
-编辑 `.env.backend.local`，修改 Token 密钥（**生产环境必须修改**）：
+缂栬緫 `.env.backend.local`锛屼慨鏀?Token 瀵嗛挜锛?*鐢熶骇鐜蹇呴』淇敼**锛夛細
 
 ```env
 AUTH_TOKEN_SECRET=your-secret-key-at-least-32-chars
 ```
 
-**第三步：初始化数据库**
+**绗笁姝ワ細鍒濆鍖栨暟鎹簱**
 
 ```bash
 npm run db:init
 ```
 
-**第四步：启动后端**
+**绗洓姝ワ細鍚姩鍚庣**
 
 ```bash
 npm run dev:backend
 ```
 
-**第五步：安装依赖并启动前端**
+**绗簲姝ワ細瀹夎渚濊禆骞跺惎鍔ㄥ墠绔?*
 
 ```bash
 npm install
 npm run dev
 ```
 
-### 默认登录信息
+### 榛樿鐧诲綍淇℃伅
 
-| 项目 | 值 |
+| 椤圭洰 | 鍊?|
 |------|-----|
-| 访问地址 | http://localhost:5173 |
-| 用户名 | `admin` |
-| 密码 | `admin123` |
-| API 地址 | http://localhost:8080/api |
+| 璁块棶鍦板潃 | http://localhost:5173 |
+| 鐢ㄦ埛鍚?| `admin` |
+| 瀵嗙爜 | `admin123` |
+| API 鍦板潃 | http://localhost:8080/api |
 | Swagger | http://localhost:8080/swagger-ui.html |
 
-> ⚠️ `admin123` 仅用于本地开发。**生产环境请通过 `AUTH_BOOTSTRAP_DEFAULT_PASSWORD` 设置强密码。**
+> 鈿狅笍 `admin123` 浠呯敤浜庢湰鍦板紑鍙戙€?*鐢熶骇鐜璇烽€氳繃 `AUTH_BOOTSTRAP_DEFAULT_PASSWORD` 璁剧疆寮哄瘑鐮併€?*
 
 ---
 
-## 📦 安装选项
+## 馃摝 瀹夎閫夐」
 
-### 🐳 Docker Compose 一键部署（推荐）
-
-**生产环境：**
+### 馃惓 Docker Compose 涓€閿儴缃诧紙鎺ㄨ崘锛?
+**鐢熶骇鐜锛?*
 
 ```bash
 cp .env.production.example .env.production
-# 编辑 .env.production 填写生产配置
+# 缂栬緫 .env.production 濉啓鐢熶骇閰嶇疆
 docker compose --env-file .env.production -f infra/production/docker-compose.yml up -d
 ```
 
-**预发布（Staging）环境：**
+**棰勫彂甯冿紙Staging锛夌幆澧冿細**
 
 ```bash
 cd infra/staging
 cp staging.env.example staging.env
-# 编辑 staging.env
+# 缂栬緫 staging.env
 docker compose -f docker-compose.yml --env-file staging.env up -d
 ```
 
-### 💻 本地开发环境
-
-参考 [🚀 快速开始](#快速开始) 章节，逐步完成本地启动。
-
-开发常用命令：
+### 馃捇 鏈湴寮€鍙戠幆澧?
+鍙傝€?[馃殌 蹇€熷紑濮媇(#蹇€熷紑濮? 绔犺妭锛岄€愭瀹屾垚鏈湴鍚姩銆?
+寮€鍙戝父鐢ㄥ懡浠わ細
 
 ```bash
-npm run dev:backend      # 启动后端（热重载）
-npm run dev              # 启动前端（Vite HMR）
-npm run lint             # ESLint 代码检查
-npm run test:frontend    # 前端单元测试
-npm run test:e2e         # E2E 端到端测试
-```
+npm run dev:backend      # 鍚姩鍚庣锛堢儹閲嶈浇锛?npm run dev              # 鍚姩鍓嶇锛圴ite HMR锛?npm run lint             # ESLint 浠ｇ爜妫€鏌?npm run test:frontend    # 鍓嶇鍗曞厓娴嬭瘯
+npm run test:e2e         # E2E 绔埌绔祴璇?```
 
-### 🏭 生产环境手动部署
+### 馃彮 鐢熶骇鐜鎵嬪姩閮ㄧ讲
 
 ```bash
-# 构建后端 JAR
+# 鏋勫缓鍚庣 JAR
 npm run build:backend
 
-# 构建前端静态文件
-npm run build
+# 鏋勫缓鍓嶇闈欐€佹枃浠?npm run build
 
-# 后端 JAR 位于 apps/api/target/
-# 前端产物位于 apps/web/dist/
+# 鍚庣 JAR 浣嶄簬 apps/api/target/
+# 鍓嶇浜х墿浣嶄簬 apps/web/dist/
 ```
 
-详细部署流程请参考 [docs/operations/staging-deploy-runbook.md](./docs/operations/staging-deploy-runbook.md)。
-
+璇︾粏閮ㄧ讲娴佺▼璇峰弬鑰?[docs/operations/staging-deploy-runbook.md](./docs/operations/staging-deploy-runbook.md)銆?
 ---
 
-## 🛠️ 技术栈
+## 馃洜锔?鎶€鏈爤
 
-### 前端
+### 鍓嶇
 
-| 技术 | 版本 | 用途 |
+| 鎶€鏈?| 鐗堟湰 | 鐢ㄩ€?|
 |------|------|------|
-| React | 19 | UI 框架 |
-| Vite | 7 | 构建工具 |
-| Ant Design | 5 | 组件库 |
-| Tailwind CSS | 4 | 原子化 CSS |
-| Zustand | 5 | 状态管理 |
-| ECharts | 5 | 数据可视化 |
-| Vitest | latest | 单元测试 |
-| Playwright | latest | E2E 测试 |
+| React | 19 | UI 妗嗘灦 |
+| Vite | 7 | 鏋勫缓宸ュ叿 |
+| Ant Design | 5 | 缁勪欢搴?|
+| Tailwind CSS | 4 | 鍘熷瓙鍖?CSS |
+| Zustand | 5 | 鐘舵€佺鐞?|
+| ECharts | 5 | 鏁版嵁鍙鍖?|
+| Vitest | latest | 鍗曞厓娴嬭瘯 |
+| Playwright | latest | E2E 娴嬭瘯 |
 
-### 后端
+### 鍚庣
 
-| 技术 | 版本 | 用途 |
+| 鎶€鏈?| 鐗堟湰 | 鐢ㄩ€?|
 |------|------|------|
-| Spring Boot | 2.7 | 应用框架 |
-| JDK | 17 | 运行时 |
-| Spring Data JPA | - | ORM 数据访问 |
-| Spring Security | - | 认证与授权 |
-| Flyway | 9 | 数据库版本管理 |
-| MySQL | 8+ | 主数据库 |
-| Redis / Caffeine | - | 本地 + 分布式缓存 |
-| RabbitMQ | - | 异步消息队列 |
+| Spring Boot | 2.7 | 搴旂敤妗嗘灦 |
+| JDK | 17 | 杩愯鏃?|
+| Spring Data JPA | - | ORM 鏁版嵁璁块棶 |
+| Spring Security | - | 璁よ瘉涓庢巿鏉?|
+| Flyway | 9 | 鏁版嵁搴撶増鏈鐞?|
+| MySQL | 8+ | 涓绘暟鎹簱 |
+| Redis / Caffeine | - | 鏈湴 + 鍒嗗竷寮忕紦瀛?|
+| RabbitMQ | - | 寮傛娑堟伅闃熷垪 |
 
-### 基础设施
+### 鍩虹璁炬柦
 
-| 技术 | 用途 |
+| 鎶€鏈?| 鐢ㄩ€?|
 |------|------|
-| Docker Compose | 容器化部署 |
-| Nginx | 反向代理 / 静态文件服务 |
-| GitHub Actions | CI/CD 流水线 |
+| Docker Compose | 瀹瑰櫒鍖栭儴缃?|
+| Nginx | 鍙嶅悜浠ｇ悊 / 闈欐€佹枃浠舵湇鍔?|
+| GitHub Actions | CI/CD 娴佹按绾?|
 
-完整架构依赖图请参考 [docs/ARCH_RUNTIME_DEPENDENCY_MAP.md](./docs/ARCH_RUNTIME_DEPENDENCY_MAP.md)。
+瀹屾暣鏋舵瀯渚濊禆鍥捐鍙傝€?[docs/ARCH_RUNTIME_DEPENDENCY_MAP.md](./docs/ARCH_RUNTIME_DEPENDENCY_MAP.md)銆?
+---
+
+## 馃摉 鏂囨。瀵艰埅
+
+| 鏂囨。 | 璇存槑 |
+|------|------|
+| [docs/PROJECT_SPECIFICATION.md](./docs/PROJECT_SPECIFICATION.md) | 椤圭洰瑙勮寖涓庤璁″師鍒?|
+| [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md) | 鐩綍缁撴瀯璇存槑 |
+| [docs/DEVELOPMENT_CONVENTIONS.md](./docs/DEVELOPMENT_CONVENTIONS.md) | 寮€鍙戠害瀹氫笌缂栫爜瑙勮寖 |
+| [docs/api-documentation.md](./docs/api-documentation.md) | API 鎺ュ彛鏂囨。 |
+| [docs/ARCH_RUNTIME_DEPENDENCY_MAP.md](./docs/ARCH_RUNTIME_DEPENDENCY_MAP.md) | 鏋舵瀯杩愯鏃朵緷璧栧浘 |
+| [docs/PROJECT_TROUBLESHOOTING.md](./docs/PROJECT_TROUBLESHOOTING.md) | 甯歌闂鎺掓煡鎵嬪唽 |
+| [docs/operations/environment-matrix.md](./docs/operations/environment-matrix.md) | 澶氱幆澧冮厤缃煩闃?|
+| [docs/operations/release-strategy.md](./docs/operations/release-strategy.md) | 鍙戝竷绛栫暐涓庢祦绋?|
 
 ---
 
-## 📖 文档导航
+## 馃И 娴嬭瘯
 
-| 文档 | 说明 |
-|------|------|
-| [docs/PROJECT_SPECIFICATION.md](./docs/PROJECT_SPECIFICATION.md) | 项目规范与设计原则 |
-| [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md) | 目录结构说明 |
-| [docs/DEVELOPMENT_CONVENTIONS.md](./docs/DEVELOPMENT_CONVENTIONS.md) | 开发约定与编码规范 |
-| [docs/api-documentation.md](./docs/api-documentation.md) | API 接口文档 |
-| [docs/ARCH_RUNTIME_DEPENDENCY_MAP.md](./docs/ARCH_RUNTIME_DEPENDENCY_MAP.md) | 架构运行时依赖图 |
-| [docs/PROJECT_TROUBLESHOOTING.md](./docs/PROJECT_TROUBLESHOOTING.md) | 常见问题排查手册 |
-| [docs/operations/environment-matrix.md](./docs/operations/environment-matrix.md) | 多环境配置矩阵 |
-| [docs/operations/release-strategy.md](./docs/operations/release-strategy.md) | 发布策略与流程 |
-
----
-
-## 🧪 测试
-
-Aster CRM 采用三层测试策略，确保核心业务逻辑的可靠性：
+Aster CRM 閲囩敤涓夊眰娴嬭瘯绛栫暐锛岀‘淇濇牳蹇冧笟鍔￠€昏緫鐨勫彲闈犳€э細
 
 ```bash
-# 前端单元测试（Vitest）
-npm run test:frontend
+# 鍓嶇鍗曞厓娴嬭瘯锛圴itest锛?npm run test:frontend
 
-# 后端单元测试（JUnit 5）
-npm run test:backend
+# 鍚庣鍗曞厓娴嬭瘯锛圝Unit 5锛?npm run test:backend
 
-# E2E 端到端测试（Playwright）
-npm run test:e2e
+# E2E 绔埌绔祴璇曪紙Playwright锛?npm run test:e2e
 
-# 查看前端测试覆盖率报告
-# 报告生成于 apps/web/coverage/
+# 鏌ョ湅鍓嶇娴嬭瘯瑕嗙洊鐜囨姤鍛?# 鎶ュ憡鐢熸垚浜?apps/web/coverage/
 ```
 
-| 测试类型 | 工具 | 覆盖范围 |
+| 娴嬭瘯绫诲瀷 | 宸ュ叿 | 瑕嗙洊鑼冨洿 |
 |----------|------|----------|
-| 前端单元测试 | Vitest | 组件、工具函数、状态管理 |
-| 后端单元测试 | JUnit 5 + Mockito | Service 层、Repository 层 |
-| E2E 测试 | Playwright | 核心用户流程（登录、CRUD、审批） |
+| 鍓嶇鍗曞厓娴嬭瘯 | Vitest | 缁勪欢銆佸伐鍏峰嚱鏁般€佺姸鎬佺鐞?|
+| 鍚庣鍗曞厓娴嬭瘯 | JUnit 5 + Mockito | Service 灞傘€丷epository 灞?|
+| E2E 娴嬭瘯 | Playwright | 鏍稿績鐢ㄦ埛娴佺▼锛堢櫥褰曘€丆RUD銆佸鎵癸級 |
 
 ---
 
-## 🐛 常见问题
+## 馃悰 甯歌闂
 
-### 启动后登录返回 500 / `seed_tenant_id_required`
+### 鍚姩鍚庣櫥褰曡繑鍥?500 / `seed_tenant_id_required`
 
-**原因：** `APP_SEED_ENABLED=true` 但 `APP_SEED_TENANT_ID` 为空。
-
-**解决：** 在 `.env.backend.local` 中添加：
+**鍘熷洜锛?* `APP_SEED_ENABLED=true` 浣?`APP_SEED_TENANT_ID` 涓虹┖銆?
+**瑙ｅ喅锛?* 鍦?`.env.backend.local` 涓坊鍔狅細
 
 ```env
 APP_SEED_ENABLED=true
@@ -320,120 +289,90 @@ APP_SEED_TENANT_ID=tenant_default
 APP_SEED_DEMO_ENABLED=true
 ```
 
-### 登录始终失败 / Token 验证错误
+### 鐧诲綍濮嬬粓澶辫触 / Token 楠岃瘉閿欒
 
-**原因：** `AUTH_TOKEN_SECRET` 使用了示例默认值或长度不足 32 位。
-
-**解决：** 在 `.env.backend.local` 中设置足够强度的密钥：
-
+**鍘熷洜锛?* `AUTH_TOKEN_SECRET` 浣跨敤浜嗙ず渚嬮粯璁ゅ€兼垨闀垮害涓嶈冻 32 浣嶃€?
+**瑙ｅ喅锛?* 鍦?`.env.backend.local` 涓缃冻澶熷己搴︾殑瀵嗛挜锛?
 ```env
 AUTH_TOKEN_SECRET=my-super-secret-key-at-least-32-chars
 ```
 
-### 后端启动时出现 Redis 相关 WARNING
+### 鍚庣鍚姩鏃跺嚭鐜?Redis 鐩稿叧 WARNING
 
-**原因：** 未启用 Redis Repository，属于正常信息日志。
+**鍘熷洜锛?* 鏈惎鐢?Redis Repository锛屽睘浜庢甯镐俊鎭棩蹇椼€?
+**瑙ｅ喅锛?* 鏈湴寮€鍙戝彲瀹夊叏蹇界暐銆傝嫢闇€瀹屾暣 Redis 鏀寔锛岃閰嶇疆 `REDIS_HOST` 鍜?`REDIS_PORT`銆?
+### AI 鍔熻兘鏃犲搷搴?/ 鎶ラ敊
 
-**解决：** 本地开发可安全忽略。若需完整 Redis 支持，请配置 `REDIS_HOST` 和 `REDIS_PORT`。
-
-### AI 功能无响应 / 报错
-
-**原因：** 未配置 AI 服务 API Key。
-
-**解决：** 在 `.env.backend.local` 中配置对应服务密钥：
+**鍘熷洜锛?* 鏈厤缃?AI 鏈嶅姟 API Key銆?
+**瑙ｅ喅锛?* 鍦?`.env.backend.local` 涓厤缃搴旀湇鍔″瘑閽ワ細
 
 ```env
 AI_OPENAI_API_KEY=sk-...
-# 或
-AI_ANTHROPIC_API_KEY=sk-ant-...
+# 鎴?AI_ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-更多排查步骤请参考 [docs/PROJECT_TROUBLESHOOTING.md](./docs/PROJECT_TROUBLESHOOTING.md)。
+鏇村鎺掓煡姝ラ璇峰弬鑰?[docs/PROJECT_TROUBLESHOOTING.md](./docs/PROJECT_TROUBLESHOOTING.md)銆?
+---
+
+## 馃 璐＄尞鎸囧崡
+
+娆㈣繋鎻愪氦 Issue 鍜?Pull Request锛?
+### 璐＄尞娴佺▼
+
+```
+1. Fork 鏈粨搴?2. 鍩轰簬 main 鍒涘缓鐗规€у垎鏀細git checkout -b feat/your-feature
+3. 鎻愪氦鍙樻洿锛堥伒寰?Conventional Commits锛夛細git commit -m "feat: add awesome feature"
+4. 鎺ㄩ€佸垎鏀細git push origin feat/your-feature
+5. 鎻愪氦 Pull Request锛岀瓑寰?CI 閫氳繃鍚庤姹?Review
+```
+
+### 寮€鍙戣鑼?
+- 浠ｇ爜椋庢牸璇烽伒寰?[寮€鍙戠害瀹氭枃妗(./docs/DEVELOPMENT_CONVENTIONS.md)
+- 鏂板姛鑳介渶闄勫甫鍗曞厓娴嬭瘯锛岃鐩栨牳蹇冨垎鏀?- PR 鎻忚堪闇€璇存槑鍙樻洿鍔ㄦ満涓庡奖鍝嶈寖鍥?- 瀵绘壘 `good first issue` 鏍囩鐨?Issue 鍏ユ墜璐＄尞
+
+### 鎻愪氦娑堟伅鏍煎紡
+
+```
+feat:     鏂板姛鑳?fix:      Bug 淇
+docs:     鏂囨。鏇存柊
+refactor: 浠ｇ爜閲嶆瀯锛堜笉鍚姛鑳藉彉鏇达級
+test:     娴嬭瘯鐩稿叧
+chore:    鏋勫缓/CI/渚濊禆绛夋潅椤?```
 
 ---
 
-## 🤝 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-### 贡献流程
-
-```
-1. Fork 本仓库
-2. 基于 main 创建特性分支：git checkout -b feat/your-feature
-3. 提交变更（遵循 Conventional Commits）：git commit -m "feat: add awesome feature"
-4. 推送分支：git push origin feat/your-feature
-5. 提交 Pull Request，等待 CI 通过后请求 Review
-```
-
-### 开发规范
-
-- 代码风格请遵循 [开发约定文档](./docs/DEVELOPMENT_CONVENTIONS.md)
-- 新功能需附带单元测试，覆盖核心分支
-- PR 描述需说明变更动机与影响范围
-- 寻找 `good first issue` 标签的 Issue 入手贡献
-
-### 提交消息格式
-
-```
-feat:     新功能
-fix:      Bug 修复
-docs:     文档更新
-refactor: 代码重构（不含功能变更）
-test:     测试相关
-chore:    构建/CI/依赖等杂项
-```
-
+## 馃搫 璁稿彲璇?
+鏈」鐩熀浜?**[AGPL-3.0](./LICENSE)** 璁稿彲璇佸紑婧愩€?
+- 鉁?鍏佽涓汉瀛︿範銆佺爺绌朵笌闈炲晢涓氫娇鐢?- 鉁?淇敼鍚庣殑浠ｇ爜蹇呴』浠ョ浉鍚岃鍙瘉寮€婧?- 鈿狅笍 鍟嗕笟浣跨敤璇风‘淇濋伒瀹?AGPL-3.0 鐨勭綉缁滄湇鍔℃潯娆撅紝鎴栬仈绯讳綔鑰呰幏鍙栧晢涓氭巿鏉?
 ---
 
-## 📄 许可证
+## 馃檹 鑷磋阿
 
-本项目基于 **[AGPL-3.0](./LICENSE)** 许可证开源。
-
-- ✅ 允许个人学习、研究与非商业使用
-- ✅ 修改后的代码必须以相同许可证开源
-- ⚠️ 商业使用请确保遵守 AGPL-3.0 的网络服务条款，或联系作者获取商业授权
-
----
-
-## 🙏 致谢
-
-感谢以下优秀开源项目为 Aster CRM 提供的基础支持：
-
-- [Spring Boot](https://spring.io/projects/spring-boot) - 后端应用框架
-- [React](https://react.dev/) - 前端 UI 框架
-- [Ant Design](https://ant.design/) - 企业级 UI 组件库
-- [Vite](https://vitejs.dev/) - 极速前端构建工具
-- [Flyway](https://flywaydb.org/) - 数据库版本迁移管理
-- [ECharts](https://echarts.apache.org/) - 开源可视化图表库
-- [Playwright](https://playwright.dev/) - 可靠的端到端测试框架
+鎰熻阿浠ヤ笅浼樼寮€婧愰」鐩负 Aster CRM 鎻愪緵鐨勫熀纭€鏀寔锛?
+- [Spring Boot](https://spring.io/projects/spring-boot) - 鍚庣搴旂敤妗嗘灦
+- [React](https://react.dev/) - 鍓嶇 UI 妗嗘灦
+- [Ant Design](https://ant.design/) - 浼佷笟绾?UI 缁勪欢搴?- [Vite](https://vitejs.dev/) - 鏋侀€熷墠绔瀯寤哄伐鍏?- [Flyway](https://flywaydb.org/) - 鏁版嵁搴撶増鏈縼绉荤鐞?- [ECharts](https://echarts.apache.org/) - 寮€婧愬彲瑙嗗寲鍥捐〃搴?- [Playwright](https://playwright.dev/) - 鍙潬鐨勭鍒扮娴嬭瘯妗嗘灦
 
 ---
 
 <p align="center">
-  如果这个项目对你有帮助，请给我们一个 ⭐ Star！
-</p>
+  濡傛灉杩欎釜椤圭洰瀵逛綘鏈夊府鍔╋紝璇风粰鎴戜滑涓€涓?猸?Star锛?</p>
 
 ---
 
-## AI 功能入口与回归测试（2026-04 更新）
-
-- 前端入口：顶部操作栏 `AI功能` 按钮（`data-testid="topbar-ai-shortcut"`）
-- 跳转行为：点击后自动切到 Dashboard，并定位到 `AI Follow-up Summary` 区块
-- 核心实现：
-  - `apps/web/src/crm/components/layout/TopBar.jsx`
+## AI 鍔熻兘鍏ュ彛涓庡洖褰掓祴璇曪紙2026-04 鏇存柊锛?
+- 鍓嶇鍏ュ彛锛氶《閮ㄦ搷浣滄爮 `AI鍔熻兘` 鎸夐挳锛坄data-testid="topbar-ai-shortcut"`锛?- 璺宠浆琛屼负锛氱偣鍑诲悗鑷姩鍒囧埌 Dashboard锛屽苟瀹氫綅鍒?`AI Follow-up Summary` 鍖哄潡
+- 鏍稿績瀹炵幇锛?  - `apps/web/src/crm/components/layout/TopBar.jsx`
   - `apps/web/src/crm/components/MainContent.jsx`
   - `apps/web/src/crm/components/pages/dashboard/AiFollowUpSummarySection.jsx`
 
-推荐回归命令：
-
+鎺ㄨ崘鍥炲綊鍛戒护锛?
 ```bash
-# 单测：TopBar AI 入口按钮
+# 鍗曟祴锛歍opBar AI 鍏ュ彛鎸夐挳
 npm run test --workspace apps/web -- --run src/crm/__tests__/TopBar.aiShortcut.test.jsx
 
-# 单测：MainContent 跳转链路（AI 按钮 -> Dashboard -> AI 面板）
-npm run test --workspace apps/web -- --run src/crm/__tests__/MainContent.aiShortcutBridge.test.jsx
+# 鍗曟祴锛歁ainContent 璺宠浆閾捐矾锛圓I 鎸夐挳 -> Dashboard -> AI 闈㈡澘锛?npm run test --workspace apps/web -- --run src/crm/__tests__/MainContent.aiShortcutBridge.test.jsx
 
-# E2E：真实浏览器链路 smoke
-npm run test:e2e:runner --workspace apps/web -- tests/e2e/topbar-ai-shortcut.spec.js
+# E2E锛氱湡瀹炴祻瑙堝櫒閾捐矾 smoke
+npm run test:e2e:ai-shortcut
 ```

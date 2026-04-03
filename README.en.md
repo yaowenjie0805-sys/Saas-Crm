@@ -1,6 +1,6 @@
-# Aster CRM
+﻿# Aster CRM
 
-> Lightweight Enterprise CRM · Full-Stack Monorepo · Multi-Tenancy & Approval Engine Out of the Box
+> Lightweight Enterprise CRM 路 Full-Stack Monorepo 路 Multi-Tenancy & Approval Engine Out of the Box
 
 <p align="center">
   <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" />
@@ -13,41 +13,41 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> | <a href="./README.zh-CN.md">中文</a>
+  <strong>English</strong> | <a href="./README.zh-CN.md">涓枃</a>
 </p>
 
 ---
 
-## 📋 Table of Contents
+## 馃搵 Table of Contents
 
-- [🎯 Why Aster CRM](#why-aster-crm)
-- [✨ Features](#features)
-- [🚀 Quick Start](#quick-start)
-- [📦 Installation](#installation)
-- [🛠️ Tech Stack](#tech-stack)
-- [📖 Documentation](#documentation)
-- [🧪 Testing](#testing)
-- [🐛 FAQ / Troubleshooting](#faq--troubleshooting)
-- [🤝 Contributing](#contributing)
-- [📄 License](#license)
-- [🙏 Acknowledgments](#acknowledgments)
+- [馃幆 Why Aster CRM](#why-aster-crm)
+- [鉁?Features](#features)
+- [馃殌 Quick Start](#quick-start)
+- [馃摝 Installation](#installation)
+- [馃洜锔?Tech Stack](#tech-stack)
+- [馃摉 Documentation](#documentation)
+- [馃И Testing](#testing)
+- [馃悰 FAQ / Troubleshooting](#faq--troubleshooting)
+- [馃 Contributing](#contributing)
+- [馃搫 License](#license)
+- [馃檹 Acknowledgments](#acknowledgments)
 
 ---
 
-## 🎯 Why Aster CRM
+## 馃幆 Why Aster CRM
 
 Aster CRM is an open-source full-stack CRM system built for small and medium-sized enterprises. It covers the complete business cycle from sales leads to contract signing, with flexible multi-tenant isolation and enterprise-grade access governance.
 
-- ✅ **Full-Stack Monorepo**: Frontend and backend managed together — one set of commands for development, build, and testing
-- ✅ **Native Multi-Tenancy**: Strong isolation architecture based on `X-Tenant-Id` request headers, SaaS-ready deployment
-- ✅ **Approval Engine Out of the Box**: Built-in configurable approval workflows with multi-level review, no custom development needed
-- ✅ **AI-Powered Analytics**: Native integration with OpenAI / Claude for sales forecasting and intelligent report insights
-- ✅ **Enterprise IM Integration**: Webhook notifications for WeCom, DingTalk, and Lark
-- ✅ **Robust CI/CD Pipeline**: GitHub Actions multi-stage pipeline with built-in performance gates and security scanning
+- 鉁?**Full-Stack Monorepo**: Frontend and backend managed together 鈥?one set of commands for development, build, and testing
+- 鉁?**Native Multi-Tenancy**: Strong isolation architecture based on `X-Tenant-Id` request headers, SaaS-ready deployment
+- 鉁?**Approval Engine Out of the Box**: Built-in configurable approval workflows with multi-level review, no custom development needed
+- 鉁?**AI-Powered Analytics**: Native integration with OpenAI / Claude for sales forecasting and intelligent report insights
+- 鉁?**Enterprise IM Integration**: Webhook notifications for WeCom, DingTalk, and Lark
+- 鉁?**Robust CI/CD Pipeline**: GitHub Actions multi-stage pipeline with built-in performance gates and security scanning
 
 ---
 
-## ✨ Features
+## 鉁?Features
 
 ### Sales Management
 - Full lifecycle management of Accounts with tagging and classification
@@ -56,7 +56,7 @@ Aster CRM is an open-source full-stack CRM system built for small and medium-siz
 - Contract & quote generation, version management, and e-signing
 
 ### Business Processes
-- Order management (Create → Fulfill → Deliver → Settle)
+- Order management (Create 鈫?Fulfill 鈫?Deliver 鈫?Settle)
 - Payment management and reconciliation
 - Multi-level approval workflow engine (configurable nodes and conditional branching)
 - Task management and schedule reminders
@@ -83,22 +83,22 @@ Aster CRM is an open-source full-stack CRM system built for small and medium-siz
 
 | Module | Status |
 |--------|--------|
-| Account / Contact / Opportunity Management | ✅ Stable |
-| Contract / Quote | ✅ Stable |
-| Order / Payment Management | ✅ Stable |
-| Approval Workflow Engine | ✅ Stable |
-| RBAC + Multi-Tenant Isolation | ✅ Stable |
-| Dashboard + Basic Reports | ✅ Stable |
-| Audit Log | ✅ Stable |
-| Custom Report Designer | 🚧 Beta |
-| AI-Powered Analytics | 🚧 Beta |
-| WeCom / DingTalk / Lark Integration | 🚧 Beta |
-| Mobile Responsive | 📋 Planned |
-| Visual Workflow Editor | 📋 Planned |
+| Account / Contact / Opportunity Management | 鉁?Stable |
+| Contract / Quote | 鉁?Stable |
+| Order / Payment Management | 鉁?Stable |
+| Approval Workflow Engine | 鉁?Stable |
+| RBAC + Multi-Tenant Isolation | 鉁?Stable |
+| Dashboard + Basic Reports | 鉁?Stable |
+| Audit Log | 鉁?Stable |
+| Custom Report Designer | 馃毀 Beta |
+| AI-Powered Analytics | 馃毀 Beta |
+| WeCom / DingTalk / Lark Integration | 馃毀 Beta |
+| Mobile Responsive | 馃搵 Planned |
+| Visual Workflow Editor | 馃搵 Planned |
 
 ---
 
-## 🚀 Quick Start
+## 馃殌 Quick Start
 
 ### Prerequisites
 
@@ -169,13 +169,13 @@ npm run dev
 | API Base URL | http://localhost:8080/api |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 
-> ⚠️ `admin123` is for local development only. **Set a strong password via `AUTH_BOOTSTRAP_DEFAULT_PASSWORD` before deploying to production.**
+> 鈿狅笍 `admin123` is for local development only. **Set a strong password via `AUTH_BOOTSTRAP_DEFAULT_PASSWORD` before deploying to production.**
 
 ---
 
-## 📦 Installation
+## 馃摝 Installation
 
-### 🐳 Docker Compose (Recommended)
+### 馃惓 Docker Compose (Recommended)
 
 **Production:**
 
@@ -194,9 +194,9 @@ cp staging.env.example staging.env
 docker compose -f docker-compose.yml --env-file staging.env up -d
 ```
 
-### 💻 Local Development
+### 馃捇 Local Development
 
-Follow the [🚀 Quick Start](#quick-start) section to get your local environment running.
+Follow the [馃殌 Quick Start](#quick-start) section to get your local environment running.
 
 Common development commands:
 
@@ -208,7 +208,7 @@ npm run test:frontend    # Frontend unit tests
 npm run test:e2e         # E2E end-to-end tests
 ```
 
-### 🏭 Manual Production Build
+### 馃彮 Manual Production Build
 
 ```bash
 # Build backend JAR
@@ -225,7 +225,7 @@ For the full deployment process, see [docs/operations/staging-deploy-runbook.md]
 
 ---
 
-## 🛠️ Tech Stack
+## 馃洜锔?Tech Stack
 
 ### Frontend
 
@@ -265,7 +265,7 @@ For the full architecture dependency map, see [docs/ARCH_RUNTIME_DEPENDENCY_MAP.
 
 ---
 
-## 📖 Documentation
+## 馃摉 Documentation
 
 | Document | Description |
 |----------|-------------|
@@ -280,7 +280,7 @@ For the full architecture dependency map, see [docs/ARCH_RUNTIME_DEPENDENCY_MAP.
 
 ---
 
-## 🧪 Testing
+## 馃И Testing
 
 Aster CRM uses a three-layer testing strategy to ensure reliability of core business logic:
 
@@ -306,7 +306,7 @@ npm run test:e2e
 
 ---
 
-## 🐛 FAQ / Troubleshooting
+## 馃悰 FAQ / Troubleshooting
 
 ### Login returns 500 / `seed_tenant_id_required` after startup
 
@@ -332,7 +332,7 @@ AUTH_TOKEN_SECRET=my-super-secret-key-at-least-32-chars
 
 ### Redis-related WARNINGs on backend startup
 
-**Cause:** Redis Repository is not enabled — this is a normal informational log.
+**Cause:** Redis Repository is not enabled 鈥?this is a normal informational log.
 
 **Fix:** Safe to ignore during local development. For full Redis support, configure `REDIS_HOST` and `REDIS_PORT`.
 
@@ -352,7 +352,7 @@ For more troubleshooting steps, see [docs/PROJECT_TROUBLESHOOTING.md](./docs/PRO
 
 ---
 
-## 🤝 Contributing
+## 馃 Contributing
 
 Issues and Pull Requests are welcome!
 
@@ -386,17 +386,17 @@ chore:    Build / CI / dependency maintenance
 
 ---
 
-## 📄 License
+## 馃搫 License
 
 This project is open-sourced under the **[AGPL-3.0](./LICENSE)** license.
 
-- ✅ Personal learning, research, and non-commercial use permitted
-- ✅ Modified code must be open-sourced under the same license
-- ⚠️ For commercial use, ensure compliance with AGPL-3.0 network service terms, or contact the author for a commercial license
+- 鉁?Personal learning, research, and non-commercial use permitted
+- 鉁?Modified code must be open-sourced under the same license
+- 鈿狅笍 For commercial use, ensure compliance with AGPL-3.0 network service terms, or contact the author for a commercial license
 
 ---
 
-## 🙏 Acknowledgments
+## 馃檹 Acknowledgments
 
 Thanks to the following outstanding open-source projects that power Aster CRM:
 
@@ -411,7 +411,7 @@ Thanks to the following outstanding open-source projects that power Aster CRM:
 ---
 
 <p align="center">
-  If this project has been helpful to you, please give us a ⭐ Star!
+  If this project has been helpful to you, please give us a 猸?Star!
 </p>
 
 ---
@@ -435,5 +435,5 @@ npm run test --workspace apps/web -- --run src/crm/__tests__/TopBar.aiShortcut.t
 npm run test --workspace apps/web -- --run src/crm/__tests__/MainContent.aiShortcutBridge.test.jsx
 
 # E2E smoke: browser-level shortcut flow
-npm run test:e2e:runner --workspace apps/web -- tests/e2e/topbar-ai-shortcut.spec.js
+npm run test:e2e:ai-shortcut
 ```

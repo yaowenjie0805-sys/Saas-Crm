@@ -32,6 +32,7 @@
     "staging:e2e": "node scripts/staging-e2e.mjs",
     "test:e2e:mobile": "node apps/web/scripts/run-playwright-mobile-e2e.mjs",
     "test:e2e:runner": "playwright test --config apps/web/playwright.config.js",
+    "test:e2e:ai-shortcut": "npm run test:e2e:ai-shortcut --workspace apps/web",
     "perf:smoke": "node scripts/perf-run.mjs smoke",
     "perf:baseline": "node scripts/perf-run.mjs baseline",
     "perf:gate": "npm run perf:baseline && node scripts/perf-gate.mjs",
