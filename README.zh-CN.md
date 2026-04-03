@@ -413,3 +413,27 @@ chore:    构建/CI/依赖等杂项
 <p align="center">
   如果这个项目对你有帮助，请给我们一个 ⭐ Star！
 </p>
+
+---
+
+## AI 功能入口与回归测试（2026-04 更新）
+
+- 前端入口：顶部操作栏 `AI功能` 按钮（`data-testid="topbar-ai-shortcut"`）
+- 跳转行为：点击后自动切到 Dashboard，并定位到 `AI Follow-up Summary` 区块
+- 核心实现：
+  - `apps/web/src/crm/components/layout/TopBar.jsx`
+  - `apps/web/src/crm/components/MainContent.jsx`
+  - `apps/web/src/crm/components/pages/dashboard/AiFollowUpSummarySection.jsx`
+
+推荐回归命令：
+
+```bash
+# 单测：TopBar AI 入口按钮
+npm run test --workspace apps/web -- --run src/crm/__tests__/TopBar.aiShortcut.test.jsx
+
+# 单测：MainContent 跳转链路（AI 按钮 -> Dashboard -> AI 面板）
+npm run test --workspace apps/web -- --run src/crm/__tests__/MainContent.aiShortcutBridge.test.jsx
+
+# E2E：真实浏览器链路 smoke
+npm run test:e2e:runner --workspace apps/web -- tests/e2e/topbar-ai-shortcut.spec.js
+```

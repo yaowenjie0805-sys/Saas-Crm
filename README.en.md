@@ -413,3 +413,27 @@ Thanks to the following outstanding open-source projects that power Aster CRM:
 <p align="center">
   If this project has been helpful to you, please give us a ⭐ Star!
 </p>
+
+---
+
+## AI Entry & Regression Checks (Updated: 2026-04)
+
+- Frontend entry: topbar `AI` button (`data-testid="topbar-ai-shortcut"`)
+- Navigation behavior: click jumps to Dashboard and focuses the `AI Follow-up Summary` panel
+- Core implementation:
+  - `apps/web/src/crm/components/layout/TopBar.jsx`
+  - `apps/web/src/crm/components/MainContent.jsx`
+  - `apps/web/src/crm/components/pages/dashboard/AiFollowUpSummarySection.jsx`
+
+Recommended regression commands:
+
+```bash
+# Unit: TopBar AI shortcut button
+npm run test --workspace apps/web -- --run src/crm/__tests__/TopBar.aiShortcut.test.jsx
+
+# Unit: MainContent bridge (AI button -> Dashboard -> AI panel)
+npm run test --workspace apps/web -- --run src/crm/__tests__/MainContent.aiShortcutBridge.test.jsx
+
+# E2E smoke: browser-level shortcut flow
+npm run test:e2e:runner --workspace apps/web -- tests/e2e/topbar-ai-shortcut.spec.js
+```
