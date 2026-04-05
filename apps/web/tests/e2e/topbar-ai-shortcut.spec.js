@@ -1,52 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { ensureLoggedIn, seedAuthSession } from './helpers/auth.js'
-import { expectHealthyPage } from './helpers/health.js'
-
-const FALLBACK_SESSION = {
-  username: 'admin',
-  displayName: 'admin',
-  role: 'ADMIN',
-  ownerScope: '',
-  tenantId: 'tenant_default',
-  department: '',
-  dataScope: '',
-  dateFormat: 'yyyy-MM-dd',
-  token: 'COOKIE_SESSION',
-  sessionActive: true,
-}
-
-function collectPageErrors(page) {
-  const errors = []
-  page.on('pageerror', (error) => {
-    errors.push(error.message)
-  })
-  return errors
-}
-
-function isApiConnectFailure(error) {
-  const message = String(error?.message || '')
-  return ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].some((token) => message.includes(token))
-}
-
-async function seedFallbackSession(page) {
-  await seedAuthSession(page, FALLBACK_SESSION)
-  await page.goto('/', { waitUntil: 'networkidle' })
-}
-
-async function login(page) {
-  try {
-    await ensureLoggedIn(page)
-    return { fallbackMode: false }
-  } catch (error) {
-    if (!isApiConnectFailure(error)) throw error
-    await seedFallbackSession(page)
-    return { fallbackMode: true }
-  }
-}
+import { collectPageErrors, expectHealthyPage } from './helpers/health.js'
+import { loginWithFallback } from './helpers/sessionFallback.js'
 
 test('topbar AI shortcut jumps to dashboard AI panel', async ({ page }) => {
   const pageErrors = collectPageErrors(page)
-  const loginState = await login(page)
+  const loginState = await loginWithFallback(page)
 
   await page.getByTestId('nav-products').click()
   await expect(page.getByTestId('products-page')).toBeVisible()

@@ -1,61 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { ensureLoggedIn, seedAuthSession } from './helpers/auth.js'
-
-const FALLBACK_SESSION = {
-  username: 'admin',
-  displayName: 'admin',
-  role: 'ADMIN',
-  ownerScope: '',
-  tenantId: 'tenant_default',
-  department: '',
-  dataScope: '',
-  dateFormat: 'yyyy-MM-dd',
-  token: 'COOKIE_SESSION',
-  sessionActive: true,
-}
-
-function collectPageErrors(page) {
-  const errors = []
-  page.on('pageerror', (error) => {
-    errors.push(error.message)
-  })
-  return errors
-}
-
-function isApiConnectFailure(error) {
-  const message = String(error?.message || '')
-  return ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].some((token) => message.includes(token))
-}
-
-async function seedFallbackSession(page) {
-  await seedAuthSession(page, FALLBACK_SESSION)
-  await page.goto('/', { waitUntil: 'networkidle' })
-}
-
-function filterUnexpectedPageErrors(pageErrors, { allowNetworkFailure = false } = {}) {
-  return pageErrors.filter((message) => {
-    if (message === 'signal is aborted without reason') return false
-    if (allowNetworkFailure && message === 'Failed to fetch') return false
-    return true
-  })
-}
-
-async function expectHealthy(page, pageErrors, options = {}) {
-  await expect(page.getByTestId('error-boundary')).toHaveCount(0)
-  const unexpectedErrors = filterUnexpectedPageErrors(pageErrors, options)
-  expect(unexpectedErrors, `Unexpected page errors:\n${pageErrors.join('\n')}`).toEqual([])
-}
-
-async function login(page) {
-  try {
-    await ensureLoggedIn(page)
-    return { fallbackMode: false }
-  } catch (error) {
-    if (!isApiConnectFailure(error)) throw error
-    await seedFallbackSession(page)
-    return { fallbackMode: true }
-  }
-}
+import { collectPageErrors, expectHealthyPage } from './helpers/health.js'
+import { loginWithFallback } from './helpers/sessionFallback.js'
 
 async function gotoDashboard(page) {
   await page.getByTestId('nav-dashboard').click({ timeout: 15_000 })
@@ -65,7 +10,7 @@ async function gotoDashboard(page) {
 test('topbar refresh and quotes lightweight interactions remain healthy', async ({ page }) => {
   const pageErrors = collectPageErrors(page)
 
-  const loginState = await login(page)
+  const loginState = await loginWithFallback(page)
   await gotoDashboard(page)
   await expect(page.getByTestId('topbar')).toBeVisible()
   await page.keyboard.press('ControlOrMeta+K')
@@ -77,7 +22,12 @@ test('topbar refresh and quotes lightweight interactions remain healthy', async 
 
   await page.getByTestId('topbar-refresh').click()
   await expect(page.getByTestId('page-title')).toHaveText('Dashboard')
-  await expectHealthy(page, pageErrors, { allowNetworkFailure: loginState.fallbackMode })
+  await expectHealthyPage(page, pageErrors, {
+    ignoreErrorMessages: [
+      'signal is aborted without reason',
+      ...(loginState.fallbackMode ? ['Failed to fetch'] : []),
+    ],
+  })
 
   await page.getByTestId('nav-quotes').click()
   await expect(page.getByTestId('quotes-page')).toBeVisible()
@@ -97,5 +47,10 @@ test('topbar refresh and quotes lightweight interactions remain healthy', async 
 
   await expect(page.getByTestId('quotes-page')).toBeVisible()
   await expect(page.getByTestId('quote-items-panel')).toBeVisible()
-  await expectHealthy(page, pageErrors, { allowNetworkFailure: loginState.fallbackMode })
+  await expectHealthyPage(page, pageErrors, {
+    ignoreErrorMessages: [
+      'signal is aborted without reason',
+      ...(loginState.fallbackMode ? ['Failed to fetch'] : []),
+    ],
+  })
 })

@@ -1,5 +1,13 @@
 import { expect } from '@playwright/test'
 
+export function collectPageErrors(page) {
+  const errors = []
+  page.on('pageerror', (error) => {
+    errors.push(error?.message || '')
+  })
+  return errors
+}
+
 function isKnownBoundaryIssue(text) {
   const content = String(text || '')
   return content.includes('requestFailed') && content.includes('Cannot convert object to primitive value')
