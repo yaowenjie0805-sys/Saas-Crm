@@ -153,7 +153,7 @@ public class OpenAiServiceImpl implements AiService {
         String configuredBase = aiConfig.getOpenai().getBaseUrl();
         String overrideBase = options.get("base_url") == null ? "" : String.valueOf(options.get("base_url")).trim();
         String base = overrideBase.isEmpty() ? configuredBase : overrideBase;
-        String normalizedBase = base == null ? "" : base.trim();
+        String normalizedBase = trimTrailingSlash(base == null ? "" : base.trim());
         if (normalizedBase.endsWith("/chat/completions")) {
             return normalizedBase;
         }
@@ -161,6 +161,14 @@ public class OpenAiServiceImpl implements AiService {
             return normalizedBase + "/chat/completions";
         }
         return normalizedBase + "/v1/chat/completions";
+    }
+
+    private String trimTrailingSlash(String value) {
+        String normalized = value == null ? "" : value.trim();
+        while (normalized.endsWith("/") && normalized.length() > 0) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     private String resolveApiKey(Map<String, Object> options) {
