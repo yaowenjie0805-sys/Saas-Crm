@@ -243,11 +243,23 @@ abstract class BaseApiController {
     }
 
     protected Map<String, Object> errorBody(HttpServletRequest request, String code, String message, Map<String, Object> details) {
+        return errorBody(request, code, message, details, null, null);
+    }
+
+    protected Map<String, Object> errorBody(HttpServletRequest request,
+                                            String code,
+                                            String message,
+                                            Map<String, Object> details,
+                                            String operation,
+                                            Boolean retriable) {
         Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> normalizedDetails = details == null ? new LinkedHashMap<String, Object>() : details;
         body.put("code", code);
         body.put("message", message);
         body.put("requestId", traceId(request));
-        body.put("details", details == null ? new LinkedHashMap<String, Object>() : details);
+        body.put("operation", isBlank(operation) ? requestOperation(request) : operation.trim());
+        body.put("retriable", retriable == null ? detailRetriable(normalizedDetails) : retriable.booleanValue());
+        body.put("details", normalizedDetails);
         return body;
     }
 
@@ -281,10 +293,13 @@ abstract class BaseApiController {
 
     protected Map<String, Object> legacyErrorBody(HttpServletRequest request, String code, String message, Map<String, Object> details) {
         Map<String, Object> body = new LinkedHashMap<String, Object>();
+        Map<String, Object> normalizedDetails = details == null ? new LinkedHashMap<String, Object>() : details;
         body.put("message", message);
         body.put("code", legacyCode(code, "BAD_REQUEST"));
         body.put("requestId", traceId(request));
-        body.put("details", details == null ? new LinkedHashMap<String, Object>() : details);
+        body.put("operation", requestOperation(request));
+        body.put("retriable", detailRetriable(normalizedDetails));
+        body.put("details", normalizedDetails);
         return body;
     }
 
@@ -329,5 +344,32 @@ abstract class BaseApiController {
 
     private static Set<String> immutableKeys(String... keys) {
         return Set.of(keys);
+    }
+
+    private String requestOperation(HttpServletRequest request) {
+        String method = request == null ? "" : String.valueOf(request.getMethod() == null ? "" : request.getMethod()).trim().toUpperCase(Locale.ROOT);
+        String uri = request == null ? "" : String.valueOf(request.getRequestURI() == null ? "" : request.getRequestURI()).trim();
+        if (!isBlank(method) && !isBlank(uri)) {
+            return method + " " + uri;
+        }
+        if (!isBlank(uri)) {
+            return uri;
+        }
+        return "unknown_operation";
+    }
+
+    private boolean detailRetriable(Map<String, Object> details) {
+        if (details == null) {
+            return false;
+        }
+        Object value = details.get("retriable");
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof String) {
+            String normalized = ((String) value).trim().toLowerCase(Locale.ROOT);
+            return "true".equals(normalized) || "1".equals(normalized) || "yes".equals(normalized);
+        }
+        return false;
     }
 }
