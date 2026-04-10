@@ -212,6 +212,8 @@ export const ZH = {
   "aiFollowUpSummaryUnavailable": "AI \u670d\u52a1\u5f53\u524d\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002",
   "aiFollowUpSummaryEmptyInput": "\u8bf7\u8f93\u5165\u4ea4\u4e92\u8be6\u60c5",
   "aiFollowUpSummaryInputTooLong": "\u4ea4\u4e92\u8be6\u60c5\u4e0d\u80fd\u8d85\u8fc7 4000 \u5b57\u7b26",
+  "aiFollowUpSummaryBaseUrlPlaceholder": "Base URL\uff08\u53ef\u9009\uff09",
+  "aiFollowUpSummaryApiKeyPlaceholder": "API Key\uff08\u53ef\u9009\uff0c\u4ec5\u5f53\u524d\u4f1a\u8bdd\uff09",
   "aiModelIdPlaceholder": "\u6a21\u578b ID\uff08\u5fc5\u586b\uff09",
   "aiBaseUrlPlaceholder": "Base URL\uff08\u53ef\u9009\uff09",
   "aiApiKeyPlaceholder": "API Key\uff08\u53ef\u9009\uff0c\u4ec5\u5f53\u524d\u4f1a\u8bdd\uff09",

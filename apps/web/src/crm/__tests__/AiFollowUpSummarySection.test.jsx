@@ -181,6 +181,27 @@ describe('AiFollowUpSummarySection', () => {
     })
   })
 
+  it('keeps model input empty by default even when config returns a default model', async () => {
+    queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o', 'claude-3-5-sonnet'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
+
+    const { container } = await renderSection({
+      initialInteractionDetails: 'Customer asked for a concise recap.',
+    })
+
+    await waitFor(() => {
+      expect(fetchAiConfigMock).toHaveBeenCalledTimes(1)
+    })
+
+    const modelInput = getByTestId(container, 'ai-followup-summary-model')
+    expect(modelInput).not.toBeNull()
+    expect(modelInput.value).toBe('')
+  })
+
   it('renders interaction details input as textarea', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
     fetchAiConfigMock.mockResolvedValueOnce({
