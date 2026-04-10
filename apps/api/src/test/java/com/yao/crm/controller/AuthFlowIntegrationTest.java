@@ -1903,7 +1903,7 @@ class AuthFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .header("X-Tenant-Id", TENANT_TEST))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("order_stage_gate_requires_quote_accepted"))
+                .andExpect(jsonPath("$.code").value("order_stage_gate_quote_accepted_required"))
                 .andExpect(jsonPath("$.requestId").isString())
                 .andExpect(jsonPath("$.details.requiredStatus").value("ACCEPTED_QUOTE"))
                 .andExpect(jsonPath("$.details.currentStatus").value("NO_QUOTE"))

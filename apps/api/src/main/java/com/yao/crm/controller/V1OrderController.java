@@ -370,7 +370,7 @@ public class V1OrderController extends CommerceControllerSupport {
             details.put("currentStatus", "NO_QUOTE");
             details.put("approvalMode", approvalMode);
             auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order confirm blocked: quote link missing", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_quote_accepted", msg(request, "order_stage_gate_requires_quote_accepted"), details));
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_quote_accepted_required", msg(request, "order_stage_gate_quote_accepted_required"), details));
         }
         Optional<Quote> quoteOpt = quoteRepository.findByIdAndTenantId(order.getQuoteId(), tenantId);
         if (!quoteOpt.isPresent()) {
@@ -379,7 +379,7 @@ public class V1OrderController extends CommerceControllerSupport {
             details.put("currentStatus", "QUOTE_NOT_FOUND");
             details.put("approvalMode", approvalMode);
             auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order confirm blocked: quote not found", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_quote_accepted", msg(request, "order_stage_gate_requires_quote_accepted"), details));
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_quote_accepted_required", msg(request, "order_stage_gate_quote_accepted_required"), details));
         }
         String quoteStatus = quoteOpt.get().getStatus();
         if (!"ACCEPTED".equalsIgnoreCase(quoteStatus)) {
@@ -388,7 +388,7 @@ public class V1OrderController extends CommerceControllerSupport {
             details.put("currentStatus", quoteStatus);
             details.put("approvalMode", approvalMode);
             auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_BLOCK", "ORDER", order.getId(), "Order confirm blocked by quote stage", tenantId);
-            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_requires_quote_accepted", msg(request, "order_stage_gate_requires_quote_accepted"), details));
+            return ResponseEntity.status(409).body(errorBody(request, "order_stage_gate_quote_accepted_required", msg(request, "order_stage_gate_quote_accepted_required"), details));
         }
         auditLogService.record(currentUser(request), currentRole(request), "STAGE_GATE_PASS", "ORDER", order.getId(), "Order confirm pass by stage gate", tenantId);
         return null;
