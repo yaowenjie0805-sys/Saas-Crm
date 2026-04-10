@@ -271,6 +271,14 @@ public class ReportAggregationService {
         double quoteToOrderRate = quoteAccepted == 0 ? 0.0 : Math.round((orders * 1000.0 / quoteAccepted)) / 10.0;
         double orderCompleteRate = orders == 0 ? 0.0 : Math.round((orderCompleted * 1000.0 / orders)) / 10.0;
         double orderCollectionRate = orderAmountTotal <= 0 ? 0.0 : Math.round((orderPaymentReceived * 1000.0 / orderAmountTotal)) / 10.0;
+        double forecastAccuracy = computeForecastAccuracy(weightedAmount, totalRevenue);
+        double pipelineHealth = computePipelineHealth(
+                winRate,
+                quoteToOrderRate,
+                orderCompleteRate,
+                orderCollectionRate,
+                forecastAccuracy
+        );
 
         // 分组数据
         Map<String, Integer> customerByOwner = customerCount <= 0
@@ -319,6 +327,8 @@ public class ReportAggregationService {
         summary.put("orderPaymentReceived", orderPaymentReceived);
         summary.put("orderPaymentOutstanding", orderPaymentOutstanding);
         summary.put("orderCollectionRate", orderCollectionRate);
+        summary.put("forecastAccuracy", forecastAccuracy);
+        summary.put("pipelineHealth", pipelineHealth);
 
         // 任务状态
         Map<String, Integer> taskStatus = new HashMap<String, Integer>();
@@ -358,6 +368,8 @@ public class ReportAggregationService {
         summary.put("orderPaymentReceived", 0L);
         summary.put("orderPaymentOutstanding", 0L);
         summary.put("orderCollectionRate", 0.0);
+        summary.put("forecastAccuracy", 0.0);
+        summary.put("pipelineHealth", 0.0);
 
         Map<String, Integer> taskStatus = new HashMap<String, Integer>();
         taskStatus.put("done", 0);
@@ -373,5 +385,27 @@ public class ReportAggregationService {
         body.put("quoteByStatus", new HashMap<String, Integer>());
         body.put("orderByStatus", new HashMap<String, Integer>());
         return body;
+    }
+
+    private double computeForecastAccuracy(long weightedAmount, long revenue) {
+        if (weightedAmount <= 0L || revenue <= 0L) {
+            return 0.0;
+        }
+        double weighted = (double) weightedAmount;
+        double actual = (double) revenue;
+        double gap = Math.abs(weighted - actual);
+        double baseline = Math.max(weighted, actual);
+        if (baseline <= 0.0) {
+            return 0.0;
+        }
+        return Math.round(Math.max(0.0, (1.0 - gap / baseline) * 1000.0)) / 10.0;
+    }
+
+    private double computePipelineHealth(double winRate,
+                                         double quoteToOrderRate,
+                                         double orderCompleteRate,
+                                         double orderCollectionRate,
+                                         double forecastAccuracy) {
+        return Math.round((winRate + quoteToOrderRate + orderCompleteRate + orderCollectionRate + forecastAccuracy) * 10.0 / 5.0) / 10.0;
     }
 }

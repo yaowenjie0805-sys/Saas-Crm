@@ -128,6 +128,9 @@ class ReportServiceTest {
         Assertions.assertNotNull(summary);
         Assertions.assertEquals(2L, summary.get("customers"));
         Assertions.assertEquals(300L, summary.get("revenue"));
+        Assertions.assertTrue(summary.containsKey("winRate"));
+        Assertions.assertTrue(summary.containsKey("forecastAccuracy"));
+        Assertions.assertTrue(summary.containsKey("pipelineHealth"));
 
         verify(reportAggregationService).aggregateWithScope(eq(TENANT_TEST), anySet());
         verify(customerRepository, never()).findByTenantId(anyString());
@@ -193,6 +196,9 @@ class ReportServiceTest {
         Assertions.assertEquals(0, ((Number) summary.get("customers")).intValue());
         Assertions.assertEquals(0, ((Number) summary.get("opportunities")).intValue());
         Assertions.assertEquals(0, ((Number) summary.get("quotes")).intValue());
+        Assertions.assertTrue(summary.containsKey("winRate"));
+        Assertions.assertTrue(summary.containsKey("forecastAccuracy"));
+        Assertions.assertTrue(summary.containsKey("pipelineHealth"));
 
         verify(customerRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(opportunityRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
@@ -257,6 +263,9 @@ class ReportServiceTest {
         Map<String, Object> summary = (Map<String, Object>) report.get("summary");
         Assertions.assertNotNull(summary);
         Assertions.assertEquals(3L, summary.get("customers"));
+        Assertions.assertTrue(summary.containsKey("winRate"));
+        Assertions.assertTrue(summary.containsKey("forecastAccuracy"));
+        Assertions.assertTrue(summary.containsKey("pipelineHealth"));
 
         verify(customerRepository).countByTenantIdAndCreatedAtBetween(anyString(), any(), any());
         verify(opportunityRepository).countByTenantIdAndCreatedAtBetween(anyString(), any(), any());
