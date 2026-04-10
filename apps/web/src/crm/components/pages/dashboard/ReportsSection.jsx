@@ -36,7 +36,8 @@ function ReportsSection({
   const marketCurrency = marketContext?.currency || reportCurrency || 'CNY'
   const marketTimezone = marketContext?.timezone || 'Asia/Shanghai'
   const approvalMode = marketContext?.approvalMode || 'STRICT'
-  const pipelineHealth = Number(localizedMetrics?.pipelineHealth || 0)
+  const pipelineHealth = Number(reportSummary?.pipelineHealth ?? localizedMetrics?.pipelineHealth ?? 0)
+  const forecastAccuracy = Number(reportSummary?.forecastAccuracy ?? 0)
   const arrLike = Number(localizedMetrics?.arrLike || 0)
   const tenantConfigSynced = !!reports?.tenantConfigSynced
   const localizedFallback = !!reports?.localizedFallback
@@ -63,6 +64,7 @@ function ReportsSection({
         <div>{t('pipeline')}: {reportSummary.opportunities || 0}</div>
         <div>{t('taskDoneRate')}: {reportSummary.taskDoneRate || 0}%</div>
         <div>{t('winRate')}: {reportSummary.winRate || 0}%</div>
+        <div>{t('forecastAccuracy')}: {forecastAccuracy}%</div>
         <div>{t('pipelineHealth')}: {pipelineHealth}%</div>
         <div>{t('arrLike')}: {formatMoneyByCurrency(arrLike, marketCurrency)}</div>
       </div>

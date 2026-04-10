@@ -11,7 +11,10 @@ export function getOrderStatusOptions(t) {
 }
 
 export function formatOrderActionError(err, t) {
-  if (err?.code === 'order_stage_gate_requires_quote_accepted') {
+  if (
+    err?.code === 'order_stage_gate_requires_quote_accepted'
+    || err?.code === 'order_stage_gate_quote_accepted_required'
+  ) {
     const fallback = t('orderStageGateQuoteAcceptedRequired')
     const req = err?.details?.requiredStatus ? ` (${t('requiredStatusLabel')}: ${err.details.requiredStatus})` : ''
     return `${fallback}${req}`

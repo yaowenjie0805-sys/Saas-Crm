@@ -493,6 +493,7 @@ export const ZH = {
   "marketProfile": "\u5e02\u573a\u6a21\u5f0f",
   "marketCN": "\u4e2d\u56fd",
   "marketGlobal": "\u56fd\u9645",
+  "forecastAccuracy": "\u9884\u6d4b\u51c6\u786e\u7387",
   "pipelineHealth": "\u7ba1\u9053\u5065\u5eb7\u5ea6",
   "arrLike": "\u5e74\u5316\u6536\u5165",
   "taxRule": "\u7a0e\u89c4\u5219",
