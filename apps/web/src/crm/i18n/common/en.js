@@ -212,8 +212,6 @@ export const EN = {
   "aiFollowUpSummaryUnavailable": "AI service is currently unavailable. Please try again later.",
   "aiFollowUpSummaryEmptyInput": "Please enter interaction details",
   "aiFollowUpSummaryInputTooLong": "Interaction details must be 4000 characters or less",
-  "aiFollowUpSummaryBaseUrlPlaceholder": "Base URL (optional)",
-  "aiFollowUpSummaryApiKeyPlaceholder": "API Key (optional, session only)",
   "aiModelIdPlaceholder": "Model ID (required)",
   "aiBaseUrlPlaceholder": "Base URL (optional)",
   "aiApiKeyPlaceholder": "API Key (optional, session only)",
