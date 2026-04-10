@@ -90,6 +90,7 @@ verify-*.png
 .lingma/
 .arts/
 .claude/
+.worktrees/
 
 # Backups
 backups/
