@@ -2,7 +2,14 @@ import { api } from '../shared'
 
 const DEFAULT_FOLLOW_UP_SUMMARY_PATH =
   String(import.meta.env.VITE_AI_FOLLOWUP_SUMMARY_PATH || '').trim() || '/v1/ai/followUpSummary'
+const DEFAULT_AI_COMMENT_REPLY_PATH =
+  String(import.meta.env.VITE_AI_COMMENT_REPLY_PATH || '').trim() || '/v1/ai/commentReply'
+const DEFAULT_AI_MARKETING_EMAIL_PATH =
+  String(import.meta.env.VITE_AI_MARKETING_EMAIL_PATH || '').trim() || '/v1/ai/marketingEmail'
+const DEFAULT_AI_SALES_ADVICE_PATH =
+  String(import.meta.env.VITE_AI_SALES_ADVICE_PATH || '').trim() || '/v1/ai/salesAdvice'
 const DEFAULT_AI_STATUS_PATH = String(import.meta.env.VITE_AI_STATUS_PATH || '').trim() || '/v1/ai/status'
+const DEFAULT_AI_CONFIG_PATH = String(import.meta.env.VITE_AI_CONFIG_PATH || '').trim() || '/v1/ai/config'
 
 const BOOLEAN_STATUS_KEYS = ['available', 'enabled', 'isAvailable', 'ready']
 const STRING_STATUS_KEYS = ['status', 'state', 'aiStatus']
@@ -119,6 +126,9 @@ export async function generateFollowUpSummary({
   customerName = '',
   channel = '',
   interactionDetails = '',
+  model = '',
+  baseUrl = '',
+  apiKey = '',
   token,
   lang = 'en',
   path = DEFAULT_FOLLOW_UP_SUMMARY_PATH,
@@ -132,6 +142,9 @@ export async function generateFollowUpSummary({
           customerName: normalizeField(customerName),
           channel: normalizeField(channel),
           interactionDetails: normalizeField(interactionDetails),
+          ...(normalizeField(model) ? { model: normalizeField(model) } : {}),
+          ...(normalizeField(baseUrl) ? { baseUrl: normalizeField(baseUrl) } : {}),
+          ...(normalizeField(apiKey) ? { apiKey: normalizeField(apiKey) } : {}),
         }),
       },
       token,
@@ -147,5 +160,139 @@ export async function generateFollowUpSummary({
   }
 }
 
+export async function fetchAiConfig({ token, lang = 'en', path = DEFAULT_AI_CONFIG_PATH } = {}) {
+  try {
+    const response = await api(path, { method: 'GET' }, token, lang)
+    const roots = [response, response?.data, response?.result]
+    const candidate = roots.find((item) => item && typeof item === 'object') || {}
+
+    const availableModels = Array.isArray(candidate.availableModels)
+      ? candidate.availableModels.map((item) => normalizeText(item)).filter(Boolean)
+      : []
+    const defaultModel = normalizeText(candidate.defaultModel)
+    const canOverride = candidate.canOverride !== false
+    const supportsCustomConnection = candidate.supportsCustomConnection !== false
+
+    return { availableModels, defaultModel, canOverride, supportsCustomConnection }
+  } catch (error) {
+    throw toAiError(error, 'Failed to load AI config')
+  }
+}
+
+export async function generateCommentReply({
+  originalComment = '',
+  context = '',
+  model = '',
+  baseUrl = '',
+  apiKey = '',
+  token,
+  lang = 'en',
+  path = DEFAULT_AI_COMMENT_REPLY_PATH,
+} = {}) {
+  try {
+    const response = await api(
+      path,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          originalComment: normalizeField(originalComment),
+          context: normalizeField(context),
+          ...(normalizeField(model) ? { model: normalizeField(model) } : {}),
+          ...(normalizeField(baseUrl) ? { baseUrl: normalizeField(baseUrl) } : {}),
+          ...(normalizeField(apiKey) ? { apiKey: normalizeField(apiKey) } : {}),
+        }),
+      },
+      token,
+      lang,
+    )
+    const reply = normalizeText(response?.reply || response?.data?.reply || response?.result?.reply)
+    if (!reply) throw new Error('Invalid AI comment reply response')
+    return reply
+  } catch (error) {
+    if (error?.message === 'Invalid AI comment reply response') throw error
+    throw toAiError(error, 'Failed to generate AI comment reply')
+  }
+}
+
+export async function generateMarketingEmail({
+  customerName = '',
+  productName = '',
+  customerInterest = '',
+  model = '',
+  baseUrl = '',
+  apiKey = '',
+  token,
+  lang = 'en',
+  path = DEFAULT_AI_MARKETING_EMAIL_PATH,
+} = {}) {
+  try {
+    const response = await api(
+      path,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          customerName: normalizeField(customerName),
+          productName: normalizeField(productName),
+          customerInterest: normalizeField(customerInterest),
+          ...(normalizeField(model) ? { model: normalizeField(model) } : {}),
+          ...(normalizeField(baseUrl) ? { baseUrl: normalizeField(baseUrl) } : {}),
+          ...(normalizeField(apiKey) ? { apiKey: normalizeField(apiKey) } : {}),
+        }),
+      },
+      token,
+      lang,
+    )
+    const email = normalizeText(response?.email || response?.data?.email || response?.result?.email)
+    if (!email) throw new Error('Invalid AI marketing email response')
+    return email
+  } catch (error) {
+    if (error?.message === 'Invalid AI marketing email response') throw error
+    throw toAiError(error, 'Failed to generate AI marketing email')
+  }
+}
+
+export async function generateSalesAdvice({
+  opportunityName = '',
+  stage = '',
+  customerName = '',
+  lastActivity = '',
+  model = '',
+  baseUrl = '',
+  apiKey = '',
+  token,
+  lang = 'en',
+  path = DEFAULT_AI_SALES_ADVICE_PATH,
+} = {}) {
+  try {
+    const response = await api(
+      path,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          opportunityName: normalizeField(opportunityName),
+          stage: normalizeField(stage),
+          customerName: normalizeField(customerName),
+          lastActivity: normalizeField(lastActivity),
+          ...(normalizeField(model) ? { model: normalizeField(model) } : {}),
+          ...(normalizeField(baseUrl) ? { baseUrl: normalizeField(baseUrl) } : {}),
+          ...(normalizeField(apiKey) ? { apiKey: normalizeField(apiKey) } : {}),
+        }),
+      },
+      token,
+      lang,
+    )
+    const advice = normalizeText(response?.advice || response?.data?.advice || response?.result?.advice)
+    if (!advice) throw new Error('Invalid AI sales advice response')
+    return advice
+  } catch (error) {
+    if (error?.message === 'Invalid AI sales advice response') throw error
+    throw toAiError(error, 'Failed to generate AI sales advice')
+  }
+}
+
 export const AI_FOLLOW_UP_SUMMARY_PATH = DEFAULT_FOLLOW_UP_SUMMARY_PATH
+export const AI_COMMENT_REPLY_PATH = DEFAULT_AI_COMMENT_REPLY_PATH
+export const AI_MARKETING_EMAIL_PATH = DEFAULT_AI_MARKETING_EMAIL_PATH
+export const AI_SALES_ADVICE_PATH = DEFAULT_AI_SALES_ADVICE_PATH
 export const AI_STATUS_PATH = DEFAULT_AI_STATUS_PATH
+export const AI_CONFIG_PATH = DEFAULT_AI_CONFIG_PATH

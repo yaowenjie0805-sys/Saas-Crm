@@ -1,6 +1,9 @@
 import { memo, useMemo } from 'react'
 import {
+  AiCommentReplySection,
   AiFollowUpSummarySection,
+  AiMarketingEmailSection,
+  AiSalesAdviceSection,
   ReportExportJobsSection,
   ReportsSection,
   StatsSection,
@@ -89,6 +92,9 @@ function DashboardPanel({
             t={t}
           />
           <AiFollowUpSummarySection t={t} apiContext={apiContext} />
+          <AiCommentReplySection t={t} apiContext={apiContext} />
+          <AiMarketingEmailSection t={t} apiContext={apiContext} />
+          <AiSalesAdviceSection t={t} apiContext={apiContext} />
         </>
       )}
 

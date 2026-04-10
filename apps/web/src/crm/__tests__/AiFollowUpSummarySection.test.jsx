@@ -4,11 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import AiFollowUpSummarySection from '../components/pages/dashboard/AiFollowUpSummarySection'
 
 const queryAiAvailabilityMock = vi.hoisted(() => vi.fn())
+const fetchAiConfigMock = vi.hoisted(() => vi.fn())
 const generateFollowUpSummaryMock = vi.hoisted(() => vi.fn())
 const extractAiErrorMessageMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../api/ai', () => ({
   queryAiAvailability: (...args) => queryAiAvailabilityMock(...args),
+  fetchAiConfig: (...args) => fetchAiConfigMock(...args),
   generateFollowUpSummary: (...args) => generateFollowUpSummaryMock(...args),
   extractAiErrorMessage: (...args) => extractAiErrorMessageMock(...args),
 }))
@@ -70,6 +72,7 @@ afterEach(async () => {
   }
 
   queryAiAvailabilityMock.mockReset()
+  fetchAiConfigMock.mockReset()
   generateFollowUpSummaryMock.mockReset()
   extractAiErrorMessageMock.mockReset()
 })
@@ -77,6 +80,11 @@ afterEach(async () => {
 describe('AiFollowUpSummarySection', () => {
   it('calls queryAiAvailability on initial load', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
 
     await renderSection({ apiContext: { token: 'token-qa', lang: 'zh' } })
 
@@ -85,10 +93,16 @@ describe('AiFollowUpSummarySection', () => {
     })
 
     expect(queryAiAvailabilityMock).toHaveBeenCalledWith({ token: 'token-qa', lang: 'zh' })
+    expect(fetchAiConfigMock).toHaveBeenCalledWith({ token: 'token-qa', lang: 'zh' })
   })
 
   it('disables generate button and shows unavailable message when AI is unavailable', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: false, message: 'Maintenance window' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
 
     const { container } = await renderSection()
 
@@ -105,6 +119,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('uses aiFollowUpSummaryUnavailable translation when unavailable response has no message', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: false, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     const t = (key) => {
       if (key === 'aiFollowUpSummaryUnavailable') return 'AI is temporarily offline'
       return key
@@ -121,6 +140,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('shows generated result when input is valid and submit is clicked', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o', 'claude-3-5-sonnet'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     generateFollowUpSummaryMock.mockResolvedValueOnce('Follow-up summary generated')
 
     const { container } = await renderSection({
@@ -145,6 +169,7 @@ describe('AiFollowUpSummarySection', () => {
       customerName: '',
       channel: '',
       interactionDetails: 'Customer asked for updated pricing.',
+      model: '',
       token: 'token-gen',
       lang: 'en',
     })
@@ -158,6 +183,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('renders interaction details input as textarea', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
 
     const { container } = await renderSection()
     const interactionInput = getByTestId(container, 'ai-followup-summary-input')
@@ -168,6 +198,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('does not submit when pressing Enter without modifiers in interaction textarea', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     generateFollowUpSummaryMock.mockResolvedValueOnce('should not submit with Enter only')
 
     const { container } = await renderSection({
@@ -194,6 +229,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('submits when pressing Ctrl+Enter in interaction textarea', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     generateFollowUpSummaryMock.mockResolvedValueOnce('Generated with Ctrl+Enter')
 
     const { container } = await renderSection({
@@ -223,6 +263,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('submits when pressing Cmd+Enter in interaction textarea', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     generateFollowUpSummaryMock.mockResolvedValueOnce('Generated with Cmd+Enter')
 
     const { container } = await renderSection({
@@ -254,6 +299,11 @@ describe('AiFollowUpSummarySection', () => {
     queryAiAvailabilityMock.mockImplementation(
       () => new Promise(() => {}),
     )
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     generateFollowUpSummaryMock.mockResolvedValueOnce('should not submit while checking')
 
     const { container } = await renderSection({
@@ -279,6 +329,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('shows error message with code and requestId when generation fails', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     const aiError = Object.assign(new Error('Gateway timeout'), {
       code: 'AI_TIMEOUT',
       requestId: 'req-1001',
@@ -312,6 +367,11 @@ describe('AiFollowUpSummarySection', () => {
 
   it('blocks submit and shows translated error when interaction details exceed max length', async () => {
     queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
     generateFollowUpSummaryMock.mockResolvedValueOnce('should not be generated')
 
     const t = (key) => {
@@ -342,5 +402,72 @@ describe('AiFollowUpSummarySection', () => {
     })
 
     expect(generateFollowUpSummaryMock).not.toHaveBeenCalled()
+  })
+
+  it('submits custom model id from model input', async () => {
+    queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o', 'claude-3-5-sonnet'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+    })
+    generateFollowUpSummaryMock.mockResolvedValueOnce('Generated')
+
+    const { container } = await renderSection({
+      initialInteractionDetails: 'Need tailored model response.',
+      apiContext: { token: 'token-model', lang: 'en', tenantId: 't-1' },
+    })
+    const submitButton = getByTestId(container, 'ai-followup-summary-submit')
+
+    await waitFor(() => {
+      expect(submitButton.disabled).toBe(false)
+    })
+
+    const modelSelect = getByTestId(container, 'ai-followup-summary-model')
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set
+      valueSetter?.call(modelSelect, 'claude-3-5-sonnet')
+      modelSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    await act(async () => {
+      submitButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await waitFor(() => {
+      expect(generateFollowUpSummaryMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(generateFollowUpSummaryMock).toHaveBeenCalledWith({
+      customerName: '',
+      channel: '',
+      interactionDetails: 'Need tailored model response.',
+      model: 'claude-3-5-sonnet',
+      token: 'token-model',
+      lang: 'en',
+    })
+  })
+
+  it('renders custom baseUrl and apiKey inputs when supported', async () => {
+    queryAiAvailabilityMock.mockResolvedValueOnce({ available: true, message: '' })
+    fetchAiConfigMock.mockResolvedValueOnce({
+      availableModels: ['gpt-4o'],
+      defaultModel: 'gpt-4o',
+      canOverride: true,
+      supportsCustomConnection: true,
+    })
+
+    const { container } = await renderSection({
+      initialInteractionDetails: 'Need custom endpoint summary.',
+      apiContext: { token: 'token-custom', lang: 'en', tenantId: 't-2' },
+    })
+
+    await waitFor(() => {
+      expect(getByTestId(container, 'ai-followup-summary-base-url')).not.toBeNull()
+      expect(getByTestId(container, 'ai-followup-summary-api-key')).not.toBeNull()
+    })
   })
 })

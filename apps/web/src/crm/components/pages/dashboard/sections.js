@@ -1,4 +1,7 @@
 export { default as AiFollowUpSummarySection } from './AiFollowUpSummarySection'
+export { default as AiCommentReplySection } from './AiCommentReplySection'
+export { default as AiMarketingEmailSection } from './AiMarketingEmailSection'
+export { default as AiSalesAdviceSection } from './AiSalesAdviceSection'
 export { default as ReportExportJobsSection } from './ReportExportJobsSection'
 export { default as ReportsSection } from './ReportsSection'
 export { default as StatsSection } from './StatsSection'
