@@ -130,7 +130,7 @@ function AiCommentReplySection({ t, apiContext }) {
           disabled={!canOverrideModel}
         />
         <datalist id="ai-comment-reply-model-list">
-          {(availableModels.length > 0 ? availableModels : ['gpt-4o']).map((model) => (
+          {availableModels.map((model) => (
             <option key={model} value={model} />
           ))}
         </datalist>

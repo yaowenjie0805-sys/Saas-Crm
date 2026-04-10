@@ -186,7 +186,7 @@ function AiFollowUpSummarySection({ t, apiContext, initialInteractionDetails = '
           disabled={!canOverrideModel}
         />
         <datalist id="ai-followup-summary-model-list">
-          {(availableModels.length > 0 ? availableModels : ['gpt-4o']).map((model) => (
+          {availableModels.map((model) => (
             <option key={model} value={model} />
           ))}
         </datalist>

@@ -132,7 +132,7 @@ function AiMarketingEmailSection({ t, apiContext }) {
           disabled={!canOverrideModel}
         />
         <datalist id="ai-marketing-email-model-list">
-          {(availableModels.length > 0 ? availableModels : ['gpt-4o']).map((model) => (
+          {availableModels.map((model) => (
             <option key={model} value={model} />
           ))}
         </datalist>
