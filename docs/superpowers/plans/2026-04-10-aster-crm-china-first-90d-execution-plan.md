@@ -270,12 +270,12 @@ git commit -m "fix(report): restore export retry endpoint contract and integrati
 - Modify (if needed): `docs/superpowers/specs/2026-04-10-aster-crm-china-first-90d-design.md`
 - Modify (if needed): `docs/superpowers/plans/2026-04-10-aster-crm-china-first-90d-execution-plan.md`
 
-- [ ] **Step 1: Run backend final verification**
+- [x] **Step 1: Run backend final verification**
 
 Run: `node scripts/run-maven.mjs -f apps/api/pom.xml "-Dtest=V1AiControllerTest,OpenAiServiceImplTest,V1IntegrationControllerTest,IntegrationWebhookServiceSecurityTest,WorkflowNotificationExecutorTest,ReportServiceTest,ReportAggregationServiceTest,AuthFlowIntegrationTest" test`  
 Expected: PASS or documented flaky case with reproduction and mitigation.
 
-- [ ] **Step 2: Run frontend final verification**
+- [x] **Step 2: Run frontend final verification**
 
 Run: `npm run test --workspace apps/web -- --run src/crm/__tests__/ai.api.test.js src/crm/__tests__/AiFollowUpSummarySection.test.jsx src/crm/__tests__/AiManualModelSections.test.jsx src/crm/__tests__/orderPanelHelpers.test.js src/crm/__tests__/ReportsSection.test.jsx`  
 Expected: PASS
@@ -283,19 +283,25 @@ Expected: PASS
 Run: `npm run build --workspace apps/web`  
 Expected: PASS
 
-- [ ] **Step 3: Update docs only if behavior changed**
+- [x] **Step 3: Update docs only if behavior changed**
 
 ```md
 - Keep error code compatibility note
 - Keep KPI source-of-truth note (summary first, localized fallback second)
 ```
 
-- [ ] **Step 4: Commit final gate artifacts**
+- [x] **Step 4: Commit final gate artifacts**
 
 ```bash
 git add docs/superpowers/specs/2026-04-10-aster-crm-china-first-90d-design.md docs/superpowers/plans/2026-04-10-aster-crm-china-first-90d-execution-plan.md
 git commit -m "docs(release): finalize 90d execution verification notes"
 ```
+
+Verification notes (2026-04-10, Asia/Shanghai):
+- Backend gate passed: `Tests run: 165, Failures: 0, Errors: 0`
+- Frontend gate passed: `5 files, 31 tests passed`
+- Frontend build passed: `vite build` success
+- Follow-up fix commit: `d2c50e4`
 
 ## Self-Review
 
@@ -311,4 +317,3 @@ git commit -m "docs(release): finalize 90d execution verification notes"
 - Type consistency:
 - 错误码使用 `order_stage_gate_quote_accepted_required`（兼容旧码映射）。
 - KPI 命名统一 `forecastAccuracy/pipelineHealth/winRate`。
-
