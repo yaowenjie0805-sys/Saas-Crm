@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -125,6 +126,16 @@ class V1ReportControllerTest {
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("export_job_not_retryable", body.get("code"));
+    }
+
+    @Test
+    void retryExportShouldRethrowUnexpectedIllegalState() {
+        MockHttpServletRequest request = authedRequest("ADMIN");
+        when(reportExportJobService.retryByTenant(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenThrow(new IllegalStateException("unexpected_state"));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> controller.retryExport(request, "job_1"));
+        assertEquals("unexpected_state", error.getMessage());
     }
 
     @Test

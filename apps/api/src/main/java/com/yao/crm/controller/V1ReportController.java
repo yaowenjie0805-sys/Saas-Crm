@@ -204,8 +204,11 @@ public class V1ReportController extends BaseApiController {
         } catch (IllegalArgumentException ex) {
             return exportJobArgumentError(request, ex);
         } catch (IllegalStateException ex) {
-            String code = normalizeCode(ex.getMessage(), "conflict");
-            return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), null));
+            String code = normalizeCode(ex.getMessage(), "");
+            if ("export_job_not_retryable".equals(code)) {
+                return ResponseEntity.status(409).body(errorBody(request, code, msg(request, code), null));
+            }
+            throw ex;
         }
     }
 
