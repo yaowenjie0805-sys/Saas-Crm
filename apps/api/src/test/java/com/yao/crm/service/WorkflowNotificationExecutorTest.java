@@ -1,15 +1,47 @@
 package com.yao.crm.service;
 
+import com.yao.crm.security.TraceIdInterceptor;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class WorkflowNotificationExecutorTest {
 
     private final WorkflowNotificationExecutor executor = new WorkflowNotificationExecutor();
+    private AutoCloseable mocks;
+
+    @Mock
+    private AuditLogService auditLogService;
+
+    @Mock
+    private IntegrationWebhookService integrationWebhookService;
+
+    @BeforeEach
+    void setUpMocks() {
+        mocks = MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        RequestContextHolder.resetRequestAttributes();
+        if (mocks != null) {
+            mocks.close();
+        }
+    }
 
     @Test
     void execute_Email_ShouldBuildExpectedPayload() {
@@ -96,5 +128,31 @@ class WorkflowNotificationExecutorTest {
         Map<String, Object> output = executor.execute("UNKNOWN", new HashMap<>());
 
         assertTrue(output.isEmpty());
+    }
+
+    @Test
+    void sendNotificationShouldRecordRequestIdAndRetryableAuditFields() {
+        NotificationDispatchService service = new NotificationDispatchService(auditLogService, integrationWebhookService, "WECOM");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(TraceIdInterceptor.TRACE_ID_ATTR, "trace-123");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        Map<String, Object> payload = new HashMap<String, Object>();
+        payload.put("customerName", "Acme");
+        payload.put("stage", "Proposal");
+
+        when(integrationWebhookService.sendEventDetailed(anyString(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(IntegrationWebhookService.DispatchResult.failure(3, 500, true));
+
+        service.sendNotification("tenant-1", "workflow_event", payload);
+
+        ArgumentCaptor<String> detailsCaptor = ArgumentCaptor.forClass(String.class);
+        verify(auditLogService).record(anyString(), anyString(), anyString(), anyString(), anyString(), detailsCaptor.capture(), anyString());
+        String details = detailsCaptor.getValue();
+        assertTrue(details.contains("requestId=trace-123"));
+        assertTrue(details.contains("retryable=true"));
+        assertTrue(details.contains("sent=false"));
+        assertTrue(details.contains("eventScope=notification"));
+        assertTrue(details.contains("customerName=Acme"));
     }
 }

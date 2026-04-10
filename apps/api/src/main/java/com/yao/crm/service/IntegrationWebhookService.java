@@ -15,9 +15,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -141,6 +145,44 @@ public class IntegrationWebhookService {
     // Circuit breakers per provider
     private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
+    public static final class DispatchResult {
+        private final boolean success;
+        private final boolean retryable;
+        private final int statusCode;
+        private final int attempts;
+
+        private DispatchResult(boolean success, boolean retryable, int statusCode, int attempts) {
+            this.success = success;
+            this.retryable = retryable;
+            this.statusCode = statusCode;
+            this.attempts = attempts;
+        }
+
+        public static DispatchResult success(int attempts, int statusCode, boolean retryable) {
+            return new DispatchResult(true, retryable, statusCode, attempts);
+        }
+
+        public static DispatchResult failure(int attempts, int statusCode, boolean retryable) {
+            return new DispatchResult(false, retryable, statusCode, attempts);
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public boolean isRetryable() {
+            return retryable;
+        }
+
+        public int getStatusCode() {
+            return statusCode;
+        }
+
+        public int getAttempts() {
+            return attempts;
+        }
+    }
+
     public IntegrationWebhookService(NotificationChannelRepository notificationChannelRepository,
                                      ObjectMapper objectMapper,
                                      RestTemplateBuilder restTemplateBuilder,
@@ -184,24 +226,30 @@ public class IntegrationWebhookService {
     }
 
     public boolean sendMessage(String provider, String tenantId, String title, String content, String userId) {
+        return sendMessageDetailed(provider, tenantId, title, content, userId).isSuccess();
+    }
+
+    public DispatchResult sendMessageDetailed(String provider, String tenantId, String title, String content, String userId) {
         String normalized = normalizeProvider(provider);
         CircuitBreaker circuitBreaker = circuitBreakers.get(normalized);
 
         // Check circuit breaker before attempting any call
         if (circuitBreaker != null && !circuitBreaker.allowRequest()) {
             log.warn("Circuit breaker is open for provider={}, skipping webhook call", normalized);
-            return false;
+            return DispatchResult.failure(0, -1, false);
         }
 
         ProviderConfig config = resolveProviderConfig(normalized, tenantId);
         String text = safeText(title, "CRM Notification") + "\n" + safeText(content, "");
 
         boolean success = false;
+        DispatchResult dispatchResult = DispatchResult.failure(0, -1, false);
 
         if ("FEISHU".equals(normalized) && canUseFeishuApp(config)) {
             boolean appSent = sendFeishuByApp(config, text, userId);
             if (appSent) {
                 success = true;
+                dispatchResult = DispatchResult.success(1, 200, false);
             } else {
                 log.warn("Feishu app mode failed, fallback to webhook if available. tenantId={}", tenantId);
             }
@@ -211,7 +259,8 @@ public class IntegrationWebhookService {
         if (!success && !isBlank(webhookUrl)) {
             Map<String, Object> body = buildProviderMessageBody(normalized, title, content, config.secret);
             String finalUrl = buildSignedUrl(normalized, webhookUrl, config.secret);
-            success = postJson(finalUrl, body);
+            dispatchResult = postJson(finalUrl, body);
+            success = dispatchResult.isSuccess();
         } else if (isBlank(webhookUrl)) {
             log.warn("Webhook skipped because url is missing. provider={}, tenantId={}", normalized, tenantId);
         }
@@ -225,13 +274,17 @@ public class IntegrationWebhookService {
             }
         }
 
-        return success;
+        return dispatchResult;
     }
 
     public boolean sendEvent(String provider, String tenantId, String eventType, String payloadJson, String jobId) {
+        return sendEventDetailed(provider, tenantId, eventType, payloadJson, jobId).isSuccess();
+    }
+
+    public DispatchResult sendEventDetailed(String provider, String tenantId, String eventType, String payloadJson, String jobId) {
         String title = "CRM Notification Event: " + safeText(eventType, "unknown");
         String content = "jobId=" + safeText(jobId, "-") + "\n" + safeText(payloadJson, "{}");
-        return sendMessage(provider, tenantId, title, content, null);
+        return sendMessageDetailed(provider, tenantId, title, content, null);
     }
 
     private boolean sendFeishuByApp(ProviderConfig config, String text, String userId) {
@@ -390,7 +443,8 @@ public class IntegrationWebhookService {
         }
     }
 
-    private boolean postJson(String url, Map<String, Object> body) {
+    private DispatchResult postJson(String url, Map<String, Object> body) {
+        boolean retryable = false;
         for (int attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
             try {
                 HttpHeaders headers = new HttpHeaders();
@@ -399,16 +453,19 @@ public class IntegrationWebhookService {
                 ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
                 int status = response.getStatusCodeValue();
                 if (status >= 200 && status < 300) {
-                    return true;
+                    return DispatchResult.success(attempt, status, retryable);
                 }
-                boolean canRetry = isRetryableStatus(status) && attempt < WEBHOOK_MAX_RETRIES;
+                boolean currentRetryable = isRetryableStatus(status);
+                retryable = retryable || currentRetryable;
+                boolean canRetry = currentRetryable && attempt < WEBHOOK_MAX_RETRIES;
                 if (canRetry) {
                     backoff(attempt);
                     continue;
                 }
                 log.warn("Webhook dispatch returned non-2xx. status={}, url={}, attempt={}", status, maskedUrl(url), attempt);
-                return false;
+                return DispatchResult.failure(attempt, status, retryable);
             } catch (Exception ex) {
+                retryable = true;
                 boolean canRetry = attempt < WEBHOOK_MAX_RETRIES;
                 if (canRetry) {
                     log.warn("Webhook dispatch attempt failed, will retry. url={}, attempt={}, error={}", maskedUrl(url), attempt, ex.getMessage());
@@ -416,10 +473,10 @@ public class IntegrationWebhookService {
                     continue;
                 }
                 log.error("Webhook dispatch failed. url={}, attempt={}, error={}", maskedUrl(url), attempt, ex.getMessage());
-                return false;
+                return DispatchResult.failure(attempt, -1, true);
             }
         }
-        return false;
+        return DispatchResult.failure(WEBHOOK_MAX_RETRIES, -1, retryable);
     }
 
     private boolean isRetryableStatus(int status) {
@@ -656,6 +713,20 @@ public class IntegrationWebhookService {
 
     private String safeTrim(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String currentRequestId() {
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes instanceof ServletRequestAttributes) {
+            HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
+            if (request != null) {
+                Object trace = request.getAttribute(com.yao.crm.security.TraceIdInterceptor.TRACE_ID_ATTR);
+                if (trace != null && !isBlank(String.valueOf(trace))) {
+                    return String.valueOf(trace);
+                }
+            }
+        }
+        return "system";
     }
 
     private String firstNonBlank(String... values) {

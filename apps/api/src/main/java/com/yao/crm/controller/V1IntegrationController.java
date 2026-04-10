@@ -84,17 +84,23 @@ public class V1IntegrationController extends BaseApiController {
         String normalizedUser = normalizeUser(currentUser(request));
         String title = resolveTitle(providerCode, safePayload);
         String content = resolveContent(safePayload);
-        auditLogService.record(normalizedUser, currentRole(request), "WEBHOOK", providerCode, null, String.valueOf(safePayload), tenantId);
-        boolean dispatched = integrationWebhookService.sendMessage(
+        IntegrationWebhookService.DispatchResult dispatchResult = integrationWebhookService.sendMessageDetailed(
                 providerCode,
                 tenantId,
                 title,
                 content,
                 normalizedUser
         );
+        Map<String, Object> auditDetails = new LinkedHashMap<String, Object>();
+        auditDetails.put("requestId", traceId(request));
+        auditDetails.put("retryable", dispatchResult.isRetryable());
+        auditDetails.put("dispatched", dispatchResult.isSuccess());
+        auditDetails.put("payload", String.valueOf(safePayload));
+        auditLogService.record(normalizedUser, currentRole(request), "WEBHOOK", providerCode, null, String.valueOf(auditDetails), tenantId);
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("accepted", true);
-        body.put("dispatched", dispatched);
+        body.put("dispatched", dispatchResult.isSuccess());
+        body.put("retryable", dispatchResult.isRetryable());
         body.put("provider", providerCode);
         body.put("tenantId", tenantId);
         return ResponseEntity.accepted().body(successWithFields(request, "webhook_accepted", body));

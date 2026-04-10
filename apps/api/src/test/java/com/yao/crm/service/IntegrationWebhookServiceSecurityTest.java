@@ -8,10 +8,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
@@ -118,6 +126,30 @@ class IntegrationWebhookServiceSecurityTest {
 
         assertFalse(success);
         verify(notificationChannelRepository).findTopByTenantAndChannelType(tenantId, "WECHAT_WORK");
+    }
+
+    @Test
+    void sendMessageDetailedShouldRetryRetryableResponsesAndExposeRetryableResult() {
+        IntegrationWebhookService service = newService("");
+        String tenantId = "tenant-retryable";
+        NotificationChannel channel = enabledChannel("{\"webhookUrl\":\"https://hooks.example.com/wh\"}");
+        when(notificationChannelRepository.findTopByTenantAndChannelType(tenantId, "WECHAT_WORK"))
+                .thenReturn(Collections.singletonList(channel));
+
+        RestTemplate restTemplate = org.mockito.Mockito.mock(RestTemplate.class);
+        ReflectionTestUtils.setField(service, "restTemplate", restTemplate);
+
+        ResponseEntity<String> retryableResponse = new ResponseEntity<String>("temporary", HttpStatus.INTERNAL_SERVER_ERROR);
+        ResponseEntity<String> successResponse = new ResponseEntity<String>("ok", HttpStatus.OK);
+        when(restTemplate.postForEntity(any(String.class), any(HttpEntity.class), org.mockito.ArgumentMatchers.eq(String.class)))
+                .thenReturn(retryableResponse, successResponse);
+
+        IntegrationWebhookService.DispatchResult result = service.sendMessageDetailed("WECOM", tenantId, "title", "content", "u3");
+
+        assertTrue(result.isSuccess());
+        assertTrue(result.isRetryable());
+        assertEquals(2, result.getAttempts());
+        verify(restTemplate, times(2)).postForEntity(any(String.class), any(HttpEntity.class), org.mockito.ArgumentMatchers.eq(String.class));
     }
 
     private IntegrationWebhookService newService(String allowedHostSuffixes) {
