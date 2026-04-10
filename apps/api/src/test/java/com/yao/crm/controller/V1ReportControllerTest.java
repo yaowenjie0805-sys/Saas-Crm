@@ -115,6 +115,20 @@ class V1ReportControllerTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void retryExportShouldReturnConflictWhenServiceThrowsIllegalState() {
+        MockHttpServletRequest request = authedRequest("ADMIN");
+        when(reportExportJobService.retryByTenant(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenThrow(new IllegalStateException("export_job_not_retryable"));
+
+        ResponseEntity<?> response = controller.retryExport(request, "job_1");
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("export_job_not_retryable", body.get("code"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void exportStatusShouldReturnNotFoundWhenJobMissing() {
         MockHttpServletRequest request = authedRequest("ADMIN");
         when(reportExportJobService.statusByTenant(anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean()))

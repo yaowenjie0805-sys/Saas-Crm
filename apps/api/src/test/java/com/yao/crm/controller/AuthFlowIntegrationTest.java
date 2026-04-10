@@ -573,6 +573,16 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray());
 
+        boolean sourceDone = waitUntil(() -> {
+            String statusBody = mockMvc.perform(get("/api/reports/export-jobs/" + jobId)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String statusText = objectMapper.readTree(statusBody).get("status").asText();
+            return "DONE".equals(statusText);
+        });
+        org.junit.jupiter.api.Assertions.assertTrue(sourceDone, "report export source job should reach DONE before retry");
+
         String retried = mockMvc.perform(post("/api/reports/export-jobs/" + jobId + "/retry")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isAccepted())
