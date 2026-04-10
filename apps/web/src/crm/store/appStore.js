@@ -3,7 +3,7 @@ import { FILTERS_KEY, LANG_KEY } from '../shared'
 
 const readStoredAuth = () => {
   try {
-    const parsed = JSON.parse(localStorage.getItem('crm_auth') || 'null')
+    const parsed = JSON.parse(safeGetStorage('crm_auth') || 'null')
     if (!parsed || typeof parsed !== 'object') return null
     if (!parsed.sessionActive) return null
     return { ...parsed, token: 'COOKIE_SESSION' }
@@ -14,7 +14,7 @@ const readStoredAuth = () => {
 
 const readStoredFilters = () => {
   try {
-    return JSON.parse(localStorage.getItem(FILTERS_KEY) || '{}')
+    return JSON.parse(safeGetStorage(FILTERS_KEY) || '{}')
   } catch {
     return {}
   }
@@ -28,6 +28,15 @@ const createLoadingState = () => ({
 })
 
 const nowTs = () => Date.now()
+
+const safeGetStorage = (key) => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return ''
+    return localStorage.getItem(key) || ''
+  } catch {
+    return ''
+  }
+}
 
 const setSafeStorage = (key, value) => {
   try {
@@ -50,7 +59,7 @@ const createDomainSetter = (set, sliceName) => (nextValue) =>
 
 export const useAppStore = create((set, get) => ({
   auth: {
-    lang: localStorage.getItem(LANG_KEY) || 'en',
+    lang: safeGetStorage(LANG_KEY) || 'en',
     session: readStoredAuth(),
     data: {
       baseModel: {},
@@ -126,6 +135,17 @@ export const useAppStore = create((set, get) => ({
   setLeadImportDomainState: createDomainSetter(set, 'leadImportDomain'),
   setPerfDomainState: createDomainSetter(set, 'perfDomain'),
   setSearchDomainState: createDomainSetter(set, 'searchDomain'),
+  resetDomainSlices: () =>
+    set(() => ({
+      customerDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      commerceDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      governanceDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      approvalDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      reportingDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      leadImportDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      perfDomain: { data: {}, forms: {}, query: {}, ui: {} },
+      searchDomain: { data: {}, forms: {}, query: {}, ui: {} },
+    })),
   initSliceField: (sliceName, section, field, initialValue) => {
     set((state) => {
       const slice = state[sliceName] || {}
@@ -175,16 +195,36 @@ export const useAppStore = create((set, get) => ({
       },
     }))
   },
+  setLoadingStateIfCurrent: (sliceName, patch, expectedRequestId = '') => {
+    set((state) => {
+      const current = state.loading?.[sliceName] || createLoadingState()
+      const expected = String(expectedRequestId || '')
+      const currentRequestId = String(current.requestId || '')
+      if (expected && currentRequestId && currentRequestId !== expected) {
+        return state
+      }
+      return {
+        loading: {
+          ...state.loading,
+          [sliceName]: {
+            ...current,
+            ...(patch || {}),
+            lastUpdatedAt: nowTs(),
+          },
+        },
+      }
+    })
+  },
   loadStarted: (sliceName, requestId = '') =>
     get().setLoadingState(sliceName, { status: 'loading', error: '', requestId }),
   loadSucceeded: (sliceName, requestId = '') =>
-    get().setLoadingState(sliceName, { status: 'success', error: '', requestId }),
+    get().setLoadingStateIfCurrent(sliceName, { status: 'success', error: '', requestId }, requestId),
   loadFailed: (sliceName, error = '', requestId = '') =>
-    get().setLoadingState(sliceName, { status: 'error', error: String(error || ''), requestId }),
+    get().setLoadingStateIfCurrent(sliceName, { status: 'error', error: String(error || ''), requestId }, requestId),
   resetLoading: (sliceName) =>
     get().setLoadingState(sliceName, { status: 'idle', error: '', requestId: '' }),
   readPageSize: (key, fallback = 8) => {
-    const raw = Number(localStorage.getItem(key) || fallback)
+    const raw = Number(safeGetStorage(key) || fallback)
     if (!Number.isFinite(raw)) return fallback
     return Math.min(Math.max(Math.floor(raw), 5), 50)
   },

@@ -1,0 +1,29 @@
+name: Job Timing Summary
+description: Append elapsed job timing to GITHUB_STEP_SUMMARY
+
+inputs:
+  job_label:
+    description: Job label shown in summary heading
+    required: true
+  start_env_var:
+    description: Environment variable name that stores UTC ISO start timestamp
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Write Job Timing Summary
+      shell: pwsh
+      run: |
+        $label = "${{ inputs.job_label }}"
+        $startEnvVar = "${{ inputs.start_env_var }}"
+        $startValue = [System.Environment]::GetEnvironmentVariable($startEnvVar)
+        if ([string]::IsNullOrWhiteSpace($startValue)) {
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### $label Job Timing`n`nResult: unknown (missing start timestamp)."
+          exit 0
+        }
+        $start = [datetime]::Parse($startValue).ToUniversalTime()
+        $elapsedMinutes = [math]::Round(((Get-Date).ToUniversalTime() - $start).TotalMinutes, 2)
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### $label Job Timing"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- elapsedMinutes: $elapsedMinutes"

@@ -7,6 +7,6 @@ export function useRuntimeAuthBranch({
   return {
     authShell,
     showBootstrapping: sessionBootstrapping && !hasAuthToken && !isAuthRoute,
-    showAuthShell: !hasAuthToken || isAuthRoute,
+    showAuthShell: !hasAuthToken,
   }
 }

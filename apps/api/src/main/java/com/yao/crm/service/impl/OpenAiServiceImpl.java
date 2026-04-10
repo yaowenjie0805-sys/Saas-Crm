@@ -5,19 +5,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.config.AiConfig;
 import com.yao.crm.service.AiService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,6 +43,8 @@ public class OpenAiServiceImpl implements AiService {
     @Autowired
     public OpenAiServiceImpl(
             AiConfig aiConfig,
+            ObjectMapper objectMapper,
+            RestTemplateBuilder restTemplateBuilder,
             @Value("${ai.openai.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${ai.openai.read-timeout-ms:15000}") int readTimeoutMs,
             @Value("${ai.openai.max-retries:2}") int maxRetries,
@@ -49,8 +52,11 @@ public class OpenAiServiceImpl implements AiService {
     ) {
         this(
                 aiConfig,
-                createRestTemplate(connectTimeoutMs, readTimeoutMs),
-                new ObjectMapper(),
+                restTemplateBuilder
+                        .setConnectTimeout(Duration.ofMillis(Math.max(1, connectTimeoutMs)))
+                        .setReadTimeout(Duration.ofMillis(Math.max(1, readTimeoutMs)))
+                        .build(),
+                objectMapper,
                 maxRetries,
                 retryBackoffMs,
                 Thread::sleep
@@ -73,12 +79,7 @@ public class OpenAiServiceImpl implements AiService {
         this.retrySleeper = retrySleeper;
     }
 
-    private static RestTemplate createRestTemplate(int connectTimeoutMs, int readTimeoutMs) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.max(1, connectTimeoutMs));
-        requestFactory.setReadTimeout(Math.max(1, readTimeoutMs));
-        return new RestTemplate(requestFactory);
-    }
+    /** RestTemplate now created via RestTemplateBuilder in constructor */
 
     @Override
     public String generateText(String prompt) {
@@ -87,13 +88,15 @@ public class OpenAiServiceImpl implements AiService {
 
     @Override
     public String generateText(String prompt, Map<String, Object> options) {
-        if (aiConfig.getOpenai().getApiKey() == null || aiConfig.getOpenai().getApiKey().isEmpty()) {
+        Map<String, Object> normalizedOptions = options == null ? Map.of() : options;
+        String apiKey = resolveApiKey(normalizedOptions);
+        if (apiKey.isEmpty()) {
             log.warn("OpenAI API key not configured");
             return OPENAI_NOT_CONFIGURED_MESSAGE;
         }
 
-        String url = aiConfig.getOpenai().getBaseUrl() + "/v1/chat/completions";
-        HttpEntity<Map<String, Object>> entity = buildRequestEntity(prompt, options);
+        String url = resolveEndpointUrl(normalizedOptions);
+        HttpEntity<Map<String, Object>> entity = buildRequestEntity(prompt, normalizedOptions, apiKey);
         int totalAttempts = maxRetries + 1;
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++) {
@@ -133,18 +136,40 @@ public class OpenAiServiceImpl implements AiService {
         return OPENAI_FAILURE_MESSAGE;
     }
 
-    private HttpEntity<Map<String, Object>> buildRequestEntity(String prompt, Map<String, Object> options) {
-        Map<String, Object> normalizedOptions = options == null ? Map.of() : options;
-
+    private HttpEntity<Map<String, Object>> buildRequestEntity(String prompt, Map<String, Object> normalizedOptions, String apiKey) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "Bearer " + aiConfig.getOpenai().getApiKey());
+        headers.set("Authorization", "Bearer " + apiKey);
 
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", aiConfig.getOpenai().getModel());
+        String overrideModel = normalizedOptions.get("model") == null ? "" : String.valueOf(normalizedOptions.get("model")).trim();
+        requestBody.put("model", overrideModel.isEmpty() ? aiConfig.getOpenai().getModel() : overrideModel);
         requestBody.put("messages", new Object[]{Map.of("role", "user", "content", prompt)});
         requestBody.put("temperature", normalizedOptions.getOrDefault("temperature", 0.7));
         return new HttpEntity<>(requestBody, headers);
+    }
+
+    private String resolveEndpointUrl(Map<String, Object> options) {
+        String configuredBase = aiConfig.getOpenai().getBaseUrl();
+        String overrideBase = options.get("base_url") == null ? "" : String.valueOf(options.get("base_url")).trim();
+        String base = overrideBase.isEmpty() ? configuredBase : overrideBase;
+        String normalizedBase = base == null ? "" : base.trim();
+        if (normalizedBase.endsWith("/chat/completions")) {
+            return normalizedBase;
+        }
+        if (normalizedBase.endsWith("/v1")) {
+            return normalizedBase + "/chat/completions";
+        }
+        return normalizedBase + "/v1/chat/completions";
+    }
+
+    private String resolveApiKey(Map<String, Object> options) {
+        String overrideApiKey = options.get("api_key") == null ? "" : String.valueOf(options.get("api_key")).trim();
+        if (!overrideApiKey.isEmpty()) {
+            return overrideApiKey;
+        }
+        String configured = aiConfig.getOpenai().getApiKey();
+        return configured == null ? "" : configured.trim();
     }
 
     private boolean isRetryable(HttpStatus status) {
@@ -213,4 +238,3 @@ public class OpenAiServiceImpl implements AiService {
         void sleep(long millis) throws InterruptedException;
     }
 }
-

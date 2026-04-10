@@ -1,53 +1,52 @@
-# 文档索引（中文主） | Docs Index
+﻿# 文档索引 | Docs Index
 
-本目录用于存放项目运维、发布、质量与治理文档。
-This directory stores operations, release, quality, and governance docs.
+本目录用于存放项目架构、开发规范、运维流程与发布策略文档。
 
-## 快速入口 | Quick Links
+## 快速入口
 
-- 项目根文档 / Root README: `README.md`
-- 项目结构 / Project structure: `docs/PROJECT_STRUCTURE.md`
-- 全景调用图 / Project flow map: `docs/PROJECT_FLOW_MAP.md`
-- 开发约定 / Development conventions: `docs/DEVELOPMENT_CONVENTIONS.md`
-- 页面域导出清单 / Pages domain exports: `docs/PAGES_DOMAIN_EXPORTS.md`
-- 命令总览 / Command reference: `docs/operations/command-reference.md`
-- 环境矩阵 / Environment matrix: `docs/operations/environment-matrix.md`
+- [../README.md](../README.md)：项目总览（中文）
+- [../README.en.md](../README.en.md)：Project overview (English)
+- [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)：项目结构
+- [PROJECT_FLOW_MAP.md](./PROJECT_FLOW_MAP.md)：全局流程地图
+- [DEVELOPMENT_CONVENTIONS.md](./DEVELOPMENT_CONVENTIONS.md)：开发规范
+- [PROJECT_TROUBLESHOOTING.md](./PROJECT_TROUBLESHOOTING.md)：故障排查
 
-## 运维文档 | Operations
+## 架构与能力
 
-### 发布与环境 | Release & Environment
-- `docs/operations/release-strategy.md`
-- `docs/operations/release-window-policy.md`
-- `docs/operations/staging-deploy-runbook.md`
-- `docs/operations/release-rollback-runbook.md`
-- `docs/operations/environment-matrix.md`
+- [ARCH_RUNTIME_DEPENDENCY_MAP.md](./ARCH_RUNTIME_DEPENDENCY_MAP.md)
+- [MODULE_CAPABILITY_MATRIX.md](./MODULE_CAPABILITY_MATRIX.md)
+- [API_ENDPOINT_CATALOG.md](./API_ENDPOINT_CATALOG.md)
+- [PAGES_DOMAIN_EXPORTS.md](./PAGES_DOMAIN_EXPORTS.md)
 
-### 可靠性与性能 | Reliability & Performance
-- `docs/operations/sre-slo-baseline.md`
-- `docs/operations/error-budget-policy.md`
-- `docs/operations/perf-baseline.md`
-- `docs/operations/perf-bundle-budget.json`
+## 运维与发布
 
-### 安全与审计 | Security & Audit
-- `docs/operations/audit-retention-policy.md`
-- `docs/operations/backup-restore-runbook.md`
-- `docs/operations/oncall-escalation-runbook.md`
+- [operations/environment-matrix.md](./operations/environment-matrix.md)
+- [operations/release-strategy.md](./operations/release-strategy.md)
+- [operations/release-window-policy.md](./operations/release-window-policy.md)
+- [operations/staging-deploy-runbook.md](./operations/staging-deploy-runbook.md)
+- [operations/release-rollback-runbook.md](./operations/release-rollback-runbook.md)
 
-### 模板与清单 | Templates & Checklists
-- `docs/operations/change-control-checklist.md`
-- `docs/operations/change-request-template.md`
-- `docs/operations/incident-postmortem-template.md`
-- `docs/operations/weekly-oncall-alert-review-template.md`
+## 可靠性与安全
 
-## 新增导航 | Additional Navigation
+- [operations/sre-slo-baseline.md](./operations/sre-slo-baseline.md)
+- [operations/error-budget-policy.md](./operations/error-budget-policy.md)
+- [operations/perf-baseline.md](./operations/perf-baseline.md)
+- [operations/audit-retention-policy.md](./operations/audit-retention-policy.md)
+- [operations/backup-restore-runbook.md](./operations/backup-restore-runbook.md)
+- [operations/oncall-escalation-runbook.md](./operations/oncall-escalation-runbook.md)
 
-- `docs/DEVELOPMENT_HOTSPOTS.md`：二开热点图 / hotspots for extension work.
-- `docs/PROJECT_TROUBLESHOOTING.md`：常见故障排查 / troubleshooting guide.
-- `docs/MODULE_CAPABILITY_MATRIX.md`：模块能力矩阵 / capability matrix.
-- `docs/API_ENDPOINT_CATALOG.md`：接口目录 / API endpoint catalog.
-- `docs/postman/crm-api.postman_collection.json`：联调集合 / Postman collection.
-- `docs/postman/crm-local.postman_environment.json`：本地环境 / Postman environment.
+## 模板与清单
 
-## 历史归档 | Archive
+- [operations/change-control-checklist.md](./operations/change-control-checklist.md)
+- [operations/change-request-template.md](./operations/change-request-template.md)
+- [operations/incident-postmortem-template.md](./operations/incident-postmortem-template.md)
+- [operations/weekly-oncall-alert-review-template.md](./operations/weekly-oncall-alert-review-template.md)
+
+## API 调试资源
+
+- [postman/crm-api.postman_collection.json](./postman/crm-api.postman_collection.json)
+- [postman/crm-local.postman_environment.json](./postman/crm-local.postman_environment.json)
+
+## 历史归档
 
 - `docs/operations/archive/`

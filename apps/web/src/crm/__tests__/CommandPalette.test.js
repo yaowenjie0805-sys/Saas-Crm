@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampSelectedIndex, flattenSearchResults } from '../components/search/CommandPalette'
+import { buildSearchHeaders, clampSelectedIndex, flattenSearchResults } from '../components/search/searchUtils'
 
 describe('CommandPalette helpers', () => {
   it('flattens only array buckets and preserves result type', () => {
@@ -19,5 +19,11 @@ describe('CommandPalette helpers', () => {
     expect(clampSelectedIndex(-1, 2)).toBe(0)
     expect(clampSelectedIndex(3, 2)).toBe(1)
     expect(clampSelectedIndex(5, 0)).toBe(0)
+  })
+
+  it('builds tenant header only when tenant exists', () => {
+    expect(buildSearchHeaders('tenant_a')).toEqual({ 'X-Tenant-Id': 'tenant_a' })
+    expect(buildSearchHeaders('   ')).toEqual({})
+    expect(buildSearchHeaders('')).toEqual({})
   })
 })

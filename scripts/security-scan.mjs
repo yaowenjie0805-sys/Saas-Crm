@@ -80,12 +80,13 @@ function isMavenUnavailable(scanResult) {
 }
 
 function runJavaDependencyScan({ enabled, required, timeoutMs }) {
+  const failBuildOnCvss = envPositiveInt('SECURITY_SCAN_JAVA_FAIL_ON_CVSS', 8)
   const args = [
     '-f',
     'apps/api/pom.xml',
     'org.owasp:dependency-check-maven:check',
     '-Dformat=JSON',
-    '-DfailBuildOnCVSS=11',
+    `-DfailBuildOnCVSS=${failBuildOnCvss}`,
   ]
   const command = `mvn ${args.join(' ')}`
 
@@ -98,6 +99,7 @@ function runJavaDependencyScan({ enabled, required, timeoutMs }) {
       status: required ? 'disabled_required' : 'disabled',
       pass: !required,
       command,
+      failBuildOnCvss,
       timeoutMs,
       exitCode: null,
       timedOut: false,
@@ -168,7 +170,6 @@ function scanSecrets() {
   ]
   const files = gitTrackedFiles()
   for (const rel of files) {
-    if (rel.startsWith('docs/')) continue
     if (rel.startsWith('test-results/')) continue
     if (rel.includes('.boss/')) continue
     const abs = path.join(root, rel)
@@ -189,11 +190,7 @@ function scanSecrets() {
 }
 
 function parseAudit(auditRes) {
-  const fallback = {
-    metadata: {
-      vulnerabilities: { low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
-    },
-  }
+  const fallback = null
   const text = (auditRes.stdout || '').trim()
   if (!text) return fallback
   try {
@@ -248,9 +245,10 @@ function main() {
 
   const auditRes = runNpm(['audit', '--omit=dev', '--json'])
   const audit = parseAudit(auditRes)
-  const high = Number(audit?.metadata?.vulnerabilities?.high || 0)
-  const critical = Number(audit?.metadata?.vulnerabilities?.critical || 0)
-  const auditPass = high === 0 && critical === 0
+  const auditParseOk = !!audit
+  const high = Number(audit?.metadata?.vulnerabilities?.high ?? -1)
+  const critical = Number(audit?.metadata?.vulnerabilities?.critical ?? -1)
+  const auditPass = auditRes.ok && auditParseOk && high === 0 && critical === 0
 
   const secretFindings = scanSecrets()
   const secretsPass = secretFindings.length === 0
@@ -269,8 +267,12 @@ function main() {
     checks: {
       npmAudit: {
         pass: auditPass,
+        commandOk: auditRes.ok,
+        parseOk: auditParseOk,
         high,
         critical,
+        stderrPreview: outputPreview(auditRes.stderr),
+        stdoutPreview: outputPreview(auditRes.stdout),
       },
       secretScan: {
         pass: secretsPass,
@@ -287,7 +289,7 @@ function main() {
   }
   writeReport(report)
   const summary = [
-    `npmAudit(high=${high},critical=${critical})`,
+    `npmAudit(ok=${auditRes.ok},parse=${auditParseOk},high=${high},critical=${critical})`,
     `secrets(findings=${secretFindings.length})`,
     `sbom(${summarizeStatus(sbomPass, sbom.fallback)})`,
     `javaDependencyScan(${javaDependencyScan.status})`,

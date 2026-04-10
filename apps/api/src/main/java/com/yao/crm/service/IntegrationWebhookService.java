@@ -8,6 +8,7 @@ import com.yao.crm.repository.NotificationChannelRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,18 +18,22 @@ import org.springframework.web.client.RestTemplate;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.LockSupport;
 
 @Service
 public class IntegrationWebhookService {
@@ -41,6 +46,10 @@ public class IntegrationWebhookService {
     private static final int FAILURE_THRESHOLD = 5;
     private static final long COOLDOWN_MS = 60_000; // 1 minute
     private static final int HALF_OPEN_MAX_CALLS = 3;
+    private static final int HTTP_CONNECT_TIMEOUT_MS = 3_000;
+    private static final int HTTP_READ_TIMEOUT_MS = 5_000;
+    private static final int WEBHOOK_MAX_RETRIES = 3;
+    private static final long WEBHOOK_RETRY_BACKOFF_MS = 300L;
 
     // Circuit state enum
     private enum CircuitState { CLOSED, OPEN, HALF_OPEN }
@@ -127,12 +136,14 @@ public class IntegrationWebhookService {
     private final String feishuReceiveId;
     private final String feishuReceiveIdType;
     private final String feishuBaseUrl;
+    private final Set<String> allowedWebhookHostSuffixes;
 
     // Circuit breakers per provider
     private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
     public IntegrationWebhookService(NotificationChannelRepository notificationChannelRepository,
                                      ObjectMapper objectMapper,
+                                     RestTemplateBuilder restTemplateBuilder,
                                      @Value("${integration.wecom.webhook-url:}") String wecomWebhookUrl,
                                      @Value("${integration.wecom.secret:}") String wecomSecret,
                                      @Value("${integration.dingtalk.webhook-url:}") String dingTalkWebhookUrl,
@@ -143,23 +154,28 @@ public class IntegrationWebhookService {
                                      @Value("${integration.feishu.app-secret:}") String feishuAppSecret,
                                      @Value("${integration.feishu.receive-id:}") String feishuReceiveId,
                                      @Value("${integration.feishu.receive-id-type:chat_id}") String feishuReceiveIdType,
-                                     @Value("${integration.feishu.base-url:https://open.feishu.cn}") String feishuBaseUrl) {
+                                     @Value("${integration.feishu.base-url:https://open.feishu.cn}") String feishuBaseUrl,
+                                     @Value("${integration.webhook.allowed-host-suffixes:}") String allowedWebhookHostSuffixes) {
         this.notificationChannelRepository = notificationChannelRepository;
         this.objectMapper = objectMapper;
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = restTemplateBuilder
+                .setConnectTimeout(Duration.ofMillis(HTTP_CONNECT_TIMEOUT_MS))
+                .setReadTimeout(Duration.ofMillis(HTTP_READ_TIMEOUT_MS))
+                .build();
+        this.allowedWebhookHostSuffixes = parseAllowedHostSuffixes(allowedWebhookHostSuffixes);
 
-        this.wecomWebhookUrl = safeTrim(wecomWebhookUrl);
+        this.wecomWebhookUrl = sanitizeWebhookUrl(wecomWebhookUrl);
         this.wecomSecret = safeTrim(wecomSecret);
-        this.dingTalkWebhookUrl = safeTrim(dingTalkWebhookUrl);
+        this.dingTalkWebhookUrl = sanitizeWebhookUrl(dingTalkWebhookUrl);
         this.dingTalkSecret = safeTrim(dingTalkSecret);
 
-        this.feishuWebhookUrl = safeTrim(feishuWebhookUrl);
+        this.feishuWebhookUrl = sanitizeWebhookUrl(feishuWebhookUrl);
         this.feishuSecret = safeTrim(feishuSecret);
         this.feishuAppId = safeTrim(feishuAppId);
         this.feishuAppSecret = safeTrim(feishuAppSecret);
         this.feishuReceiveId = safeTrim(feishuReceiveId);
         this.feishuReceiveIdType = normalizeReceiveIdType(feishuReceiveIdType);
-        this.feishuBaseUrl = safeTrim(feishuBaseUrl);
+        this.feishuBaseUrl = sanitizeBaseUrl(feishuBaseUrl);
 
         // Initialize circuit breakers for each provider
         circuitBreakers.put("WECOM", new CircuitBreaker());
@@ -191,11 +207,12 @@ public class IntegrationWebhookService {
             }
         }
 
-        if (!success && !isBlank(config.webhookUrl)) {
+        String webhookUrl = sanitizeWebhookUrl(config.webhookUrl);
+        if (!success && !isBlank(webhookUrl)) {
             Map<String, Object> body = buildProviderMessageBody(normalized, title, content, config.secret);
-            String finalUrl = buildSignedUrl(normalized, config.webhookUrl, config.secret);
+            String finalUrl = buildSignedUrl(normalized, webhookUrl, config.secret);
             success = postJson(finalUrl, body);
-        } else if (isBlank(config.webhookUrl)) {
+        } else if (isBlank(webhookUrl)) {
             log.warn("Webhook skipped because url is missing. provider={}, tenantId={}", normalized, tenantId);
         }
 
@@ -374,20 +391,47 @@ public class IntegrationWebhookService {
     }
 
     private boolean postJson(String url, Map<String, Object> body) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<Map<String, Object>>(body, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-            int status = response.getStatusCodeValue();
-            if (status >= 200 && status < 300) {
-                return true;
+        for (int attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Map<String, Object>> entity = new HttpEntity<Map<String, Object>>(body, headers);
+                ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+                int status = response.getStatusCodeValue();
+                if (status >= 200 && status < 300) {
+                    return true;
+                }
+                boolean canRetry = isRetryableStatus(status) && attempt < WEBHOOK_MAX_RETRIES;
+                if (canRetry) {
+                    backoff(attempt);
+                    continue;
+                }
+                log.warn("Webhook dispatch returned non-2xx. status={}, url={}, attempt={}", status, maskedUrl(url), attempt);
+                return false;
+            } catch (Exception ex) {
+                boolean canRetry = attempt < WEBHOOK_MAX_RETRIES;
+                if (canRetry) {
+                    log.warn("Webhook dispatch attempt failed, will retry. url={}, attempt={}, error={}", maskedUrl(url), attempt, ex.getMessage());
+                    backoff(attempt);
+                    continue;
+                }
+                log.error("Webhook dispatch failed. url={}, attempt={}, error={}", maskedUrl(url), attempt, ex.getMessage());
+                return false;
             }
-            log.warn("Webhook dispatch returned non-2xx. status={}, url={}", status, maskedUrl(url));
-            return false;
-        } catch (Exception ex) {
-            log.error("Webhook dispatch failed. url={}, error={}", maskedUrl(url), ex.getMessage());
-            return false;
+        }
+        return false;
+    }
+
+    private boolean isRetryableStatus(int status) {
+        return status == 429 || status >= 500;
+    }
+
+    private void backoff(int attempt) {
+        long delayMs = WEBHOOK_RETRY_BACKOFF_MS * attempt;
+        LockSupport.parkNanos(java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(delayMs));
+        if (Thread.currentThread().isInterrupted()) {
+            log.warn("Webhook retry backoff interrupted");
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -430,9 +474,131 @@ public class IntegrationWebhookService {
             String receiveId = readString(cfg, "receiveId", "receive_id", "chatId", "chat_id");
             String receiveIdType = readString(cfg, "receiveIdType", "receive_id_type");
             String baseUrl = readString(cfg, "baseUrl", "base_url");
-            return new ProviderConfig(url, secret, appId, appSecret, receiveId, receiveIdType, baseUrl);
+            return new ProviderConfig(
+                    sanitizeWebhookUrl(url),
+                    secret,
+                    appId,
+                    appSecret,
+                    receiveId,
+                    receiveIdType,
+                    sanitizeBaseUrl(baseUrl)
+            );
         }
         return ProviderConfig.empty();
+    }
+
+    String sanitizeWebhookUrl(String rawUrl) {
+        return sanitizeOutboundUrl(rawUrl, "webhook-url");
+    }
+
+    String sanitizeBaseUrl(String rawUrl) {
+        return sanitizeOutboundUrl(rawUrl, "base-url");
+    }
+
+    private String sanitizeOutboundUrl(String rawUrl, String fieldName) {
+        String value = safeTrim(rawUrl);
+        if (isBlank(value)) {
+            return "";
+        }
+        try {
+            URI uri = URI.create(value);
+            String scheme = safeTrim(uri.getScheme()).toLowerCase(Locale.ROOT);
+            String host = safeTrim(uri.getHost()).toLowerCase(Locale.ROOT);
+            if (!"https".equals(scheme)) {
+                log.warn("Blocked outbound {} because non-https scheme was provided: {}", fieldName, maskedUrl(value));
+                return "";
+            }
+            if (isBlank(host) || isLocalOrPrivateHost(host)) {
+                log.warn("Blocked outbound {} because host is local/private: {}", fieldName, maskedUrl(value));
+                return "";
+            }
+            if (!isAllowedHostSuffix(host)) {
+                log.warn("Blocked outbound {} because host is not in allowlist: {}", fieldName, maskedUrl(value));
+                return "";
+            }
+            return value;
+        } catch (Exception ex) {
+            log.warn("Blocked outbound {} because URL is invalid: {}", fieldName, maskedUrl(value));
+            return "";
+        }
+    }
+
+    private Set<String> parseAllowedHostSuffixes(String raw) {
+        String value = safeTrim(raw);
+        if (isBlank(value)) {
+            return Collections.emptySet();
+        }
+        Set<String> out = new HashSet<String>();
+        String[] tokens = value.split("[,;\\s]+");
+        for (String token : tokens) {
+            String suffix = safeTrim(token).toLowerCase(Locale.ROOT);
+            if (!suffix.isEmpty()) {
+                out.add(suffix);
+            }
+        }
+        return out;
+    }
+
+    private boolean isAllowedHostSuffix(String host) {
+        if (allowedWebhookHostSuffixes.isEmpty()) {
+            return true;
+        }
+        for (String suffix : allowedWebhookHostSuffixes) {
+            if (host.equals(suffix) || host.endsWith("." + suffix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isLocalOrPrivateHost(String host) {
+        if ("localhost".equals(host)) {
+            return true;
+        }
+        if (isIpv6Loopback(host)) {
+            return true;
+        }
+        if (!host.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
+            return false;
+        }
+        String[] parts = host.split("\\.");
+        if (parts.length != 4) {
+            return true;
+        }
+        int a = parseInt(parts[0]);
+        int b = parseInt(parts[1]);
+        if (a < 0 || b < 0) {
+            return true;
+        }
+        if (a == 10 || a == 127 || a == 0) {
+            return true;
+        }
+        if (a == 169 && b == 254) {
+            return true;
+        }
+        if (a == 172 && b >= 16 && b <= 31) {
+            return true;
+        }
+        if (a == 192 && b == 168) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isIpv6Loopback(String host) {
+        String normalized = safeTrim(host);
+        if (normalized.startsWith("[") && normalized.endsWith("]") && normalized.length() > 2) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+        return "::1".equals(normalized) || "0:0:0:0:0:0:0:1".equals(normalized);
+    }
+
+    private int parseInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception ex) {
+            return -1;
+        }
     }
 
     private Map<String, Object> parseConfig(String json) {

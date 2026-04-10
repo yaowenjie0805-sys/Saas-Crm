@@ -10,22 +10,27 @@ const releaseDir = path.join(root, 'logs', 'release')
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 const reportFile = path.join(outDir, `staging-deploy-${stamp}.json`)
 const latestFile = path.join(outDir, 'staging-deploy-latest.json')
+const DEFAULT_COMMAND_TIMEOUT_MS = Number(process.env.STAGING_COMMAND_TIMEOUT_MS || 20 * 60 * 1000)
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
 
 function run(command, args = [], options = {}) {
+  const timeoutMs = Number(options.timeoutMs || DEFAULT_COMMAND_TIMEOUT_MS)
   const result = spawnSync(command, args, {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, ...(options.env || {}) },
+    timeout: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined,
   })
+  const timedOut = Boolean(result.error && String(result.error.code || '').toUpperCase() === 'ETIMEDOUT')
   return {
     ok: result.status === 0,
     status: result.status,
     stdout: result.stdout || '',
     stderr: result.stderr || '',
+    timedOut,
   }
 }
 

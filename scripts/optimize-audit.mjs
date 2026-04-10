@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs'
+import fs from 'node:fs'
 import path from 'node:path'
 
 const repoRoot = process.cwd()
@@ -8,7 +8,7 @@ const reportDir = path.join(repoRoot, 'logs', 'optimization')
 const reportPath = path.join(reportDir, `auto-audit-${stamp}.md`)
 
 const rootNoiseDirs = ['.idea', '.vscode', '.m2repo', '.qoder', '.codeartsdoer']
-const docsMojibakeTokens = ['?', '閺', '鈧', '鍞', '妫', '鐤']
+const docsMojibakeTokens = ['閺', '鈧', '鍞', '妫', '鐤', '锟�']
 
 function walkFiles(dir, filter = () => true, out = []) {
   if (!fs.existsSync(dir)) return out

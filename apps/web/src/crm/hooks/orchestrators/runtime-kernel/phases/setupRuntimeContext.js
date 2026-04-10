@@ -5,7 +5,7 @@ import { useRuntimeRouting, useRuntimeStateSlices } from '../../runtime'
 import { useRuntimeKernelState } from '../useRuntimeKernelState'
 
 export function useSetupRuntimeContext() {
-  const { lang, setLang, auth, setAuth, persisted, readPageSize } = useAppStateModel()
+  const { lang, setLang, auth, setAuth, persisted, readPageSize, resetDomainSlices } = useAppStateModel()
   const runtime = useRuntimeStateSlices({ persisted, readPageSize }).runtime
   const { location, navigate, perfEnabledByQuery, apiContext, isAuthRoute } = useRuntimeRouting({ auth, lang })
   const t = useMemo(() => tFactory(lang), [lang])
@@ -25,6 +25,7 @@ export function useSetupRuntimeContext() {
     setLang,
     auth,
     setAuth,
+    resetDomainSlices,
     runtime,
     location,
     navigate,

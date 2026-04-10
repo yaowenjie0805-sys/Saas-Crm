@@ -25,12 +25,32 @@ function envVal(key, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
 }
 
+function readJsonFile(filePath, checkName) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { ok: false, error: `missing ${path.relative(root, filePath)}`, value: null }
+    }
+    const raw = fs.readFileSync(filePath, 'utf8')
+    return { ok: true, error: '', value: JSON.parse(raw) }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `${checkName} invalid json (${path.relative(root, filePath)}): ${err.message}`,
+      value: null,
+    }
+  }
+}
+
 function checkRequiredEnv() {
   const checks = []
   const secret = envVal('AUTH_TOKEN_SECRET')
   checks.push(secret && secret !== 'crm-secret-change-me'
     ? pass('AUTH_TOKEN_SECRET', 'configured')
     : fail('AUTH_TOKEN_SECRET', 'missing or insecure default'))
+  const unsafeFallback = envVal('AUTH_TOKEN_ALLOW_UNSAFE_FALLBACK', 'false').toLowerCase() === 'true'
+  checks.push(!unsafeFallback
+    ? pass('AUTH_TOKEN_ALLOW_UNSAFE_FALLBACK', 'disabled')
+    : fail('AUTH_TOKEN_ALLOW_UNSAFE_FALLBACK', 'must remain false in production'))
 
   const mfaCode = envVal('SECURITY_MFA_STATIC_CODE')
   checks.push(mfaCode && mfaCode !== '000000'
@@ -111,7 +131,12 @@ function checkReleaseEvidence() {
   if (!backupDrill) {
     checks.push(fail('backup restore drill', 'missing logs/drills/backup-restore-*.json'))
   } else {
-    const body = JSON.parse(fs.readFileSync(backupDrill, 'utf8'))
+    const parsed = readJsonFile(backupDrill, 'backup restore drill')
+    if (!parsed.ok) {
+      checks.push(fail('backup restore drill', parsed.error))
+      return checks
+    }
+    const body = parsed.value
     checks.push(body.pass
       ? pass('backup restore drill', path.relative(root, backupDrill))
       : fail('backup restore drill', `${path.relative(root, backupDrill)} pass=false`))
@@ -121,7 +146,12 @@ function checkReleaseEvidence() {
   if (!rollbackDrill) {
     checks.push(fail('rollback drill', 'missing logs/drills/rollback-*.json'))
   } else {
-    const body = JSON.parse(fs.readFileSync(rollbackDrill, 'utf8'))
+    const parsed = readJsonFile(rollbackDrill, 'rollback drill')
+    if (!parsed.ok) {
+      checks.push(fail('rollback drill', parsed.error))
+      return checks
+    }
+    const body = parsed.value
     checks.push(body.pass
       ? pass('rollback drill', path.relative(root, rollbackDrill))
       : fail('rollback drill', `${path.relative(root, rollbackDrill)} pass=false`))
@@ -228,7 +258,12 @@ function checkPerfEvidence() {
   if (!baseline || baseline.includes('-raw.')) {
     checks.push(fail('perf baseline report', 'missing logs/perf/perf-baseline-*.json'))
   } else {
-    const body = JSON.parse(fs.readFileSync(baseline, 'utf8'))
+    const parsed = readJsonFile(baseline, 'perf baseline report')
+    if (!parsed.ok) {
+      checks.push(fail('perf baseline report', parsed.error))
+      return checks
+    }
+    const body = parsed.value
     checks.push(body?.failed
       ? fail('perf baseline report', `${path.relative(root, baseline)} failed=true`)
       : pass('perf baseline report', path.relative(root, baseline)))
@@ -238,7 +273,12 @@ function checkPerfEvidence() {
   if (!fs.existsSync(gate)) {
     checks.push(fail('perf gate report', 'missing logs/perf/perf-gate-latest.json'))
   } else {
-    const body = JSON.parse(fs.readFileSync(gate, 'utf8'))
+    const parsed = readJsonFile(gate, 'perf gate report')
+    if (!parsed.ok) {
+      checks.push(fail('perf gate report', parsed.error))
+      return checks
+    }
+    const body = parsed.value
     checks.push(body?.pass
       ? pass('perf gate report', 'pass=true')
       : fail('perf gate report', `pass=false failedCount=${Number(body?.failedCount || 0)}`))
@@ -258,7 +298,12 @@ function checkSecurityEvidence() {
     checks.push(fail('security scan report', 'missing logs/security/security-scan-latest.json'))
     return checks
   }
-  const body = JSON.parse(fs.readFileSync(latest, 'utf8'))
+  const parsed = readJsonFile(latest, 'security scan report')
+  if (!parsed.ok) {
+    checks.push(fail('security scan report', parsed.error))
+    return checks
+  }
+  const body = parsed.value
   checks.push(body?.pass
     ? pass('security scan report', 'pass=true')
     : fail('security scan report', 'pass=false'))
@@ -278,7 +323,12 @@ function checkStagingEvidence() {
     checks.push(fail('staging release evidence', 'missing logs/staging/staging-release-latest.json'))
     return checks
   }
-  const body = JSON.parse(fs.readFileSync(latest, 'utf8'))
+  const parsed = readJsonFile(latest, 'staging release evidence')
+  if (!parsed.ok) {
+    checks.push(fail('staging release evidence', parsed.error))
+    return checks
+  }
+  const body = parsed.value
   const perfGate = !!body?.gate?.perf
   checks.push(perfGate
     ? pass('staging perf gate', 'pass=true')

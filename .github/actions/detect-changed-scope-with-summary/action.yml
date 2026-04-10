@@ -1,0 +1,102 @@
+name: Detect Changed Scope With Summary
+description: Detect changed scopes and append summary in one reusable action
+
+inputs:
+  workflow_file:
+    description: Current workflow file path to include in scope detection
+    required: true
+  security_job_name:
+    description: Security job name shown in conditional plan
+    required: false
+    default: security-ops
+
+outputs:
+  frontend:
+    description: Whether frontend-related files changed
+    value: ${{ steps.filter.outputs.frontend }}
+  backend:
+    description: Whether backend-related files changed
+    value: ${{ steps.filter.outputs.backend }}
+  security:
+    description: Whether security/release-related files changed
+    value: ${{ steps.filter.outputs.security }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect Changed Paths
+      id: filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          frontend:
+            - 'apps/web/**'
+            - 'package.json'
+            - 'package-lock.json'
+            - '.github/actions/**'
+            - '.github/workflows/**'
+            - 'scripts/runtime-*.mjs'
+            - 'scripts/pages-*.mjs'
+            - 'scripts/optimize-audit.mjs'
+            - 'scripts/split-app-css.mjs'
+            - 'scripts/perf-*.mjs'
+            - 'scripts/cache-header-check.mjs'
+            - 'scripts/local-e2e.mjs'
+            - 'scripts/staging-e2e.mjs'
+            - '${{ inputs.workflow_file }}'
+          backend:
+            - 'apps/api/**'
+            - 'package.json'
+            - 'package-lock.json'
+            - '.github/actions/**'
+            - '.github/workflows/**'
+            - 'scripts/run-maven.mjs'
+            - 'scripts/api-smoke-test.mjs'
+            - 'scripts/init-db.ps1'
+            - 'scripts/init-db.sh'
+            - 'scripts/flyway-repair-dev.ps1'
+            - 'scripts/flyway-repair-dev.sh'
+            - 'scripts/perf-sql-explain.mjs'
+            - '${{ inputs.workflow_file }}'
+          security:
+            - 'apps/api/**'
+            - 'apps/web/**'
+            - 'package.json'
+            - 'package-lock.json'
+            - '.github/actions/**'
+            - '.github/workflows/**'
+            - 'scripts/security-scan.mjs'
+            - 'scripts/preflight-prod.mjs'
+            - 'scripts/release-snapshot.mjs'
+            - 'scripts/staging-verify.mjs'
+            - 'scripts/staging-deploy.mjs'
+            - 'scripts/staging-rollback.mjs'
+            - 'scripts/sre-*.mjs'
+            - 'scripts/drill-*.mjs'
+            - '${{ inputs.workflow_file }}'
+
+    - name: Changed Scope Summary
+      shell: pwsh
+      run: |
+        $frontend = "${{ steps.filter.outputs.frontend }}"
+        $backend = "${{ steps.filter.outputs.backend }}"
+        $security = "${{ steps.filter.outputs.security }}"
+        $securityJobName = "${{ inputs.security_job_name }}"
+
+        $frontendPlan = if ($frontend -eq 'true') { "run (frontend-relevant changes detected)" } else { "skip (no frontend-relevant changes)" }
+        $backendPlan = if ($backend -eq 'true') { "run (backend-relevant changes detected)" } else { "skip (no backend-relevant changes)" }
+        $securityPlan = if ($security -eq 'true') { "run (security/release-relevant changes detected)" } else { "skip (no security/release-relevant changes)" }
+        $releasePrepPlan = if ($frontend -eq 'true' -or $backend -eq 'true' -or $security -eq 'true') { "run (upstream scope matched)" } else { "skip (no relevant scope matched)" }
+
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Changed Scope"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- frontend: $frontend"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- backend: $backend"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- security: $security"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Conditional Job Plan"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- frontend job: $frontendPlan"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- backend job: $backendPlan"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- $securityJobName job: $securityPlan"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- release-prep job: $releasePrepPlan"

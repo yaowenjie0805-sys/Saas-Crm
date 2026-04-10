@@ -1,5 +1,6 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.config.AiConfig;
 import com.yao.crm.service.AiContentGenerationService;
 import com.yao.crm.service.AiLeadClassificationService;
 import com.yao.crm.service.AiSalesForecastService;
@@ -30,6 +31,7 @@ class V1AiControllerTest {
     private AiContentGenerationService aiContentGenerationService;
     private AiLeadClassificationService aiLeadClassificationService;
     private AiSalesForecastService aiSalesForecastService;
+    private AiConfig aiConfig;
     private V1AiController controller;
 
     @BeforeEach
@@ -37,6 +39,9 @@ class V1AiControllerTest {
         aiContentGenerationService = mock(AiContentGenerationService.class);
         aiLeadClassificationService = mock(AiLeadClassificationService.class);
         aiSalesForecastService = mock(AiSalesForecastService.class);
+        aiConfig = new AiConfig();
+        aiConfig.getOpenai().setModel("gpt-4o");
+        aiConfig.getAnthropic().setModel("claude-3-5-sonnet");
         I18nService i18nService = mock(I18nService.class);
         when(i18nService.msg(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
 
@@ -44,6 +49,7 @@ class V1AiControllerTest {
                 aiContentGenerationService,
                 aiLeadClassificationService,
                 aiSalesForecastService,
+                aiConfig,
                 i18nService
         );
     }
@@ -60,6 +66,21 @@ class V1AiControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("ai_status_loaded", body.get("code"));
         assertEquals(Boolean.TRUE, body.get("available"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void configShouldReturnAvailableModelsAndDefaultModel() {
+        MockHttpServletRequest request = authedRequest("ANALYST");
+
+        ResponseEntity<?> response = controller.config(request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("ai_config_loaded", body.get("code"));
+        assertEquals("gpt-4o", body.get("defaultModel"));
+        assertEquals(Boolean.TRUE, body.get("canOverride"));
+        assertEquals(Boolean.TRUE, body.get("supportsCustomConnection"));
     }
 
     @Test
@@ -117,7 +138,7 @@ class V1AiControllerTest {
         payload.setCustomerName("  Acme  ");
         payload.setInteractionDetails("  Interested in annual plan  ");
         payload.setChannel("  phone  ");
-        when(aiContentGenerationService.generateFollowUpSummary("Acme", "Interested in annual plan", "phone"))
+        when(aiContentGenerationService.generateFollowUpSummary("Acme", "Interested in annual plan", "phone", null, null, null))
                 .thenReturn("Summary");
 
         ResponseEntity<?> response = controller.followUpSummary(request, payload);
@@ -130,11 +151,30 @@ class V1AiControllerTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void followUpSummaryShouldPassSelectedModelWhenProvided() {
+        MockHttpServletRequest request = authedRequest("MANAGER");
+        V1AiController.FollowUpSummaryRequest payload = new V1AiController.FollowUpSummaryRequest();
+        payload.setCustomerName("Acme");
+        payload.setInteractionDetails("Interested in annual plan");
+        payload.setChannel("phone");
+        payload.setModel("claude-3-5-sonnet");
+        when(aiContentGenerationService.generateFollowUpSummary("Acme", "Interested in annual plan", "phone", "claude-3-5-sonnet", null, null))
+                .thenReturn("Summary");
+
+        ResponseEntity<?> response = controller.followUpSummary(request, payload);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("Summary", body.get("summary"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void followUpSummaryShouldAllowOptionalCustomerAndChannel() {
         MockHttpServletRequest request = authedRequest("MANAGER");
         V1AiController.FollowUpSummaryRequest payload = new V1AiController.FollowUpSummaryRequest();
         payload.setInteractionDetails("  Interested in annual plan  ");
-        when(aiContentGenerationService.generateFollowUpSummary("Unknown Customer", "Interested in annual plan", "Unknown Channel"))
+        when(aiContentGenerationService.generateFollowUpSummary("Unknown Customer", "Interested in annual plan", "Unknown Channel", null, null, null))
                 .thenReturn("Summary");
 
         ResponseEntity<?> response = controller.followUpSummary(request, payload);
@@ -166,7 +206,7 @@ class V1AiControllerTest {
         payload.setCustomerName("Acme");
         payload.setInteractionDetails("Interested in annual plan");
         payload.setChannel("phone");
-        when(aiContentGenerationService.generateFollowUpSummary(anyString(), anyString(), anyString()))
+        when(aiContentGenerationService.generateFollowUpSummary(anyString(), anyString(), anyString(), any(), any(), any()))
                 .thenThrow(new RuntimeException("downstream timeout"));
 
         ResponseEntity<?> response = controller.followUpSummary(request, payload);
@@ -184,7 +224,7 @@ class V1AiControllerTest {
         payload.setCustomerName("Acme");
         payload.setInteractionDetails("Interested in annual plan");
         payload.setChannel("phone");
-        when(aiContentGenerationService.generateFollowUpSummary(anyString(), anyString(), anyString()))
+        when(aiContentGenerationService.generateFollowUpSummary(anyString(), anyString(), anyString(), any(), any(), any()))
                 .thenReturn("   ");
 
         ResponseEntity<?> response = controller.followUpSummary(request, payload);
@@ -196,12 +236,57 @@ class V1AiControllerTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void followUpSummaryShouldReturnServiceUnavailableWhenAiReturnsNotConfiguredMessage() {
+        MockHttpServletRequest request = authedRequest("MANAGER");
+        V1AiController.FollowUpSummaryRequest payload = new V1AiController.FollowUpSummaryRequest();
+        payload.setCustomerName("Acme");
+        payload.setInteractionDetails("Interested in annual plan");
+        payload.setChannel("phone");
+        when(aiContentGenerationService.generateFollowUpSummary(anyString(), anyString(), anyString(), any(), any(), any()))
+                .thenReturn("AI service is not configured. Please contact administrator.");
+
+        ResponseEntity<?> response = controller.followUpSummary(request, payload);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("ai_service_unavailable", body.get("code"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void followUpSummaryShouldPassCustomConnectionWhenProvided() {
+        MockHttpServletRequest request = authedRequest("MANAGER");
+        V1AiController.FollowUpSummaryRequest payload = new V1AiController.FollowUpSummaryRequest();
+        payload.setCustomerName("Acme");
+        payload.setInteractionDetails("Interested in annual plan");
+        payload.setChannel("phone");
+        payload.setModel("gpt-4o");
+        payload.setBaseUrl("http://localhost:11434/v1");
+        payload.setApiKey("sk-local");
+        when(aiContentGenerationService.generateFollowUpSummary(
+                "Acme",
+                "Interested in annual plan",
+                "phone",
+                "gpt-4o",
+                "http://localhost:11434/v1",
+                "sk-local"))
+                .thenReturn("Summary");
+
+        ResponseEntity<?> response = controller.followUpSummary(request, payload);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("Summary", body.get("summary"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void commentReplyShouldReturnGeneratedReply() {
         MockHttpServletRequest request = authedRequest("ADMIN");
         V1AiController.CommentReplyRequest payload = new V1AiController.CommentReplyRequest();
         payload.setOriginalComment("  Product is too expensive  ");
         payload.setContext("  Loyal customer  ");
-        when(aiContentGenerationService.generateCommentReply("Product is too expensive", "Loyal customer"))
+        when(aiContentGenerationService.generateCommentReply("Product is too expensive", "Loyal customer", null, null, null))
                 .thenReturn("Reply");
 
         ResponseEntity<?> response = controller.commentReply(request, payload);
@@ -209,6 +294,31 @@ class V1AiControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("ai_comment_reply_generated", body.get("code"));
+        assertEquals("Reply", body.get("reply"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void commentReplyShouldPassCustomConnectionWhenProvided() {
+        MockHttpServletRequest request = authedRequest("ADMIN");
+        V1AiController.CommentReplyRequest payload = new V1AiController.CommentReplyRequest();
+        payload.setOriginalComment("Product is too expensive");
+        payload.setContext("Loyal customer");
+        payload.setModel("gpt-4o-mini");
+        payload.setBaseUrl("http://localhost:11434/v1");
+        payload.setApiKey("sk-local");
+        when(aiContentGenerationService.generateCommentReply(
+                "Product is too expensive",
+                "Loyal customer",
+                "gpt-4o-mini",
+                "http://localhost:11434/v1",
+                "sk-local"))
+                .thenReturn("Reply");
+
+        ResponseEntity<?> response = controller.commentReply(request, payload);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("Reply", body.get("reply"));
     }
 
@@ -236,7 +346,7 @@ class V1AiControllerTest {
         payload.setCustomerName("Acme");
         payload.setProductName("CRM Plus");
         payload.setCustomerInterest("Automation");
-        when(aiContentGenerationService.generateMarketingEmail("Acme", "CRM Plus", "Automation"))
+        when(aiContentGenerationService.generateMarketingEmail("Acme", "CRM Plus", "Automation", null, null, null))
                 .thenReturn("Email");
 
         ResponseEntity<?> response = controller.marketingEmail(request, payload);
@@ -244,6 +354,33 @@ class V1AiControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("ai_marketing_email_generated", body.get("code"));
+        assertEquals("Email", body.get("email"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void marketingEmailShouldPassCustomConnectionWhenProvided() {
+        MockHttpServletRequest request = authedRequest("ADMIN");
+        V1AiController.MarketingEmailRequest payload = new V1AiController.MarketingEmailRequest();
+        payload.setCustomerName("Acme");
+        payload.setProductName("CRM Plus");
+        payload.setCustomerInterest("Automation");
+        payload.setModel("gpt-4o-mini");
+        payload.setBaseUrl("http://localhost:11434/v1");
+        payload.setApiKey("sk-local");
+        when(aiContentGenerationService.generateMarketingEmail(
+                "Acme",
+                "CRM Plus",
+                "Automation",
+                "gpt-4o-mini",
+                "http://localhost:11434/v1",
+                "sk-local"))
+                .thenReturn("Email");
+
+        ResponseEntity<?> response = controller.marketingEmail(request, payload);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("Email", body.get("email"));
     }
 
@@ -304,7 +441,7 @@ class V1AiControllerTest {
         payload.setStage("PROPOSAL");
         payload.setCustomerName("Acme");
         payload.setLastActivity("Sent proposal");
-        when(aiSalesForecastService.generateSalesAdvice("Q2 Renewal", "PROPOSAL", "Acme", "Sent proposal"))
+        when(aiSalesForecastService.generateSalesAdvice("Q2 Renewal", "PROPOSAL", "Acme", "Sent proposal", null, null, null))
                 .thenReturn("Advice");
 
         ResponseEntity<?> response = controller.salesAdvice(request, payload);
@@ -313,7 +450,36 @@ class V1AiControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals("ai_sales_advice_generated", body.get("code"));
         assertEquals("Advice", body.get("advice"));
-        verify(aiSalesForecastService).generateSalesAdvice("Q2 Renewal", "PROPOSAL", "Acme", "Sent proposal");
+        verify(aiSalesForecastService).generateSalesAdvice("Q2 Renewal", "PROPOSAL", "Acme", "Sent proposal", null, null, null);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void salesAdviceShouldPassCustomConnectionWhenProvided() {
+        MockHttpServletRequest request = authedRequest("MANAGER");
+        V1AiController.SalesAdviceRequest payload = new V1AiController.SalesAdviceRequest();
+        payload.setOpportunityName("Q2 Renewal");
+        payload.setStage("PROPOSAL");
+        payload.setCustomerName("Acme");
+        payload.setLastActivity("Sent proposal");
+        payload.setModel("gpt-4o-mini");
+        payload.setBaseUrl("http://localhost:11434/v1");
+        payload.setApiKey("sk-local");
+        when(aiSalesForecastService.generateSalesAdvice(
+                "Q2 Renewal",
+                "PROPOSAL",
+                "Acme",
+                "Sent proposal",
+                "gpt-4o-mini",
+                "http://localhost:11434/v1",
+                "sk-local"))
+                .thenReturn("Advice");
+
+        ResponseEntity<?> response = controller.salesAdvice(request, payload);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("Advice", body.get("advice"));
     }
 
     private MockHttpServletRequest authedRequest(String role) {

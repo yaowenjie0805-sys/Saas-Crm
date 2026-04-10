@@ -7,9 +7,6 @@ import java.util.Map;
 
 import static com.yao.crm.service.ReportUtils.castMap;
 
-/**
- * 报表导出服务 - 处理 CSV 导出相关功能
- */
 @Service
 public class ReportExportService {
 
@@ -19,23 +16,10 @@ public class ReportExportService {
         this.reportService = reportService;
     }
 
-    /**
-     * 导出概览报表 CSV（默认租户）
-     */
-    public String exportOverviewCsv(LocalDate fromDate, LocalDate toDate, String role) {
-        throw new IllegalStateException("tenant_id_required");
-    }
-
-    /**
-     * 导出概览报表 CSV（指定租户，默认语言）
-     */
     public String exportOverviewCsvByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String role, String owner, String department) {
         return exportOverviewCsvByTenant(tenantId, fromDate, toDate, role, owner, department, "en");
     }
 
-    /**
-     * 导出概览报表 CSV（完整参数）
-     */
     public String exportOverviewCsvByTenant(String tenantId,
                                             LocalDate fromDate,
                                             LocalDate toDate,
@@ -56,9 +40,6 @@ public class ReportExportService {
         return normalized;
     }
 
-    /**
-     * 将报表数据转换为 CSV 格式
-     */
     private String toCsv(Map<String, Object> report, LocalDate fromDate, LocalDate toDate, String role, String language) {
         Map<String, Object> summary = castMap(report.get("summary"));
         Map<String, Integer> taskStatus = castMap(report.get("taskStatus"));
@@ -66,25 +47,22 @@ public class ReportExportService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append(zh ? "分组,字段,值\n" : "section,key,value\n");
-        sb.append(row(zh ? "筛选" : "filter", zh ? "开始" : "from", fromDate == null ? "" : fromDate.toString()));
-        sb.append(row(zh ? "筛选" : "filter", zh ? "结束" : "to", toDate == null ? "" : toDate.toString()));
-        sb.append(row(zh ? "筛选" : "filter", zh ? "角色" : "role", role == null ? "" : role.trim().toUpperCase()));
+        sb.append(zh ? "\u5206\u7EC4,\u5B57\u6BB5,\u503C\n" : "section,key,value\n");
+        sb.append(row(zh ? "\u7B5B\u9009" : "filter", zh ? "\u5F00\u59CB" : "from", fromDate == null ? "" : fromDate.toString()));
+        sb.append(row(zh ? "\u7B5B\u9009" : "filter", zh ? "\u7ED3\u675F" : "to", toDate == null ? "" : toDate.toString()));
+        sb.append(row(zh ? "\u7B5B\u9009" : "filter", zh ? "\u89D2\u8272" : "role", role == null ? "" : role.trim().toUpperCase()));
 
-        appendMapRows(sb, zh ? "汇总" : "summary", summary);
-        appendMapRows(sb, zh ? "客户负责人分布" : "customerByOwner", castMap(report.get("customerByOwner")));
-        appendMapRows(sb, zh ? "客户状态营收" : "revenueByStatus", castMap(report.get("revenueByStatus")));
-        appendMapRows(sb, zh ? "商机阶段分布" : "opportunityByStage", castMap(report.get("opportunityByStage")));
-        appendMapRows(sb, zh ? "任务状态" : "taskStatus", taskStatus);
-        appendMapRows(sb, zh ? "跟进渠道分布" : "followUpByChannel", castMap(report.get("followUpByChannel")));
-        appendMapRows(sb, zh ? "报价状态分布" : "quoteByStatus", castMap(report.get("quoteByStatus")));
-        appendMapRows(sb, zh ? "订单状态分布" : "orderByStatus", castMap(report.get("orderByStatus")));
+        appendMapRows(sb, zh ? "\u6C47\u603B" : "summary", summary);
+        appendMapRows(sb, zh ? "\u5BA2\u6237\u8D1F\u8D23\u4EBA\u5206\u5E03" : "customerByOwner", castMap(report.get("customerByOwner")));
+        appendMapRows(sb, zh ? "\u5BA2\u6237\u72B6\u6001\u8425\u6536" : "revenueByStatus", castMap(report.get("revenueByStatus")));
+        appendMapRows(sb, zh ? "\u5546\u673A\u9636\u6BB5\u5206\u5E03" : "opportunityByStage", castMap(report.get("opportunityByStage")));
+        appendMapRows(sb, zh ? "\u4EFB\u52A1\u72B6\u6001" : "taskStatus", taskStatus);
+        appendMapRows(sb, zh ? "\u8DDF\u8FDB\u6E20\u9053\u5206\u5E03" : "followUpByChannel", castMap(report.get("followUpByChannel")));
+        appendMapRows(sb, zh ? "\u62A5\u4EF7\u72B6\u6001\u5206\u5E03" : "quoteByStatus", castMap(report.get("quoteByStatus")));
+        appendMapRows(sb, zh ? "\u8BA2\u5355\u72B6\u6001\u5206\u5E03" : "orderByStatus", castMap(report.get("orderByStatus")));
         return sb.toString();
     }
 
-    /**
-     * 追加 Map 数据行到 StringBuilder
-     */
     private void appendMapRows(StringBuilder sb, String section, Map<String, ?> map) {
         if (map == null) {
             return;
@@ -94,16 +72,10 @@ public class ReportExportService {
         }
     }
 
-    /**
-     * 构建单行 CSV 数据
-     */
     private String row(String section, String key, Object value) {
         return csv(section) + "," + csv(key) + "," + csv(value == null ? "" : String.valueOf(value)) + "\n";
     }
 
-    /**
-     * CSV 字段转义处理
-     */
     private String csv(String text) {
         String safe = text == null ? "" : text;
         String escaped = safe.replace("\"", "\"\"");

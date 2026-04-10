@@ -10,11 +10,8 @@ export default function AuthShell({
   t,
   navigate,
   submitLogin,
-  submitRegister,
   loginForm,
   setLoginForm,
-  registerForm,
-  setRegisterForm,
   formErrors,
   setFormErrors,
   submitSsoLogin,
@@ -44,11 +41,8 @@ export default function AuthShell({
         setLang={setLang}
         t={t}
         submitLogin={submitLogin}
-        submitRegister={submitRegister}
         loginForm={loginForm}
         setLoginForm={setLoginForm}
-        registerForm={registerForm}
-        setRegisterForm={setRegisterForm}
         formErrors={formErrors}
         setFormErrors={setFormErrors}
         submitSsoLogin={submitSsoLogin}

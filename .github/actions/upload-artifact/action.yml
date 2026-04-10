@@ -1,0 +1,34 @@
+name: Upload Artifact
+description: Upload workflow artifacts with shared defaults
+
+inputs:
+  artifact_name:
+    description: Artifact name
+    required: true
+  artifact_path:
+    description: Files or directories to upload
+    required: true
+  if_no_files_found:
+    description: Behavior when files are missing
+    required: false
+    default: warn
+  retention_days:
+    description: Number of days to retain uploaded artifacts
+    required: false
+    default: 14
+  compression_level:
+    description: Compression level for artifact upload
+    required: false
+    default: 6
+
+runs:
+  using: composite
+  steps:
+    - name: Upload Artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ inputs.artifact_path }}
+        if-no-files-found: ${{ inputs.if_no_files_found }}
+        retention-days: ${{ inputs.retention_days }}
+        compression-level: ${{ inputs.compression_level }}

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// 代码分割配置
+// Code split groups
 const CHUNK_GROUPS = {
   vendor: [
     { test: /node_modules\/react/, name: 'vendor-react' },
@@ -25,22 +25,22 @@ const CHUNK_GROUPS = {
     '/orchestrators/',
   ],
   routes: {
-    'DashboardPanel': 'route-dashboard',
-    'customer360': 'route-customers-detail',
-    'CustomersPanel': 'route-sales-core',
-    'CustomersPanelRuntime': 'route-sales-core',
-    'CustomersPanelContainer': 'route-sales-core',
-    'useBatchActions': 'route-sales-core',
-    'QuotesPanel': 'route-commerce',
-    'OrdersPanel': 'route-commerce',
-    // Keep commerce detail modules in the same chunk to avoid circular chunk warnings
-    'quotes': 'route-commerce',
-    'orders': 'route-commerce',
-    'PipelinePanel': 'route-sales-core',
-    'ApprovalsPageContainer': 'route-approvals',
-    'GovernancePageContainer': 'route-governance',
-    'ReportDesignerPanel': 'route-report-designer',
-    'reportDesigner': 'route-report-designer-detail',
+    DashboardPanel: 'route-dashboard',
+    customer360: 'route-customers-detail',
+    CustomersPanel: 'route-sales-core',
+    CustomersPanelRuntime: 'route-sales-core',
+    CustomersPanelContainer: 'route-sales-core',
+    useBatchActions: 'route-sales-core',
+    QuotesPanel: 'route-commerce',
+    OrdersPanel: 'route-commerce',
+    // Keep commerce detail modules together to avoid circular chunk warnings.
+    quotes: 'route-commerce',
+    orders: 'route-commerce',
+    PipelinePanel: 'route-sales-core',
+    ApprovalsPageContainer: 'route-approvals',
+    GovernancePageContainer: 'route-governance',
+    ReportDesignerPanel: 'route-report-designer',
+    reportDesigner: 'route-report-designer-detail',
   },
   i18n: {
     'i18n/common/en': 'crm-i18n-en',
@@ -56,27 +56,22 @@ const CHUNK_GROUPS = {
 }
 
 function getChunkName(id) {
-  // 1. Vendor chunks
   for (const { test, name } of CHUNK_GROUPS.vendor) {
     if (test.test(id)) return name
   }
 
-  // 2. App runtime core (avoid circular deps)
   for (const pattern of CHUNK_GROUPS.appRuntime) {
     if (id.includes(pattern)) return 'app-runtime-core'
   }
 
-  // 3. Shell chunks
   for (const pattern of CHUNK_GROUPS.shell) {
     if (id.includes(pattern)) return 'app-shell'
   }
 
-  // 4. Route chunks
   for (const [pattern, name] of Object.entries(CHUNK_GROUPS.routes)) {
     if (id.includes(pattern)) return name
   }
 
-  // 5. i18n chunks
   for (const [pattern, name] of Object.entries(CHUNK_GROUPS.i18n)) {
     if (id.includes(pattern)) return name
   }
@@ -84,23 +79,18 @@ function getChunkName(id) {
   return undefined
 }
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   build: {
-    // 生产环境禁用 sourcemap
     sourcemap: false,
-    // 目标浏览�?
     target: 'es2015',
-    // 代码压缩
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true,    // 生产环境移除 console
-        drop_debugger: true,   // 移除 debugger
+        drop_console: true,
+        drop_debugger: true,
       },
     },
-    // 分包配置
     rollupOptions: {
       output: {
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -108,7 +98,6 @@ export default defineConfig({
         manualChunks(id) {
           const byRule = getChunkName(id)
           if (byRule) return byRule
-          // 大型库单独分�?
           if (id.includes('node_modules/antd') || id.includes('node_modules/@ant-design')) {
             return 'vendor-antd'
           }
@@ -119,15 +108,11 @@ export default defineConfig({
         },
       },
     },
-    // CSS 代码分割
     cssCodeSplit: true,
-    // 启用chunk分层
     chunkSizeWarningLimit: 500,
   },
-  // 开发服务器优化
   server: {
     port: 5173,
-    // 代理配置
     proxy: {
       '/api': {
         target: 'http://localhost:8080',
@@ -135,15 +120,12 @@ export default defineConfig({
       },
     },
   },
-  // 预览服务器配�?
   preview: {
     port: 4173,
   },
-  // 路径解析优化
   resolve: {
     alias: {
       '@': '/src',
     },
   },
-});
-
+})

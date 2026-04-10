@@ -6,7 +6,7 @@ const repoRoot = process.cwd()
 const appCssPath = path.join(repoRoot, 'apps', 'web', 'src', 'App.css')
 const stylesDir = path.join(repoRoot, 'apps', 'web', 'src', 'styles')
 
-const chunkCount = 3
+const chunkCount = 5
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true })
@@ -18,7 +18,7 @@ function writeFile(filePath, content) {
 
 function main() {
   const raw = fs.readFileSync(appCssPath, 'utf8')
-  const root = postcss.parse(raw)
+  let root = postcss.parse(raw)
   const allNodes = root.nodes || []
   const importNodes = []
   const nodes = []
@@ -33,8 +33,24 @@ function main() {
   }
 
   if (nodes.length === 0 && importNodes.length > 0) {
-    console.log('SPLIT_APP_CSS_SKIPPED already-split')
-    return
+    const importedCss = importNodes
+      .map((statement) => {
+        const match = statement.match(/['"](.+?)['"]/)
+        if (!match) return ''
+        const importPath = match[1]
+        const absPath = path.resolve(path.dirname(appCssPath), importPath)
+        if (!fs.existsSync(absPath)) return ''
+        return fs.readFileSync(absPath, 'utf8')
+      })
+      .filter(Boolean)
+      .join('\n\n')
+    if (!importedCss.trim()) {
+      console.log('SPLIT_APP_CSS_SKIPPED already-split')
+      return
+    }
+    root = postcss.parse(importedCss)
+    nodes.push(...(root.nodes || []))
+    importNodes.length = 0
   }
 
   if (nodes.length === 0) {

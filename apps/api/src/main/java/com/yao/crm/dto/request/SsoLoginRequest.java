@@ -18,6 +18,9 @@ public class SsoLoginRequest {
     @Size(max = 64, message = "bad_request")
     private String tenantId;
 
+    @Size(max = 512, message = "bad_request")
+    private String nonce;
+
     public String getCode() {
         return code;
     }
@@ -48,5 +51,13 @@ public class SsoLoginRequest {
 
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
+    }
+
+    public String getNonce() {
+        return nonce;
+    }
+
+    public void setNonce(String nonce) {
+        this.nonce = nonce;
     }
 }

@@ -1,6 +1,7 @@
 package com.yao.crm.controller;
 
 import com.yao.crm.dto.request.LoginRequest;
+import com.yao.crm.dto.request.RegisterRequest;
 import com.yao.crm.dto.request.SsoLoginRequest;
 import com.yao.crm.entity.UserAccount;
 import com.yao.crm.repository.TenantRepository;
@@ -71,8 +72,73 @@ class AuthControllerTest {
                 mfaService,
                 ssoAuthService,
                 sessionCookieService,
+                true,
                 i18nService
         );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void registerShouldAlwaysReturnGoneForInviteOnlyFlow() {
+        RegisterRequest payload = new RegisterRequest();
+        payload.setUsername("alice");
+        payload.setPassword("pass-123");
+        payload.setDisplayName("Alice");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Tenant-Id", TENANT_TEST);
+
+        ResponseEntity<?> response = controller.register(request, payload);
+
+        assertEquals(HttpStatus.GONE, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("register_deprecated_invite_only", body.get("code"));
+        Map<String, Object> details = (Map<String, Object>) body.get("details");
+        assertEquals("/activate", details.get("activationPath"));
+        assertEquals("/api/v1/auth/invitations/accept", details.get("acceptInvitationPath"));
+        verify(userAccountRepository, never()).save(any(UserAccount.class));
+        verifyNoInteractions(tenantRepository);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void registerShouldCreateUserWhenInviteOnlyDisabled() {
+        I18nService i18nService = mock(I18nService.class);
+        when(i18nService.msg(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
+        AuthController legacyRegisterController = new AuthController(
+                userAccountRepository,
+                tenantRepository,
+                passwordEncoder,
+                tokenService,
+                auditLogService,
+                loginRiskService,
+                mfaService,
+                ssoAuthService,
+                sessionCookieService,
+                false,
+                i18nService
+        );
+
+        RegisterRequest payload = new RegisterRequest();
+        payload.setUsername("alice");
+        payload.setPassword("pass-123");
+        payload.setDisplayName("Alice");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Tenant-Id", TENANT_TEST);
+
+        when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(mock(com.yao.crm.entity.Tenant.class)));
+        when(userAccountRepository.findByUsernameAndTenantId("alice", TENANT_TEST)).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("pass-123")).thenReturn("encoded-pass");
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tokenService.createToken(anyString(), anyString(), anyString(), anyString(), anyBoolean())).thenReturn("token-1");
+        when(sessionCookieService.buildSessionCookie("token-1")).thenReturn("CRM_SESSION=token-1; Path=/; HttpOnly");
+
+        ResponseEntity<?> response = legacyRegisterController.register(request, payload);
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("alice", body.get("username"));
+        assertEquals(TENANT_TEST, body.get("tenantId"));
+        verify(userAccountRepository).save(any(UserAccount.class));
     }
 
     @Test

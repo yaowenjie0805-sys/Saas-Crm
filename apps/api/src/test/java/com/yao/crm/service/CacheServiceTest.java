@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
@@ -28,10 +29,12 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -65,6 +68,18 @@ class CacheServiceTest {
     void setShouldNormalizePrefix() {
         cacheService.set("crm:cache:crm:cache:user:123", "value");
         verify(valueOperations).set(eq("crm:cache:user:123"), eq("\"value\""), eq(Duration.ofMinutes(10)));
+    }
+
+    @Test
+    void setShouldFallbackToLocalCacheWhenRedisUnavailable() {
+        doThrow(new RedisConnectionFailureException("redis unavailable"))
+            .when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+
+        cacheService.set("user:redis-down", "fallback-value", Duration.ofMinutes(2));
+
+        verify(valueOperations).set(eq("crm:cache:user:redis-down"), eq("\"fallback-value\""), eq(Duration.ofMinutes(2)));
+        assertTrue(cacheService.getLocal("user:redis-down", String.class).isPresent());
+        assertEquals("fallback-value", cacheService.getLocal("user:redis-down", String.class).orElse(null));
     }
 
     @Test

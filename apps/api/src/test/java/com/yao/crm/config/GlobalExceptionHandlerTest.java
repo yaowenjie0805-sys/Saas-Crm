@@ -23,6 +23,17 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class GlobalExceptionHandlerTest {
+    private static class AuthenticationFailureException extends RuntimeException {
+        AuthenticationFailureException(String message) {
+            super(message);
+        }
+    }
+
+    private static class AccessDeniedSecurityException extends RuntimeException {
+        AccessDeniedSecurityException(String message) {
+            super(message);
+        }
+    }
 
     @Mock
     private I18nService i18nService;
@@ -179,6 +190,32 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), response.getStatusCodeValue());
         assertNotNull(response.getBody());
         assertNotNull(response.getBody().getTimestamp());
+    }
+
+    @Test
+    @DisplayName("shouldReturn401_whenSecurityAuthenticationException")
+    void shouldReturn401_whenSecurityAuthenticationException() {
+        when(i18nService.msg(any(HttpServletRequest.class), anyString())).thenReturn("Unauthorized");
+
+        Exception ex = new AuthenticationFailureException("authentication failed");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleAnyException(ex, request);
+
+        assertEquals(HttpStatus.UNAUTHORIZED.value(), response.getStatusCodeValue());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    @DisplayName("shouldReturn403_whenSecurityAccessDeniedException")
+    void shouldReturn403_whenSecurityAccessDeniedException() {
+        when(i18nService.msg(any(HttpServletRequest.class), anyString())).thenReturn("Forbidden");
+
+        Exception ex = new AccessDeniedSecurityException("access denied");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleAnyException(ex, request);
+
+        assertEquals(HttpStatus.FORBIDDEN.value(), response.getStatusCodeValue());
+        assertNotNull(response.getBody());
     }
 
     @Test

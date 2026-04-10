@@ -1,4 +1,4 @@
-﻿import { buildBatchFailureText } from './useBatchActions'
+import { buildBatchFailureText } from './useBatchActions'
 
 function BatchResultModal({ t, open, summary, onClose }) {
   if (!open || !summary) return null

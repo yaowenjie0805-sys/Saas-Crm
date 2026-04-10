@@ -86,12 +86,12 @@ function LeadsPanel({
   const selectedIdList = useMemo(() => [...selectedIds], [selectedIds])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // Sync prop to local draft state when parent value changes
     setLeadQDraft(leadQ || '')
   }, [leadQ])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // Sync prop to local draft state when parent value changes
     setLeadStatusDraft(leadStatus || '')
   }, [leadStatus])
 

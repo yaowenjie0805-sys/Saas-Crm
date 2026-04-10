@@ -1,0 +1,13 @@
+name: Run Release Prep Checks
+description: Execute release snapshot and production preflight checks
+
+runs:
+  using: composite
+  steps:
+    - name: Release Snapshot
+      shell: pwsh
+      run: npm run release:snapshot
+
+    - name: Production Preflight
+      shell: pwsh
+      run: npm run preflight:prod

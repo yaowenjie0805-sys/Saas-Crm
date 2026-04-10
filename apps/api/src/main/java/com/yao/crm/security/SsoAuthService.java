@@ -72,7 +72,7 @@ public class SsoAuthService {
             return null;
         }
         if ("oidc".equals(mode)) {
-            return oidcAuthService.resolveByAuthorizationCode(payload.getCode());
+            return oidcAuthService.resolveByAuthorizationCode(payload.getCode(), payload.getNonce());
         }
 
         if (!mockCode.equals(payload.getCode().trim())) {

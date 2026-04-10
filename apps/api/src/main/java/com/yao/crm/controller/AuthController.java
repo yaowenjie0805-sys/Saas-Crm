@@ -17,6 +17,7 @@ import com.yao.crm.service.I18nService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,7 +28,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -44,6 +44,7 @@ public class AuthController extends BaseApiController {
     private final MfaService mfaService;
     private final SsoAuthService ssoAuthService;
     private final SessionCookieService sessionCookieService;
+    private final boolean registerInviteOnly;
 
     public AuthController(UserAccountRepository userAccountRepository,
                           TenantRepository tenantRepository,
@@ -54,6 +55,7 @@ public class AuthController extends BaseApiController {
                           MfaService mfaService,
                           SsoAuthService ssoAuthService,
                           SessionCookieService sessionCookieService,
+                          @Value("${auth.register.invite-only:true}") boolean registerInviteOnly,
                           I18nService i18nService) {
         super(i18nService);
         this.userAccountRepository = userAccountRepository;
@@ -65,6 +67,7 @@ public class AuthController extends BaseApiController {
         this.mfaService = mfaService;
         this.ssoAuthService = ssoAuthService;
         this.sessionCookieService = sessionCookieService;
+        this.registerInviteOnly = registerInviteOnly;
     }
 
     @GetMapping("/auth/sso/config")
@@ -74,33 +77,53 @@ public class AuthController extends BaseApiController {
 
     @PostMapping("/auth/register")
     public ResponseEntity<?> register(HttpServletRequest request, @Valid @RequestBody RegisterRequest payload) {
-        String username = payload.getUsername() == null ? "" : payload.getUsername().trim().toLowerCase(Locale.ROOT);
-        if (isBlank(username)) {
-            return ResponseEntity.badRequest().body(singleMessage(request, "register_username_required", "BAD_REQUEST", null));
+        if (!registerInviteOnly) {
+            String tenantId = normalizeOptional(request.getHeader("X-Tenant-Id"));
+            if (isBlank(tenantId)) {
+                return validationError(request, "tenantId");
+            }
+            if (!tenantRepository.findById(tenantId).isPresent()) {
+                return ResponseEntity.status(404).body(singleMessage(request, "tenant_not_found", "NOT_FOUND", null));
+            }
+
+            String username = normalizeOptional(payload.getUsername());
+            if (isBlank(username)) {
+                return validationError(request, "username");
+            }
+            if (userAccountRepository.findByUsernameAndTenantId(username, tenantId).isPresent()) {
+                return ResponseEntity.status(409).body(singleMessage(request, "username_exists", "CONFLICT", null));
+            }
+
+            UserAccount user = new UserAccount();
+            user.setId("u_reg_" + Long.toString(System.currentTimeMillis(), 36));
+            user.setUsername(username);
+            user.setPassword(passwordEncoder.encode(payload.getPassword()));
+            user.setRole("SALES");
+            user.setDisplayName(isBlank(payload.getDisplayName()) ? username : payload.getDisplayName().trim());
+            user.setOwnerScope(username);
+            user.setEnabled(true);
+            user.setTenantId(tenantId);
+            user.setDepartment("DEFAULT");
+            user.setDataScope("SELF");
+
+            UserAccount created = userAccountRepository.save(user);
+            auditLogService.record(created.getUsername(), created.getRole(), "REGISTER", "AUTH", null, "User self-registered", tenantId);
+
+            Map<String, Object> body = buildAuthBody(request, created, false);
+            return ResponseEntity.status(201)
+                    .header(HttpHeaders.SET_COOKIE, sessionCookieService.buildSessionCookie(String.valueOf(body.get("token"))))
+                    .body(body);
         }
 
-        if (userAccountRepository.findByUsername(username).isPresent()) {
-            return ResponseEntity.status(409).body(singleMessage(request, "username_exists", "CONFLICT", null));
-        }
-
-        UserAccount user = new UserAccount();
-        user.setId("u_" + Long.toString(System.currentTimeMillis(), 36));
-        user.setUsername(username);
-        user.setPassword(passwordEncoder.encode(payload.getPassword()));
-        user.setRole("SALES");
-        user.setDisplayName(isBlank(payload.getDisplayName()) ? username : payload.getDisplayName().trim());
-        user.setOwnerScope(username);
-        user.setEnabled(true);
-        user.setTenantId(currentTenant(request));
-        user.setDepartment("DEFAULT");
-        user.setDataScope("SELF");
-        user = userAccountRepository.save(user);
-        if (isBlank(user.getTenantId())) {
-            return invalidTenantState(request);
-        }
-
-        auditLogService.record(user.getUsername(), user.getRole(), "REGISTER", "AUTH", null, "User self-registered", user.getTenantId());
-        return ResponseEntity.status(201).body(buildAuthBody(request, user, false));
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("activationPath", "/activate");
+        details.put("acceptInvitationPath", "/api/v1/auth/invitations/accept");
+        return ResponseEntity.status(410).body(errorBody(
+                request,
+                "register_deprecated_invite_only",
+                msg(request, "register_deprecated_invite_only"),
+                details
+        ));
     }
 
     @PostMapping("/auth/login")
@@ -269,9 +292,7 @@ public class AuthController extends BaseApiController {
     }
 
     private ResponseEntity<?> invalidTenantState(HttpServletRequest request) {
-        Map<String, Object> details = new LinkedHashMap<String, Object>();
-        details.put("field", "tenantId");
-        return ResponseEntity.status(401).body(singleMessage(request, "invalid_or_expired", "UNAUTHORIZED", details));
+        return ResponseEntity.status(401).body(singleMessage(request, "invalid_or_expired", "UNAUTHORIZED", null));
     }
 
     private String normalizeOptional(String value) {

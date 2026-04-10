@@ -10,7 +10,7 @@ const reportPath = path.join(repoRoot, 'logs', 'structure', 'pages-unused-export
 
 const exportFromRegex = /export\s*{([\s\S]*?)}\s*from\s*['"][^'"]+['"]/g
 const importFromPagesRegex =
-  /import\s+([\s\S]*?)\s+from\s*['"]([^'"]*components\/pages(?:\/index(?:\.js)?)?)['"]/g
+  /^\s*import\s+(.+?)\s+from\s*['"]([^'"]*components\/pages(?:\/index(?:\.js)?)?)['"]/gm
 
 function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8')
@@ -92,6 +92,15 @@ function collectUsedExports() {
     let match
     while ((match = importFromPagesRegex.exec(content)) !== null) {
       const importClause = match[1]
+      const namespaceMatch = importClause.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)$/)
+      if (namespaceMatch) {
+        const alias = namespaceMatch[1]
+        const memberRegex = new RegExp(`${alias}\\.([A-Za-z_$][\\w$]*)`, 'g')
+        let memberMatch
+        while ((memberMatch = memberRegex.exec(content)) !== null) {
+          used.add(memberMatch[1])
+        }
+      }
       parseImportedNames(importClause).forEach((name) => used.add(name))
     }
     importFromPagesRegex.lastIndex = 0

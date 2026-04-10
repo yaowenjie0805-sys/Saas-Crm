@@ -5,6 +5,7 @@ import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +22,7 @@ class TokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        tokenService = new TokenService("test-secret-key-for-unit-tests", 86400000L);
+        tokenService = new TokenService(new ObjectMapper(), "test-secret-key-for-unit-tests", 86400000L);
     }
 
     @Test
@@ -87,7 +88,7 @@ class TokenServiceTest {
     @Test
     @DisplayName("shouldReturnNull_whenTokenIsExpired")
     void shouldReturnNull_whenTokenIsExpired() {
-        TokenService shortLivedService = new TokenService("test-secret-key", -1000L);
+        TokenService shortLivedService = new TokenService(new ObjectMapper(), "test-secret-key", -1000L);
         String token = shortLivedService.createToken("testuser", "USER", "owner-1");
 
         AuthPrincipal principal = tokenService.verify(token);
@@ -238,7 +239,7 @@ class TokenServiceTest {
     void shouldThrowHelpfulException_whenConfiguredSecretIsBlank() {
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> new TokenService("   ", 86400000L)
+                () -> new TokenService(new ObjectMapper(), "   ", 86400000L)
         );
 
         assertTrue(exception.getMessage().contains("auth.token.secret"));
@@ -250,10 +251,22 @@ class TokenServiceTest {
     void shouldThrowHelpfulException_whenConfiguredSecretIsNull() {
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> new TokenService(null, 86400000L)
+                () -> new TokenService(new ObjectMapper(), null, 86400000L)
         );
 
         assertTrue(exception.getMessage().contains("auth.token.secret"));
+        assertTrue(exception.getMessage().contains("AUTH_TOKEN_SECRET"));
+    }
+
+    @Test
+    @DisplayName("shouldThrowHelpfulException_whenConfiguredSecretIsWeakDefault")
+    void shouldThrowHelpfulException_whenConfiguredSecretIsWeakDefault() {
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> new TokenService(new ObjectMapper(), "crm-secret-change-me", 86400000L)
+        );
+
+        assertTrue(exception.getMessage().contains("weak"));
         assertTrue(exception.getMessage().contains("AUTH_TOKEN_SECRET"));
     }
 
@@ -286,4 +299,6 @@ class TokenServiceTest {
         return builder.toString();
     }
 }
+
+
 

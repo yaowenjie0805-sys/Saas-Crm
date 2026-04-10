@@ -81,18 +81,19 @@ public class SearchController {
 
         String query = q.trim();
         PageRequest pageRequest = PageRequest.of(0, safeLimit);
-        List<String> prefixMatches = savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        List<SavedSearch> prefixMatches = savedSearchRepository.findByTenantIdAndNameIgnoreCaseStartingWith(
                 normalizedTenantId,
                 query,
                 pageRequest);
+        List<String> prefixNames = prefixMatches.stream().map(SavedSearch::getName).distinct().collect(java.util.stream.Collectors.toList());
 
-        LinkedHashSet<String> deduped = new LinkedHashSet<>(prefixMatches);
-        if (prefixMatches.size() < safeLimit) {
-            List<String> containsMatches = savedSearchRepository.findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+        LinkedHashSet<String> deduped = new LinkedHashSet<>(prefixNames);
+        if (prefixNames.size() < safeLimit) {
+            List<SavedSearch> containsMatches = savedSearchRepository.findByTenantIdAndNameIgnoreCaseContaining(
                     normalizedTenantId,
                     query,
                     pageRequest);
-            deduped.addAll(containsMatches);
+            containsMatches.stream().map(SavedSearch::getName).forEach(deduped::add);
         }
 
         List<String> results = new ArrayList<>(deduped);

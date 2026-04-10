@@ -51,7 +51,7 @@ afterEach(async () => {
 })
 
 describe('tenant fallback cleanup', () => {
-  it('useAuthRuntimeState loginForm defaults tenantId to tenant_default when cache is absent', async () => {
+  it('useAuthRuntimeState loginForm keeps tenantId empty when cache is absent', async () => {
     localStorage.removeItem('crm_last_tenant')
     const capturedStateRef = { current: null }
 
@@ -65,14 +65,14 @@ describe('tenant fallback cleanup', () => {
 
     await render(<Probe />)
 
-    expect(capturedStateRef.current.loginForm().tenantId).toBe('tenant_default')
+    expect(capturedStateRef.current.loginForm().tenantId).toBe('')
   })
 
   it('useRuntimeAuthActions.submitSsoLogin blocks request and sets tenant field error when tenant is blank', async () => {
     let ssoErrors = {}
     const setFormErrors = (updater) => {
       const nextState = typeof updater === 'function'
-        ? updater({ sso: ssoErrors, login: {}, register: {} })
+        ? updater({ sso: ssoErrors, login: {} })
         : updater
       ssoErrors = nextState.sso || {}
     }

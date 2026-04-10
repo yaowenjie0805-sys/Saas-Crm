@@ -90,22 +90,22 @@ export function buildRuntimeCommonPageLoaders(args) {
     pipeline: {
       signature: pageSignature('pipeline', { stage: oppStage }, opportunityPage, opportunitySize),
       delay: 220,
-      run: () => loadOpportunities(opportunityPage, opportunitySize),
+      run: (controller) => loadOpportunities(opportunityPage, opportunitySize, { signal: controller?.signal }),
     },
     contacts: {
       signature: pageSignature('contacts', { q: contactQ }, contactPage, contactSize),
       delay: 220,
-      run: () => loadContacts(contactPage, contactSize),
+      run: (controller) => loadContacts(contactPage, contactSize, { signal: controller?.signal }),
     },
     contracts: {
       signature: pageSignature('contracts', { q: contractQ, status: contractStatus }, contractPage, contractSize),
       delay: 220,
-      run: () => loadContracts(contractPage, contractSize),
+      run: (controller) => loadContracts(contractPage, contractSize, { signal: controller?.signal }),
     },
     payments: {
       signature: pageSignature('payments', { status: paymentStatus }, paymentPage, paymentSize),
       delay: 220,
-      run: () => loadPayments(paymentPage, paymentSize),
+      run: (controller) => loadPayments(paymentPage, paymentSize, { signal: controller?.signal }),
     },
     priceBooks: {
       signature: pageSignature(
@@ -166,12 +166,12 @@ export function buildRuntimeCommonPageLoaders(args) {
     followUps: {
       signature: pageSignature('followUps', { customerId: followCustomerId, q: followQ }, 1, 0),
       delay: 250,
-      run: () => loadFollowUps(),
+      run: (controller) => loadFollowUps({ signal: controller?.signal }),
     },
     tasks: {
       signature: pageSignature('tasks', {}, 1, 0),
       delay: 0,
-      run: () => loadTasks(),
+      run: (controller) => loadTasks({ signal: controller?.signal }),
     },
   }
 }

@@ -1,0 +1,21 @@
+name: Prepare Backend Java Environment
+description: Checkout repository and setup Java with Maven cache
+
+inputs:
+  java_version:
+    description: Java version
+    required: false
+    default: "17"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+    - name: Setup Java
+      uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java_version }}
+        cache: maven

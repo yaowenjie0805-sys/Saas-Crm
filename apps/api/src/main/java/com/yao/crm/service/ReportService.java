@@ -51,17 +51,6 @@ public class ReportService {
     // 缓存配置常量
     private static final int IDENTITY_CACHE_MAX_SIZE = 500;
     private static final long IDENTITY_CACHE_TTL_MINUTES = 10;
-    private static final long IDENTITY_SCOPE_CACHE_TTL_MS = 30_000L;
-    
-    // 日期范围常量
-    private static final LocalDate OPEN_RANGE_START = LocalDate.of(1970, 1, 1);
-    private static final LocalDate OPEN_RANGE_END = LocalDate.of(2099, 12, 31);
-    
-    // 预定义空 Map - 减少对象创建
-    private static final Map<String, Integer> EMPTY_INT_MAP = Collections.emptyMap();
-    private static final Map<String, Long> EMPTY_LONG_MAP = Collections.emptyMap();
-    private static final Map<String, Object> EMPTY_OBJ_MAP = Collections.emptyMap();
-
     private final CustomerRepository customerRepository;
     private final OpportunityRepository opportunityRepository;
     private final TaskRepository taskRepository;
@@ -107,11 +96,6 @@ public class ReportService {
         this.valueNormalizerService = valueNormalizerService;
         this.dashboardMetricsCacheService = dashboardMetricsCacheService;
         this.reportAggregationService = reportAggregationService;
-    }
-
-    @Transactional(readOnly = true)
-    public Map<String, Object> overview(LocalDate fromDate, LocalDate toDate, String role) {
-        throw new IllegalStateException("tenant_id_required");
     }
 
     @Transactional(readOnly = true)
@@ -656,7 +640,7 @@ public class ReportService {
 
     private Set<String> loadRoleIdentitiesFromRepository(String tenantId, String role) {
         Set<String> identities = new HashSet<String>();
-        for (Object[] row : userAccountRepository.findIdentityPairsByTenantIdAndRole(tenantId, role)) {
+        for (Object[] row : userAccountRepository.findIdentityPairsByTenantIdAndRoleIgnoreCase(tenantId, role)) {
             if (row == null) continue;
             if (row.length > 0 && !isBlank((String) row[0])) identities.add(normalized((String) row[0]));
             if (row.length > 1 && !isBlank((String) row[1])) identities.add(normalized((String) row[1]));
@@ -666,7 +650,7 @@ public class ReportService {
 
     private Set<String> loadDepartmentIdentitiesFromRepository(String tenantId, String department) {
         Set<String> identities = new HashSet<String>();
-        for (Object[] row : userAccountRepository.findIdentityPairsByTenantIdAndDepartment(tenantId, department)) {
+        for (Object[] row : userAccountRepository.findIdentityPairsByTenantIdAndDepartmentIgnoreCase(tenantId, department)) {
             if (row == null) continue;
             if (row.length > 0 && !isBlank((String) row[0])) identities.add(normalized((String) row[0]));
             if (row.length > 1 && !isBlank((String) row[1])) identities.add(normalized((String) row[1]));

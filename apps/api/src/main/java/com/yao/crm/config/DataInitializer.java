@@ -285,8 +285,6 @@ public class DataInitializer {
             if (!equalsSafe(followUp.getChannel(), normalizedChannel)) {
                 followUp.setChannel(normalizedChannel);
                 changed = true;
-            } else if (changed) {
-                followUpsToUpdate.add(followUp);
             }
             if (changed) {
                 followUpsToUpdate.add(followUp);

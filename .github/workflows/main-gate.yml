@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "main" ]
     paths-ignore:
-      - 'docs/**'
       - 'backups/**'
       - 'evaluation/**'
 
@@ -14,6 +13,7 @@ concurrency:
 
 permissions:
   contents: read
+  security-events: write
 
 env:
   AUTH_TOKEN_SECRET: ${{ secrets.CI_AUTH_TOKEN_SECRET }}
@@ -24,58 +24,71 @@ env:
   DB_USER: ${{ secrets.CI_DB_USER }}
   DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
   LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
-  PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
+  PREFLIGHT_SKIP_DRILL_EVIDENCE: "false"
   PREFLIGHT_REQUIRE_STAGING_EVIDENCE: "false"
   PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
   PREFLIGHT_SKIP_ALERT_EVIDENCE: "false"
 
 jobs:
-  # Job 1: 浠ｇ爜妫€鏌ワ紙鏈€鍏堟墽琛岋紝蹇€熷け璐ワ級
+  # Job 0: Detect changed scopes for selective job execution
+  changes:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.scope.outputs.frontend }}
+      backend: ${{ steps.scope.outputs.backend }}
+      security: ${{ steps.scope.outputs.security }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Detect Changed Scope With Summary
+        id: scope
+        uses: ./.github/actions/detect-changed-scope-with-summary
+        with:
+          workflow_file: .github/workflows/main-gate.yml
+          security_job_name: security-ops
+
+  # Job 1: Lint and static quality gates
   lint:
+    needs: changes
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Prepare Frontend Node Environment
+        uses: ./.github/actions/prepare-frontend-node
 
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+
+      - name: Mark Lint Job Start
+        uses: ./.github/actions/mark-job-start
         with:
-          node-version: "20"
-          cache: "npm"
+          start_env_var: LINT_JOB_STARTED_AT
 
-      - name: Install Frontend Dependencies
-        run: npm ci
+      - name: Run Lint Quality Gates
+        uses: ./.github/actions/run-lint-quality-gates
 
-      - name: Runtime Kernel Import Check
-        run: npm run check:runtime-kernel-imports --workspace apps/web
+      - name: Lint Job Timing Summary
+        if: always()
+        uses: ./.github/actions/job-timing-summary
+        with:
+          job_label: Lint
+          start_env_var: LINT_JOB_STARTED_AT
 
-      - name: Pages Entry Export Check
-        run: npm run check:pages-entry-exports --workspace apps/web
-
-      - name: Lint
-        run: npm run lint
-
-  # Job 2: 鍓嶇鏋勫缓鍜屾祴璇曪紙渚濊禆 lint锛?
+  # Job 2: Frontend full gate and performance
   frontend:
-    needs: lint
+    needs: [lint, changes]
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 50
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Prepare Frontend Node Environment
+        uses: ./.github/actions/prepare-frontend-node
 
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+
+      - name: Mark Frontend Job Start
+        uses: ./.github/actions/mark-job-start
         with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install Frontend Dependencies
-        run: npm ci
-
-      - name: Runtime Kernel Import Check
-        run: npm run check:runtime-kernel-imports --workspace apps/web
+          start_env_var: FRONTEND_JOB_STARTED_AT
 
       - name: Frontend Unit Tests
         run: npm run test:frontend:coverage
@@ -83,98 +96,166 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: ${{ runner.os }}-playwright-v1.58.2-chromium
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright Browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
       - name: Full Gate
+        timeout-minutes: 20
         run: npm run test:full
 
-      - name: Install k6
-        run: choco install k6 -y
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
 
       - name: Performance Gate
+        timeout-minutes: 12
         run: npm run perf:gate
         env:
           PERF_REQUIRE_K6: "true"
 
-  # Job 3: 鍚庣娴嬭瘯锛堜緷璧?lint锛屼笌 frontend 骞惰锛?
+      - name: Upload Frontend Test Artifacts
+        if: always()
+        uses: ./.github/actions/upload-artifact
+        with:
+          artifact_name: main-frontend-test-artifacts-${{ github.run_number }}
+          artifact_path: |
+            apps/web/coverage/**
+            apps/web/playwright-report/**
+            apps/web/test-results/**
+            test-results/**
+          if_no_files_found: warn
+
+      - name: Upload Frontend Ops Evidence
+        if: always()
+        uses: ./.github/actions/upload-artifact
+        with:
+          artifact_name: main-frontend-ops-evidence-${{ github.run_number }}
+          artifact_path: |
+            logs/perf/**
+            logs/preflight/**
+          if_no_files_found: warn
+
+      - name: Frontend Job Timing Summary
+        if: always()
+        uses: ./.github/actions/job-timing-summary
+        with:
+          job_label: Frontend
+          start_env_var: FRONTEND_JOB_STARTED_AT
+
+  # Job 3: Backend integration and coverage
   backend:
-    needs: lint
+    needs: [lint, changes]
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Prepare Backend Java Environment
+        uses: ./.github/actions/prepare-backend-java
 
-      - name: Setup Java
-        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+      - name: Mark Backend Job Start
+        uses: ./.github/actions/mark-job-start
         with:
-          distribution: "temurin"
-          java-version: "17"
-          cache: "maven"
+          start_env_var: BACKEND_JOB_STARTED_AT
 
-      - name: API Integration Test
-        run: npm run test:api:integration
+      - name: API Smoke Test
+        run: npm run test:api:smoke
 
       - name: Backend Tests
         run: npm run test:backend:coverage
 
-  # Job 4: 瀹夊叏鍜岃繍缁存鏌ワ紙渚濊禆 lint锛屼笌 frontend/backend 骞惰锛?
+      - name: Upload Backend Test Artifacts
+        if: always()
+        uses: ./.github/actions/upload-artifact
+        with:
+          artifact_name: main-backend-test-artifacts-${{ github.run_number }}
+          artifact_path: |
+            apps/api/target/surefire-reports/**
+            apps/api/target/failsafe-reports/**
+            apps/api/target/site/jacoco/**
+          if_no_files_found: warn
+
+      - name: Backend Job Timing Summary
+        if: always()
+        uses: ./.github/actions/job-timing-summary
+        with:
+          job_label: Backend
+          start_env_var: BACKEND_JOB_STARTED_AT
+
+  # Job 4: Security and SRE checks
   security-ops:
-    needs: lint
+    needs: [lint, changes]
+    if: ${{ needs.changes.outputs.security == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Prepare Frontend Node Environment
+        uses: ./.github/actions/prepare-frontend-node
 
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+
+      - name: Mark Security Job Start
+        uses: ./.github/actions/mark-job-start
         with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install Frontend Dependencies
-        run: npm ci
+          start_env_var: SECURITY_JOB_STARTED_AT
 
       - name: Security Scan
+        timeout-minutes: 10
         run: npm run security:scan
         env:
           SECURITY_SCAN_JAVA_ENABLED: "true"
-          SECURITY_SCAN_JAVA_REQUIRED: "false"
+          SECURITY_SCAN_JAVA_REQUIRED: "true"
           SECURITY_SCAN_JAVA_TIMEOUT_MS: "300000"
 
       - name: Security Scan Summary
         if: always()
-        shell: pwsh
-        run: |
-          $reportPath = "logs/security/security-scan-latest.json"
-          if (Test-Path $reportPath) {
-            $report = Get-Content $reportPath -Raw | ConvertFrom-Json
-            $secretFindings = 0
-            if ($null -ne $report.checks.secretScan.findings) {
-              $secretFindings = @($report.checks.secretScan.findings).Count
-            }
-            Write-Host ("SECURITY_REPORT pass={0} npmHigh={1} npmCritical={2} secretFindings={3} sbomPass={4} javaStatus={5}" -f $report.pass, $report.checks.npmAudit.high, $report.checks.npmAudit.critical, $secretFindings, $report.checks.sbom.pass, $report.checks.javaDependencyScan.status)
-          } else {
-            Write-Host "SECURITY_REPORT missing=logs/security/security-scan-latest.json"
-          }
+        uses: ./.github/actions/security-scan-summary
 
       - name: Upload Security Artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: ./.github/actions/upload-artifact
         with:
-          name: main-security-scan-${{ github.run_number }}
-          path: |
+          artifact_name: main-security-scan-${{ github.run_number }}
+          artifact_path: |
             logs/security/**
-          if-no-files-found: warn
+          if_no_files_found: error
+
+      - name: Upload Security Ops Evidence
+        if: always()
+        uses: ./.github/actions/upload-artifact
+        with:
+          artifact_name: main-security-ops-evidence-${{ github.run_number }}
+          artifact_path: |
+            logs/sre/**
+            logs/preflight/**
+          if_no_files_found: warn
 
       - name: SRE Daily Check
+        timeout-minutes: 5
         run: npm run sre:daily-check
 
       - name: SRE Alert Check
+        timeout-minutes: 5
         run: npm run sre:alert-check
 
-  # Job 5: 鍙戝竷鍑嗗锛堟墍鏈夋祴璇曢€氳繃鍚庯級
+      - name: Security Job Timing Summary
+        if: always()
+        uses: ./.github/actions/job-timing-summary
+        with:
+          job_label: Security
+          start_env_var: SECURITY_JOB_STARTED_AT
+
+  # Job 5: Release readiness and ops evidence
   release-prep:
-    needs: [frontend, backend, security-ops]
+    needs: [frontend, backend, security-ops, changes]
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.security == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -185,26 +266,36 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
 
-      - name: Install Frontend Dependencies
-        run: npm ci
 
-      - name: Release Snapshot
-        run: npm run release:snapshot
+      - name: Mark Release Prep Job Start
+        uses: ./.github/actions/mark-job-start
+        with:
+          start_env_var: RELEASE_PREP_JOB_STARTED_AT
 
-      - name: Production Preflight
-        run: npm run preflight:prod
+      - name: Run Release Prep Checks
+        uses: ./.github/actions/run-release-prep-checks
 
       - name: Upload Ops Evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: ./.github/actions/upload-artifact
         with:
-          name: ops-evidence
-          path: |
+          artifact_name: ops-evidence
+          artifact_path: |
             logs/release/**
             logs/sre/**
             logs/perf/**
             logs/security/**
             logs/preflight/**
+          if_no_files_found: error
+
+      - name: Release Prep Job Timing Summary
+        if: always()
+        uses: ./.github/actions/job-timing-summary
+        with:
+          job_label: Release Prep
+          start_env_var: RELEASE_PREP_JOB_STARTED_AT
 

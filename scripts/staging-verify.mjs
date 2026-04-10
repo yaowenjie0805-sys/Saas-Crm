@@ -10,6 +10,7 @@ const latestFile = path.join(outDir, 'staging-verify-latest.json')
 const HEALTH_RETRY_COUNT = 20
 const HEALTH_RETRY_DELAY_MS = 2000
 const HEALTH_REQUEST_TIMEOUT_MS = 5000
+const COMMAND_TIMEOUT_MS = Number(process.env.STAGING_VERIFY_COMMAND_TIMEOUT_MS || 20 * 60 * 1000)
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -20,13 +21,22 @@ function run(command, args = [], envOverrides = {}) {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, ...envOverrides },
+    timeout: COMMAND_TIMEOUT_MS,
   })
+  const timedOut = Boolean(result.error && String(result.error.code || '').toUpperCase() === 'ETIMEDOUT')
   return {
     ok: result.status === 0,
     status: result.status,
     stdout: result.stdout || '',
     stderr: result.stderr || '',
+    timedOut,
   }
+}
+
+function textTail(value, maxLength = 500) {
+  const text = String(value || '')
+  if (text.length <= maxLength) return text
+  return text.slice(-maxLength)
 }
 
 function runNpm(script, envOverrides = {}) {
@@ -104,13 +114,13 @@ async function main() {
 
   const e2eScript = stagingBaseUrl ? 'staging:e2e' : 'test:e2e'
   const e2e = runNpm(e2eScript)
-  checks.e2e = { ok: e2e.ok, status: e2e.status }
+  checks.e2e = { ok: e2e.ok, status: e2e.status, timedOut: e2e.timedOut, stdoutTail: textTail(e2e.stdout), stderrTail: textTail(e2e.stderr) }
 
   const sre = runNpm('sre:daily-check', remoteCheckEnv)
-  checks.sreDaily = { ok: sre.ok, status: sre.status }
+  checks.sreDaily = { ok: sre.ok, status: sre.status, timedOut: sre.timedOut, stdoutTail: textTail(sre.stdout), stderrTail: textTail(sre.stderr) }
 
   const perfGate = runNpm('perf:gate', remoteCheckEnv)
-  checks.perfGate = { ok: perfGate.ok, status: perfGate.status }
+  checks.perfGate = { ok: perfGate.ok, status: perfGate.status, timedOut: perfGate.timedOut, stdoutTail: textTail(perfGate.stdout), stderrTail: textTail(perfGate.stderr) }
 
   const pass = Object.values(checks).every((c) => c.ok)
   const report = {

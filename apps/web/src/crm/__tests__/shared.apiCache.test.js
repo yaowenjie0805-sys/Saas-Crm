@@ -50,6 +50,74 @@ test('GET dedupe keys include tenant and language context', async () => {
   await Promise.all([requestA, requestB, requestC, requestD]);
 });
 
+test('GET dedupe keys include auth context', async () => {
+  const fetchResolvers = [];
+  const fetchMock = vi.fn(() => new Promise((resolve) => {
+    fetchResolvers.push(resolve);
+  }));
+  vi.stubGlobal('fetch', fetchMock);
+  localStorage.setItem('crm_last_tenant', 'tenant-auth');
+
+  const requestA = api('/dedupe-auth', { method: 'GET' }, 'token-a', 'en');
+  const requestB = api('/dedupe-auth', { method: 'GET' }, 'token-a', 'en');
+  const requestC = api('/dedupe-auth', { method: 'GET' }, 'token-b', 'en');
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  const sampleResponse = {
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true }),
+  };
+  fetchResolvers.forEach((resolve) => resolve(sampleResponse));
+  await Promise.all([requestA, requestB, requestC]);
+});
+
+test('GET dedupe keys should not collide for same-prefix auth tokens', async () => {
+  const fetchResolvers = [];
+  const fetchMock = vi.fn(() => new Promise((resolve) => {
+    fetchResolvers.push(resolve);
+  }));
+  vi.stubGlobal('fetch', fetchMock);
+  localStorage.setItem('crm_last_tenant', 'tenant-auth-collision');
+
+  const tokenA = `${'x'.repeat(24)}-aaaaaaaaaa`;
+  const tokenB = `${'x'.repeat(24)}-bbbbbbbbbb`;
+
+  const requestA = api('/dedupe-auth-collision', { method: 'GET' }, tokenA, 'en');
+  const requestB = api('/dedupe-auth-collision', { method: 'GET' }, tokenB, 'en');
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  const sampleResponse = {
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true }),
+  };
+  fetchResolvers.forEach((resolve) => resolve(sampleResponse));
+  await Promise.all([requestA, requestB]);
+});
+
+test('GET requests with abort signal should not dedupe', async () => {
+  const fetchMock = vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  localStorage.setItem('crm_last_tenant', 'tenant-signal');
+  const controller = new AbortController();
+
+  await Promise.all([
+    api('/dedupe-signal', { method: 'GET', signal: controller.signal }, '', 'en'),
+    api('/dedupe-signal', { method: 'GET', signal: controller.signal }, '', 'en'),
+  ]);
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
 test('Cache evicts lower priority entries when size limit reached', async () => {
   const fetchMock = vi.fn((url) =>
     Promise.resolve({

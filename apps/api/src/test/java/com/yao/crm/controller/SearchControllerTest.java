@@ -402,37 +402,37 @@ class SearchControllerTest {
 
     @Test
     void suggestionsShouldReturnPrefixMatchesBeforeContainsMatchesAndDeduplicate() {
-        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        when(savedSearchRepository.findByTenantIdAndNameIgnoreCaseStartingWith(
                 eq("tenant-1"), eq("vip"), any(Pageable.class)))
-                .thenReturn(Arrays.asList("vip alpha", "vip beta"));
-        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+                .thenReturn(savedSearches("vip alpha", "vip beta"));
+        when(savedSearchRepository.findByTenantIdAndNameIgnoreCaseContaining(
                 eq("tenant-1"), eq("vip"), any(Pageable.class)))
-                .thenReturn(Arrays.asList("alpha vip", "vip beta", "vip gamma"));
+                .thenReturn(savedSearches("alpha vip", "vip beta", "vip gamma"));
 
         ResponseEntity<List<String>> response = controller.suggestions("tenant-1", " vip ", 5);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(Arrays.asList("vip alpha", "vip beta", "alpha vip", "vip gamma"), response.getBody());
-        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        verify(savedSearchRepository).findByTenantIdAndNameIgnoreCaseStartingWith(
                 eq("tenant-1"), eq("vip"), any(Pageable.class));
-        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+        verify(savedSearchRepository).findByTenantIdAndNameIgnoreCaseContaining(
                 eq("tenant-1"), eq("vip"), any(Pageable.class));
     }
 
     @Test
     void suggestionsShouldClampLimitToMaximumPageSize() {
-        List<String> names = Arrays.asList(
+        List<SavedSearch> names = savedSearches(
                 "Suggestion 1", "Suggestion 2", "Suggestion 3", "Suggestion 4", "Suggestion 5",
                 "Suggestion 6", "Suggestion 7", "Suggestion 8", "Suggestion 9", "Suggestion 10",
                 "Suggestion 11", "Suggestion 12", "Suggestion 13", "Suggestion 14", "Suggestion 15",
                 "Suggestion 16", "Suggestion 17", "Suggestion 18", "Suggestion 19", "Suggestion 20",
                 "Suggestion 21", "Suggestion 22", "Suggestion 23", "Suggestion 24", "Suggestion 25");
 
-        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        when(savedSearchRepository.findByTenantIdAndNameIgnoreCaseStartingWith(
                 eq("tenant-1"), eq("vip"), any(Pageable.class)))
                 .thenReturn(Collections.emptyList());
 
-        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+        when(savedSearchRepository.findByTenantIdAndNameIgnoreCaseContaining(
                 eq("tenant-1"), eq("vip"), any(Pageable.class)))
                 .thenReturn(names);
 
@@ -442,13 +442,13 @@ class SearchControllerTest {
         assertEquals(20, response.getBody().size());
 
         ArgumentCaptor<Pageable> prefixPageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        verify(savedSearchRepository).findByTenantIdAndNameIgnoreCaseStartingWith(
                 eq("tenant-1"), eq("vip"), prefixPageableCaptor.capture());
         assertEquals(20, prefixPageableCaptor.getValue().getPageSize());
         assertEquals(0, prefixPageableCaptor.getValue().getPageNumber());
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+        verify(savedSearchRepository).findByTenantIdAndNameIgnoreCaseContaining(
                 eq("tenant-1"), eq("vip"), pageableCaptor.capture());
         assertEquals(20, pageableCaptor.getValue().getPageSize());
         assertEquals(0, pageableCaptor.getValue().getPageNumber());
@@ -462,17 +462,21 @@ class SearchControllerTest {
                 "vip lambda", "vip mu", "vip nu", "vip xi", "vip omicron",
                 "vip pi", "vip rho", "vip sigma", "vip tau", "vip upsilon");
 
-        when(savedSearchRepository.findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        when(savedSearchRepository.findByTenantIdAndNameIgnoreCaseStartingWith(
                 eq("tenant-1"), eq("vip"), any(Pageable.class)))
-                .thenReturn(prefixNames);
+                .thenReturn(savedSearches(
+                        "vip alpha", "vip beta", "vip gamma", "vip delta", "vip epsilon",
+                        "vip zeta", "vip eta", "vip theta", "vip iota", "vip kappa",
+                        "vip lambda", "vip mu", "vip nu", "vip xi", "vip omicron",
+                        "vip pi", "vip rho", "vip sigma", "vip tau", "vip upsilon"));
 
         ResponseEntity<List<String>> response = controller.suggestions("tenant-1", "vip", 20);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(prefixNames, response.getBody());
-        verify(savedSearchRepository).findDistinctNamesByTenantIdAndNameStartingWithIgnoreCase(
+        verify(savedSearchRepository).findByTenantIdAndNameIgnoreCaseStartingWith(
                 eq("tenant-1"), eq("vip"), any(Pageable.class));
-        verify(savedSearchRepository, never()).findDistinctNamesByTenantIdAndNameContainingIgnoreCase(
+        verify(savedSearchRepository, never()).findByTenantIdAndNameIgnoreCaseContaining(
                 eq("tenant-1"), eq("vip"), any(Pageable.class));
     }
 
@@ -488,6 +492,14 @@ class SearchControllerTest {
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         assertNull(response.getBody());
         verify(savedSearchRepository).deleteByIdAndTenantIdAndOwner("saved-1", "tenant-1", "alice");
+    }
+
+    private List<SavedSearch> savedSearches(String... names) {
+        return Arrays.stream(names).map(name -> {
+            SavedSearch savedSearch = new SavedSearch();
+            savedSearch.setName(name);
+            return savedSearch;
+        }).collect(java.util.stream.Collectors.toList());
     }
 }
 

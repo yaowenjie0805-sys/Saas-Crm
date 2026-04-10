@@ -86,6 +86,11 @@ public class AiSalesForecastService {
      */
     public String generateSalesAdvice(String opportunityName, String stage,
             String customerName, String lastActivity) {
+        return generateSalesAdvice(opportunityName, stage, customerName, lastActivity, null, null, null);
+    }
+
+    public String generateSalesAdvice(String opportunityName, String stage,
+            String customerName, String lastActivity, String model, String baseUrl, String apiKey) {
 
         if (!aiService.isAvailable()) {
             return "AI服务暂不可用，建议保持客户跟进。";
@@ -100,6 +105,17 @@ public class AiSalesForecastService {
             opportunityName, stage, customerName, lastActivity
         );
 
-        return aiService.generateText(prompt, Map.of("temperature", 0.7));
+        java.util.Map<String, Object> options = new java.util.LinkedHashMap<String, Object>();
+        options.put("temperature", 0.7);
+        if (model != null && !model.trim().isEmpty()) {
+            options.put("model", model.trim());
+        }
+        if (baseUrl != null && !baseUrl.trim().isEmpty()) {
+            options.put("base_url", baseUrl.trim());
+        }
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            options.put("api_key", apiKey.trim());
+        }
+        return aiService.generateText(prompt, options);
     }
 }

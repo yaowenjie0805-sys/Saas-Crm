@@ -1,4 +1,4 @@
-﻿function ListState({ loading, empty, emptyText = 'No data', rows = 4 }) {
+function ListState({ loading, empty, emptyText = 'No data', rows = 4 }) {
   if (loading) {
     return (
       <div className="list-skeleton" aria-hidden="true">

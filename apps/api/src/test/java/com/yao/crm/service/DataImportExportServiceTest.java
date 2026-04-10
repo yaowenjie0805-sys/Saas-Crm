@@ -8,6 +8,8 @@ import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.ProductRepository;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -21,9 +23,14 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +55,16 @@ class DataImportExportServiceTest {
 
     @BeforeEach
     void setUp() {
+        final Map<String, Object> exportJobStore = new ConcurrentHashMap<>();
+        lenient().doAnswer(invocation -> {
+            String jobId = invocation.getArgument(0);
+            Object context = invocation.getArgument(1);
+            exportJobStore.put(jobId, context);
+            return null;
+        }).when(cacheService).setExportJobContext(any(), any());
+        lenient().when(cacheService.getExportJobContext(any(), any(Class.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(exportJobStore.get(invocation.getArgument(0))));
+
         ObjectMapper objectMapper = new ObjectMapper();
         FileParsingService fileParsingService = new FileParsingService(objectMapper);
         DataMappingService dataMappingService = new DataMappingService();
@@ -181,7 +198,7 @@ class DataImportExportServiceTest {
                 createCustomer("cust_1", "CompanyA"),
                 createCustomer("cust_2", "CompanyB")
         );
-        when(customerRepository.findByTenantId(TENANT_TEST)).thenReturn(customers);
+        stubCustomerPagedQuery(customers);
 
         DataImportExportService.ExportJobResult result =
                 service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
@@ -189,6 +206,31 @@ class DataImportExportServiceTest {
         assertNotNull(result);
         assertNotNull(result.getJobId());
         assertEquals(2, result.getTotalRows());
+    }
+
+    @Test
+    void testCreateExportJob_ShouldDefaultToCsvWhenFormatMissing() {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, null);
+
+        assertNotNull(result);
+        assertNotNull(result.getJobId());
+        assertEquals("COMPLETED", result.getStatus());
+        assertEquals(1, result.getTotalRows());
+    }
+
+    @Test
+    void testCreateExportJob_ShouldFailWhenFormatUnsupported() {
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "xml");
+
+        assertNotNull(result);
+        assertEquals("FAILED", result.getStatus());
+        assertNull(result.getJobId());
+        assertTrue(result.getErrorMessage() != null && result.getErrorMessage().contains("unsupported_export_format"));
     }
 
     @Test
@@ -204,12 +246,17 @@ class DataImportExportServiceTest {
     @Disabled("TODO: rewrite to use mock CacheService for async behavior")
     void testGetExportJobStatus() {
         List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
-        when(customerRepository.findByTenantId(TENANT_TEST)).thenReturn(customers);
+        stubCustomerPagedQuery(customers);
 
         DataImportExportService.ExportJobResult createResult =
                 service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
 
-        DataImportExportService.ExportJobResult status = service.getExportJobStatus(createResult.getJobId());
+        DataImportExportService.ExportJobResult status = service.getExportJobStatus(
+                TENANT_TEST,
+                "user123",
+                createResult.getJobId(),
+                false
+        );
 
         assertNotNull(status);
         assertEquals(createResult.getJobId(), status.getJobId());
@@ -217,8 +264,37 @@ class DataImportExportServiceTest {
 
     @Test
     void testGetExportJobStatus_NotFound() {
-        DataImportExportService.ExportJobResult status = service.getExportJobStatus("nonexistent_job");
+        DataImportExportService.ExportJobResult status = service.getExportJobStatus(
+                TENANT_TEST,
+                "user123",
+                "nonexistent_job",
+                false
+        );
         assertNull(status);
+    }
+
+    @Test
+    void testGetExportJobStatus_ShouldRejectCrossTenantAccess() {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult createResult =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getExportJobStatus("tenant_other", "user123", createResult.getJobId(), false));
+    }
+
+    @Test
+    void testGetExportJobStatus_ShouldRejectNonOwnerWithoutPrivilege() {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult createResult =
+                service.createExportJob(TENANT_TEST, "ownerA", "Customer", null, null, "csv");
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getExportJobStatus(TENANT_TEST, "ownerB", createResult.getJobId(), false));
     }
 
     @Test
@@ -237,12 +313,141 @@ class DataImportExportServiceTest {
                 service.getImportTemplate("InvalidType", "csv"));
     }
 
+    @Test
+    void testGetImportTemplate_ShouldRejectUnsupportedFormat() {
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getImportTemplate("Customer", "xml"));
+    }
+
+    @Test
+    void testCreateExportJob_ShouldReleaseCachedDataAfterCompletion() throws Exception {
+        List<Customer> customers = Arrays.asList(
+                createCustomer("cust_1", "CompanyA"),
+                createCustomer("cust_2", "CompanyB")
+        );
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        Object context = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(context);
+        Method getData = context.getClass().getDeclaredMethod("getData");
+        Object data = getData.invoke(context);
+        assertNull(data);
+    }
+
+    @Test
+    void testCreateExportJob_ShouldReleaseCachedFieldsAfterCompletion() throws Exception {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        Object context = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(context);
+        Method getFields = context.getClass().getDeclaredMethod("getFields");
+        Object fields = getFields.invoke(context);
+        assertNull(fields);
+    }
+
+    @Test
+    void testGetExportFile_ShouldClearCachedFilePathAfterDownload() throws Exception {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        byte[] bytes = service.getExportFile(TENANT_TEST, "user123", result.getJobId(), false);
+        assertNotNull(bytes);
+        assertTrue(bytes.length > 0);
+
+        Object context = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(context);
+        Method getFilePath = context.getClass().getDeclaredMethod("getFilePath");
+        Object filePath = getFilePath.invoke(context);
+        assertNull(filePath);
+    }
+
+    @Test
+    void testGetExportFile_ShouldClearStaleCachedFilePathWhenFileMissing() throws Exception {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        Object context = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(context);
+        Method setFilePath = context.getClass().getDeclaredMethod("setFilePath", String.class);
+        setFilePath.invoke(context, "C:\\\\temp\\\\not-exists-export.csv");
+        cacheService.setExportJobContext(result.getJobId(), context);
+
+        byte[] bytes = service.getExportFile(TENANT_TEST, "user123", result.getJobId(), false);
+        assertNull(bytes);
+
+        Object refreshed = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(refreshed);
+        Method getFilePath = refreshed.getClass().getDeclaredMethod("getFilePath");
+        Object filePath = getFilePath.invoke(refreshed);
+        assertNull(filePath);
+    }
+
+    @Test
+    void testGetExportJobStatus_ShouldClearStaleFilePathWhenFileMissing() throws Exception {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        Object context = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(context);
+        Method setFilePath = context.getClass().getDeclaredMethod("setFilePath", String.class);
+        setFilePath.invoke(context, "C:\\\\temp\\\\not-exists-export-status.csv");
+        cacheService.setExportJobContext(result.getJobId(), context);
+
+        DataImportExportService.ExportJobResult status = service.getExportJobStatus(
+                TENANT_TEST, "user123", result.getJobId(), false
+        );
+        assertNotNull(status);
+        assertNull(status.getFilePath());
+    }
+
+    @Test
+    void testGetExportJobStatus_ShouldClearInvalidFilePath() throws Exception {
+        List<Customer> customers = Arrays.asList(createCustomer("cust_1", "CompanyA"));
+        stubCustomerPagedQuery(customers);
+
+        DataImportExportService.ExportJobResult result =
+                service.createExportJob(TENANT_TEST, "user123", "Customer", null, null, "csv");
+
+        Object context = cacheService.getExportJobContext(result.getJobId(), Object.class).orElse(null);
+        assertNotNull(context);
+        Method setFilePath = context.getClass().getDeclaredMethod("setFilePath", String.class);
+        setFilePath.invoke(context, "bad\u0000path.csv");
+        cacheService.setExportJobContext(result.getJobId(), context);
+
+        DataImportExportService.ExportJobResult status = service.getExportJobStatus(
+                TENANT_TEST, "user123", result.getJobId(), false
+        );
+        assertNotNull(status);
+        assertNull(status.getFilePath());
+    }
+
     private Customer createCustomer(String id, String name) {
         Customer customer = new Customer();
         customer.setId(id);
         customer.setName(name);
         customer.setTenantId(TENANT_TEST);
         return customer;
+    }
+
+    private void stubCustomerPagedQuery(List<Customer> customers) {
+        when(customerRepository.findByTenantId(TENANT_TEST, PageRequest.of(0, 500)))
+                .thenReturn(new PageImpl<>(customers, PageRequest.of(0, 500), customers.size()));
     }
 }
 

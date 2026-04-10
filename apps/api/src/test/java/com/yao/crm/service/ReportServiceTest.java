@@ -52,9 +52,9 @@ class ReportServiceTest {
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
-        when(userAccountRepository.findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndRoleIgnoreCase(TENANT_TEST, "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
-        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartmentIgnoreCase(TENANT_TEST, "bd"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
 
         when(customerRepository.countByTenantIdAndOwnerIn(anyString(), anyCollection())).thenReturn(2L);
@@ -133,8 +133,8 @@ class ReportServiceTest {
         verify(customerRepository, never()).findByTenantId(anyString());
         verify(customerRepository, never()).countByTenantIdAndOwnerIn(anyString(), anyCollection());
         verify(customerRepository, never()).findByTenantIdAndOwnerIn(anyString(), anyCollection());
-        verify(userAccountRepository).findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES");
-        verify(userAccountRepository).findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd");
+        verify(userAccountRepository).findIdentityPairsByTenantIdAndRoleIgnoreCase(TENANT_TEST, "SALES");
+        verify(userAccountRepository).findIdentityPairsByTenantIdAndDepartmentIgnoreCase(TENANT_TEST, "bd");
     }
 
     @Test
@@ -152,9 +152,9 @@ class ReportServiceTest {
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
-        when(userAccountRepository.findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndRoleIgnoreCase(TENANT_TEST, "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
-        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartmentIgnoreCase(TENANT_TEST, "bd"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
         Map<String, Object> emptySummary = new java.util.HashMap<String, Object>();
         emptySummary.put("customers", 0L);
@@ -347,9 +347,9 @@ class ReportServiceTest {
         DashboardMetricsCacheService cacheService = mock(DashboardMetricsCacheService.class);
         ReportAggregationService reportAggregationService = mock(ReportAggregationService.class);
 
-        when(userAccountRepository.findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndRoleIgnoreCase(TENANT_TEST, "SALES"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
-        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "BD"))
+        when(userAccountRepository.findIdentityPairsByTenantIdAndDepartmentIgnoreCase(TENANT_TEST, "BD"))
                 .thenReturn(Collections.singletonList(new Object[]{"alice", "Alice"}));
         when(customerRepository.countByTenantIdAndOwnerIn(anyString(), anyCollection())).thenReturn(1L);
         when(customerRepository.sumValueByTenantIdAndOwnerIn(anyString(), anyCollection())).thenReturn(100L);
@@ -390,8 +390,8 @@ class ReportServiceTest {
         reportService.overviewByTenant(TENANT_TEST, null, null, "sales", "alice", "bd");
         reportService.overviewByTenant(TENANT_TEST, null, null, "sales", "alice", "bd");
 
-        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndRole(TENANT_TEST, "SALES");
-        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndDepartment(TENANT_TEST, "bd");
+        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndRoleIgnoreCase(TENANT_TEST, "SALES");
+        verify(userAccountRepository, times(1)).findIdentityPairsByTenantIdAndDepartmentIgnoreCase(TENANT_TEST, "bd");
     }
 
     @Test
@@ -695,3 +695,4 @@ class ReportServiceTest {
         }
     }
 }
+

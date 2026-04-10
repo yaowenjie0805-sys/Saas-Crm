@@ -1,0 +1,42 @@
+name: Run Lint Quality Gates
+description: Run shared lint, runtime, encoding, and pages gate checks
+
+runs:
+  using: composite
+  steps:
+    - name: CI Scope Guard
+      shell: pwsh
+      run: npm run ci:scope:guard
+
+    - name: CI Scope Guard Self Test
+      shell: pwsh
+      run: npm run test:ci:scope-guard
+
+    - name: Optimize Guard
+      shell: pwsh
+      run: npm run optimize:guard
+
+    - name: Encoding Guard
+      shell: pwsh
+      run: npm run guard:encoding
+
+    - name: Runtime Kernel Import Check
+      shell: pwsh
+      run: npm run check:runtime-kernel-imports --workspace apps/web
+
+    - name: Runtime Barrel Export Check
+      shell: pwsh
+      run: npm run check:runtime-barrel-exports:ci --workspace apps/web
+
+    - name: Runtime Barrel Export Summary
+      if: always()
+      shell: pwsh
+      run: node scripts/runtime-barrel-summary.mjs >> $env:GITHUB_STEP_SUMMARY
+
+    - name: Pages Entry Export Check
+      shell: pwsh
+      run: npm run check:pages-entry-exports --workspace apps/web
+
+    - name: Lint
+      shell: pwsh
+      run: npm run lint

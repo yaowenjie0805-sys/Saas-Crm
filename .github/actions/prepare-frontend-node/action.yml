@@ -1,0 +1,26 @@
+name: Prepare Frontend Node Environment
+description: Checkout repository, setup Node.js, and install frontend dependencies
+
+inputs:
+  node_version:
+    description: Node.js version
+    required: false
+    default: "20"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+    - name: Setup Node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: ${{ inputs.node_version }}
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+
+    - name: Install Frontend Dependencies
+      shell: pwsh
+      run: npm ci

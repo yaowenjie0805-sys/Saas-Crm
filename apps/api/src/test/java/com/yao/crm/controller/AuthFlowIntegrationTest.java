@@ -153,8 +153,7 @@ class AuthFlowIntegrationTest {
 
         String followId = objectMapper.readTree(createResponse).get("id").asText();
 
-        boolean foundFollowUp = false;
-        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+        boolean foundFollowUp = waitUntil(() -> {
             String searchBody = mockMvc.perform(get("/api/follow-ups/search")
                             .header("Authorization", "Bearer " + token)
                             .queryParam("customerId", "c_1001")
@@ -164,15 +163,11 @@ class AuthFlowIntegrationTest {
             JsonNode followItems = objectMapper.readTree(searchBody).path("items");
             for (JsonNode item : followItems) {
                 if (followId.equals(item.path("id").asText())) {
-                    foundFollowUp = true;
-                    break;
+                    return true;
                 }
             }
-            if (foundFollowUp) {
-                break;
-            }
-            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
-        }
+            return false;
+        });
         org.junit.jupiter.api.Assertions.assertTrue(foundFollowUp, "created follow-up should be searchable by id");
 
         mockMvc.perform(delete("/api/follow-ups/" + followId)
@@ -231,19 +226,14 @@ class AuthFlowIntegrationTest {
 
         String retryJobId = objectMapper.readTree(retried).get("jobId").asText();
 
-        boolean retryDone = false;
-        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+        boolean retryDone = waitUntil(() -> {
             String statusBody = mockMvc.perform(get("/api/audit-logs/export-jobs/" + retryJobId)
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             String statusText = objectMapper.readTree(statusBody).get("status").asText();
-            if ("DONE".equals(statusText)) {
-                retryDone = true;
-                break;
-            }
-            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
-        }
+            return "DONE".equals(statusText);
+        });
         org.junit.jupiter.api.Assertions.assertTrue(retryDone, "audit export retry job should reach DONE before download");
 
         mockMvc.perform(get("/api/audit-logs/export-jobs/" + retryJobId + "/download")
@@ -591,25 +581,33 @@ class AuthFlowIntegrationTest {
 
         String retryJobId = objectMapper.readTree(retried).get("jobId").asText();
 
-        boolean retryDone = false;
-        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+        boolean retryDone = waitUntil(() -> {
             String statusBody = mockMvc.perform(get("/api/reports/export-jobs/" + retryJobId)
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             String statusText = objectMapper.readTree(statusBody).get("status").asText();
-            if ("DONE".equals(statusText)) {
-                retryDone = true;
-                break;
-            }
-            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
-        }
+            return "DONE".equals(statusText);
+        });
         org.junit.jupiter.api.Assertions.assertTrue(retryDone, "report export retry job should reach DONE before download");
 
         mockMvc.perform(get("/api/reports/export-jobs/" + retryJobId + "/download")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("section,key,value")));
+
+        mockMvc.perform(get("/api/reports/export-jobs/" + retryJobId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.downloadReady").value(false));
+
+        mockMvc.perform(get("/api/reports/export-jobs")
+                        .header("Authorization", "Bearer " + token)
+                        .queryParam("limit", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].jobId").value(retryJobId))
+                .andExpect(jsonPath("$.items[0].downloadReady").value(false));
     }
 
     @Test
@@ -740,20 +738,15 @@ class AuthFlowIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String jobId = objectMapper.readTree(jobBody).get("jobId").asText();
 
-        boolean jobDone = false;
-        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+        boolean jobDone = waitUntil(() -> {
             String statusBody = mockMvc.perform(get("/api/v1/reports/export-jobs/" + jobId)
                             .header("Authorization", "Bearer " + token)
                             .header("X-Tenant-Id", TENANT_TEST))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             String statusText = objectMapper.readTree(statusBody).get("status").asText();
-            if ("DONE".equals(statusText)) {
-                jobDone = true;
-                break;
-            }
-            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
-        }
+            return "DONE".equals(statusText);
+        });
         org.junit.jupiter.api.Assertions.assertTrue(jobDone, "v1 report export job should reach DONE before download");
 
         mockMvc.perform(get("/api/v1/reports/export-jobs/" + jobId + "/download")
@@ -1548,8 +1541,7 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.code").value("lead_import_export_jobs_listed"))
                 .andExpect(jsonPath("$.items").isArray());
 
-        boolean exportDone = false;
-        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+        boolean exportDone = waitUntil(() -> {
             String listBody = mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs")
                             .header("Authorization", "Bearer " + token)
                             .header("X-Tenant-Id", TENANT_TEST)
@@ -1566,12 +1558,8 @@ class AuthFlowIntegrationTest {
                     break;
                 }
             }
-            if ("DONE".equals(statusText)) {
-                exportDone = true;
-                break;
-            }
-            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
-        }
+            return "DONE".equals(statusText);
+        });
         org.junit.jupiter.api.Assertions.assertTrue(exportDone, "failed-rows export job should reach DONE before download");
 
         mockMvc.perform(get("/api/v1/leads/import-jobs/" + importJobId + "/failed-rows/export-jobs/" + exportJobId + "/download")
@@ -2510,6 +2498,21 @@ class AuthFlowIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         JsonNode node = objectMapper.readTree(response);
         return node.get("token").asText();
+    }
+
+    @FunctionalInterface
+    private interface CheckedCondition {
+        boolean evaluate() throws Exception;
+    }
+
+    private boolean waitUntil(CheckedCondition condition) throws Exception {
+        for (int i = 0; i < ASYNC_WAIT_ATTEMPTS; i++) {
+            if (condition.evaluate()) {
+                return true;
+            }
+            Thread.sleep(ASYNC_WAIT_INTERVAL_MS);
+        }
+        return false;
     }
 }
 

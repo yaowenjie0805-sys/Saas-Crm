@@ -4,7 +4,6 @@ export function buildRuntimeStateSnapshots(runtime) {
       auth: runtime.auth,
       loginError: runtime.loginError,
       loginForm: runtime.loginForm,
-      registerForm: runtime.registerForm,
       mfaChallengeId: runtime.mfaChallengeId,
       ssoConfig: runtime.ssoConfig,
       ssoForm: runtime.ssoForm,

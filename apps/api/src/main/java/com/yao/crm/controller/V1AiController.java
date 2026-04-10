@@ -1,5 +1,6 @@
 package com.yao.crm.controller;
 
+import com.yao.crm.config.AiConfig;
 import com.yao.crm.service.AiContentGenerationService;
 import com.yao.crm.service.AiLeadClassificationService;
 import com.yao.crm.service.AiSalesForecastService;
@@ -19,7 +20,10 @@ import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.validation.constraints.NotBlank;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,19 +35,24 @@ public class V1AiController extends BaseApiController {
     private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
     private static final String AI_SERVICE_UNAVAILABLE_CODE = "ai_service_unavailable";
     private static final int FOLLOW_UP_INTERACTION_DETAILS_MAX_LENGTH = 4000;
+    private static final String OPENAI_FAILURE_MESSAGE = "AI service is temporarily unavailable. Please try again later.";
+    private static final String OPENAI_NOT_CONFIGURED_MESSAGE = "AI service is not configured. Please contact administrator.";
 
     private final AiContentGenerationService aiContentGenerationService;
     private final AiLeadClassificationService aiLeadClassificationService;
     private final AiSalesForecastService aiSalesForecastService;
+    private final AiConfig aiConfig;
 
     public V1AiController(AiContentGenerationService aiContentGenerationService,
                           AiLeadClassificationService aiLeadClassificationService,
                           AiSalesForecastService aiSalesForecastService,
+                          AiConfig aiConfig,
                           I18nService i18nService) {
         super(i18nService);
         this.aiContentGenerationService = aiContentGenerationService;
         this.aiLeadClassificationService = aiLeadClassificationService;
         this.aiSalesForecastService = aiSalesForecastService;
+        this.aiConfig = aiConfig;
     }
 
     @GetMapping("/status")
@@ -55,6 +64,22 @@ public class V1AiController extends BaseApiController {
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("available", aiContentGenerationService.isAvailable());
         return ResponseEntity.ok(successWithFields(request, "ai_status_loaded", out));
+    }
+
+    @GetMapping("/config")
+    public ResponseEntity<?> config(HttpServletRequest request) {
+        if (!hasAiAccess(request)) {
+            return forbidden(request);
+        }
+        List<String> availableModels = resolveAvailableModels();
+        String defaultModel = defaultModel(availableModels);
+
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("availableModels", availableModels);
+        out.put("defaultModel", defaultModel);
+        out.put("canOverride", Boolean.TRUE);
+        out.put("supportsCustomConnection", Boolean.TRUE);
+        return ResponseEntity.ok(successWithFields(request, "ai_config_loaded", out));
     }
 
     @PostMapping("/followUpSummary")
@@ -77,11 +102,25 @@ public class V1AiController extends BaseApiController {
         String channel = normalize(payload.getChannel());
         final String finalCustomerName = isBlank(customerName) ? "Unknown Customer" : customerName;
         final String finalChannel = isBlank(channel) ? "Unknown Channel" : channel;
+        String model = normalize(payload.getModel());
+        if (!isBlank(model) && !resolveAvailableModels().contains(model)) {
+            return badRequest(request, "ai_model_invalid");
+        }
+        final String finalModel = isBlank(model) ? null : model;
+        final String finalBaseUrl = normalize(payload.getBaseUrl());
+        final String finalApiKey = normalize(payload.getApiKey());
 
         String summary = invokeAiText("follow_up_summary", new AiTextOperation() {
             @Override
             public String execute() {
-                return aiContentGenerationService.generateFollowUpSummary(finalCustomerName, interactionDetails, finalChannel);
+                return aiContentGenerationService.generateFollowUpSummary(
+                        finalCustomerName,
+                        interactionDetails,
+                        finalChannel,
+                        finalModel,
+                        isBlank(finalBaseUrl) ? null : finalBaseUrl,
+                        isBlank(finalApiKey) ? null : finalApiKey
+                );
             }
         });
         if (summary == null) {
@@ -106,11 +145,20 @@ public class V1AiController extends BaseApiController {
 
         String originalComment = normalize(payload.getOriginalComment());
         String context = normalize(payload.getContext());
+        final String model = normalize(payload.getModel());
+        final String baseUrl = normalize(payload.getBaseUrl());
+        final String apiKey = normalize(payload.getApiKey());
 
         String reply = invokeAiText("comment_reply", new AiTextOperation() {
             @Override
             public String execute() {
-                return aiContentGenerationService.generateCommentReply(originalComment, context);
+                return aiContentGenerationService.generateCommentReply(
+                        originalComment,
+                        context,
+                        isBlank(model) ? null : model,
+                        isBlank(baseUrl) ? null : baseUrl,
+                        isBlank(apiKey) ? null : apiKey
+                );
             }
         });
         if (reply == null) {
@@ -136,11 +184,21 @@ public class V1AiController extends BaseApiController {
         String customerName = normalize(payload.getCustomerName());
         String productName = normalize(payload.getProductName());
         String customerInterest = normalize(payload.getCustomerInterest());
+        final String model = normalize(payload.getModel());
+        final String baseUrl = normalize(payload.getBaseUrl());
+        final String apiKey = normalize(payload.getApiKey());
 
         String email = invokeAiText("marketing_email", new AiTextOperation() {
             @Override
             public String execute() {
-                return aiContentGenerationService.generateMarketingEmail(customerName, productName, customerInterest);
+                return aiContentGenerationService.generateMarketingEmail(
+                        customerName,
+                        productName,
+                        customerInterest,
+                        isBlank(model) ? null : model,
+                        isBlank(baseUrl) ? null : baseUrl,
+                        isBlank(apiKey) ? null : apiKey
+                );
             }
         });
         if (email == null) {
@@ -247,11 +305,22 @@ public class V1AiController extends BaseApiController {
         String stage = normalize(payload.getStage());
         String customerName = normalize(payload.getCustomerName());
         String lastActivity = normalize(payload.getLastActivity());
+        final String model = normalize(payload.getModel());
+        final String baseUrl = normalize(payload.getBaseUrl());
+        final String apiKey = normalize(payload.getApiKey());
 
         String advice = invokeAiText("sales_advice", new AiTextOperation() {
             @Override
             public String execute() {
-                return aiSalesForecastService.generateSalesAdvice(opportunityName, stage, customerName, lastActivity);
+                return aiSalesForecastService.generateSalesAdvice(
+                        opportunityName,
+                        stage,
+                        customerName,
+                        lastActivity,
+                        isBlank(model) ? null : model,
+                        isBlank(baseUrl) ? null : baseUrl,
+                        isBlank(apiKey) ? null : apiKey
+                );
             }
         });
         if (advice == null) {
@@ -293,11 +362,21 @@ public class V1AiController extends BaseApiController {
                 log.warn("AI operation {} returned blank response", operation);
                 return null;
             }
+            if (isAiUnavailablePayload(result)) {
+                log.warn("AI operation {} returned service-unavailable payload", operation);
+                return null;
+            }
             return result;
         } catch (Exception ex) {
             log.warn("AI operation {} failed", operation, ex);
             return null;
         }
+    }
+
+    private boolean isAiUnavailablePayload(String result) {
+        String normalized = normalize(result);
+        return OPENAI_FAILURE_MESSAGE.equalsIgnoreCase(normalized)
+                || OPENAI_NOT_CONFIGURED_MESSAGE.equalsIgnoreCase(normalized);
     }
 
     private interface AiTextOperation {
@@ -344,6 +423,27 @@ public class V1AiController extends BaseApiController {
         }
     }
 
+    private List<String> resolveAvailableModels() {
+        LinkedHashSet<String> models = new LinkedHashSet<String>();
+        if (aiConfig != null && aiConfig.getOpenai() != null && !isBlank(aiConfig.getOpenai().getModel())) {
+            models.add(aiConfig.getOpenai().getModel().trim());
+        }
+        if (aiConfig != null && aiConfig.getAnthropic() != null && !isBlank(aiConfig.getAnthropic().getModel())) {
+            models.add(aiConfig.getAnthropic().getModel().trim());
+        }
+        if (models.isEmpty()) {
+            models.add("gpt-4o");
+        }
+        return new ArrayList<String>(models);
+    }
+
+    private String defaultModel(List<String> availableModels) {
+        if (availableModels == null || availableModels.isEmpty()) {
+            return "gpt-4o";
+        }
+        return availableModels.get(0);
+    }
+
     public static class FollowUpSummaryRequest {
         private String customerName;
 
@@ -351,6 +451,9 @@ public class V1AiController extends BaseApiController {
         private String interactionDetails;
 
         private String channel;
+        private String model;
+        private String baseUrl;
+        private String apiKey;
 
         public String getCustomerName() {
             return customerName;
@@ -375,6 +478,30 @@ public class V1AiController extends BaseApiController {
         public void setChannel(String channel) {
             this.channel = channel;
         }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
     }
 
     public static class CommentReplyRequest {
@@ -383,6 +510,9 @@ public class V1AiController extends BaseApiController {
 
         @NotBlank(message = "context_required")
         private String context;
+        private String model;
+        private String baseUrl;
+        private String apiKey;
 
         public String getOriginalComment() {
             return originalComment;
@@ -399,6 +529,30 @@ public class V1AiController extends BaseApiController {
         public void setContext(String context) {
             this.context = context;
         }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
     }
 
     public static class MarketingEmailRequest {
@@ -410,6 +564,9 @@ public class V1AiController extends BaseApiController {
 
         @NotBlank(message = "customer_interest_required")
         private String customerInterest;
+        private String model;
+        private String baseUrl;
+        private String apiKey;
 
         public String getCustomerName() {
             return customerName;
@@ -433,6 +590,30 @@ public class V1AiController extends BaseApiController {
 
         public void setCustomerInterest(String customerInterest) {
             this.customerInterest = customerInterest;
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
         }
     }
 
@@ -552,6 +733,9 @@ public class V1AiController extends BaseApiController {
 
         @NotBlank(message = "last_activity_required")
         private String lastActivity;
+        private String model;
+        private String baseUrl;
+        private String apiKey;
 
         public String getOpportunityName() {
             return opportunityName;
@@ -583,6 +767,30 @@ public class V1AiController extends BaseApiController {
 
         public void setLastActivity(String lastActivity) {
             this.lastActivity = lastActivity;
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
         }
     }
 }

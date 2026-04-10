@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAppStore, selectSearchDomainSlice } from '../../store/appStore'
+import { getTenantId } from '../../shared/storage'
+import { clampSelectedIndex, buildSearchHeaders, flattenSearchResults } from './searchUtils'
 
 /**
  * Command Palette - 全局搜索命令面板
@@ -53,9 +55,7 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
       const response = await fetch(
         `/api/v2/search?q=${encodeURIComponent(trimmedKeyword)}&limit=20`,
         {
-          headers: {
-            'X-Tenant-Id': 'tenant_default',
-          },
+          headers: buildSearchHeaders(getTenantId()),
           signal: controller.signal,
         }
       )
@@ -305,28 +305,8 @@ function CommandPaletteComponent({ isOpen, onClose, onResultSelect }) {
   )
 }
 
-/**
- * 搜索钩子
- */
-// eslint-disable-next-line react-refresh/only-export-components
-export function clampSelectedIndex(selectedIndex, flatResultsLength) {
-  if (flatResultsLength <= 0) return 0
-  return Math.min(Math.max(selectedIndex, 0), flatResultsLength - 1)
-}
-
 function buildResultIndexKey(type, id) {
   return `${type ?? ''}:${id ?? ''}`
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function flattenSearchResults(results) {
-  const flat = []
-  Object.entries(results || {}).forEach(([type, items]) => {
-    ;(Array.isArray(items) ? items : []).forEach((item) => {
-      flat.push({ ...item, type })
-    })
-  })
-  return flat
 }
 
 // 导出组件

@@ -1,20 +1,6 @@
-// Static navigation entry for page domains and panel-level exports.
+// Keep this barrel intentionally slim.
+// Route-level lazy loading imports each page domain directly.
 export { ApprovalsPageContainer as ApprovalsPage } from './approvals'
-export { AuditPanel as AuditPage } from './audit'
-export { ContactsPanel as ContactsPage } from './contacts'
-export { ContractsPanel as ContractsPage } from './contracts'
 export { CustomersPanelContainer as CustomersPage } from './customers'
 export { DashboardPanel as DashboardPage } from './dashboard'
-export { FollowUpsPanel as FollowUpsPage } from './follow-ups'
-export { GovernancePageContainer as GovernancePage } from './governance'
-export { LeadsPanel as LeadsPage } from './leads'
-export { OrdersPanel as OrdersPage } from './orders'
-export { PaymentsPanel as PaymentsPage } from './payments'
-export { PermissionsPanel as PermissionsPage } from './permissions'
-export { PipelinePanel as PipelinePage } from './pipeline'
-export { PriceBooksPanel as PriceBooksPage } from './price-books'
-export { ProductsPanel as ProductsPage } from './products'
-export { QuotesPanel as QuotesPage } from './quotes'
-export { ReportDesignerPanel as ReportDesignerPage } from './reportDesigner'
-export { TasksPanel as TasksPage } from './tasks'
 export { ImportExportPanel as ImportExportPage } from './import-export'

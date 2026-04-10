@@ -40,14 +40,14 @@ public class V1TenantController extends BaseApiController {
                               UserAccountRepository userAccountRepository,
                               PasswordEncoder passwordEncoder,
                               AuditLogService auditLogService,
-                              @Value("${auth.bootstrap.default-password:admin123}") String bootstrapDefaultPassword,
+                              @Value("${auth.bootstrap.default-password:}") String bootstrapDefaultPassword,
                               I18nService i18nService) {
         super(i18nService);
         this.tenantRepository = tenantRepository;
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditLogService = auditLogService;
-        this.bootstrapDefaultPassword = bootstrapDefaultPassword;
+        this.bootstrapDefaultPassword = requireBootstrapPassword(bootstrapDefaultPassword);
     }
 
     @GetMapping("/tenants")
@@ -55,13 +55,7 @@ public class V1TenantController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return forbidden(request);
         }
-        List<Tenant> rows = tenantRepository.findAll();
-        rows.sort(new Comparator<Tenant>() {
-            @Override
-            public int compare(Tenant a, Tenant b) {
-                return String.valueOf(a.getId()).compareToIgnoreCase(String.valueOf(b.getId()));
-            }
-        });
+        List<Tenant> rows = tenantRepository.findAllByOrderByIdAsc();
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (Tenant row : rows) {
             items.add(toTenantView(row));
@@ -192,6 +186,21 @@ public class V1TenantController extends BaseApiController {
         item.put("createdAt", row.getCreatedAt());
         item.put("updatedAt", row.getUpdatedAt());
         return item;
+    }
+
+    private String requireBootstrapPassword(String password) {
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "auth.bootstrap.default-password must be explicitly configured. "
+                    + "Set AUTH_BOOTSTRAP_DEFAULT_PASSWORD to a strong value.");
+        }
+        String trimmed = password.trim();
+        if (trimmed.length() < 8) {
+            throw new IllegalStateException(
+                    "auth.bootstrap.default-password is too short (< 8 chars). "
+                    + "Use a stronger password.");
+        }
+        return trimmed;
     }
 
     private String normalizeOptional(String value) {

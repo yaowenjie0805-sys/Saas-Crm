@@ -12,6 +12,7 @@ export function buildAuthModelHookInput(ctx, formatErrorMessage) {
     runtime: ctx.runtime,
     auth: ctx.auth,
     setAuth: ctx.setAuth,
+    resetDomainSlices: ctx.resetDomainSlices,
     abortAll: ctx.pagePolicy.abortAll,
     loadReasonRef: ctx.kernel.loadReasonRef,
     workbenchJumpRef: ctx.kernel.workbenchJumpRef,

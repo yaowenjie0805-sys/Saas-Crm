@@ -9,7 +9,7 @@ on:
         default: "main"
 
 concurrency:
-  group: staging-release-${{ github.ref }}
+  group: staging-release-${{ github.ref }}-${{ github.event.inputs.ref || 'main' }}
   cancel-in-progress: false
 
 permissions:
@@ -29,7 +29,7 @@ jobs:
       DB_USER: ${{ secrets.CI_DB_USER }}
       DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
       LEAD_IMPORT_MQ_PUBLISH_ENABLED: "false"
-      PREFLIGHT_SKIP_DRILL_EVIDENCE: "true"
+      PREFLIGHT_SKIP_DRILL_EVIDENCE: "false"
       PREFLIGHT_SKIP_SLO_EVIDENCE: "false"
       PREFLIGHT_SKIP_PERF_EVIDENCE: "false"
       PREFLIGHT_SKIP_SECURITY_EVIDENCE: "false"
@@ -43,6 +43,22 @@ jobs:
       COMPOSE_PROJECT_NAME: crm-staging
       STAGING_APPROVAL_STATUS: approved
     steps:
+      - name: Validate Release Ref
+        shell: pwsh
+        run: |
+          $inputRef = "${{ github.event.inputs.ref || 'main' }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($inputRef)) {
+            throw "Release ref cannot be empty."
+          }
+          $allowed = $false
+          if ($inputRef -eq "main") { $allowed = $true }
+          if ($inputRef -like "refs/heads/main") { $allowed = $true }
+          if ($inputRef -like "v*") { $allowed = $true }
+          if ($inputRef -like "refs/tags/v*") { $allowed = $true }
+          if (-not $allowed) {
+            throw "Only main or version tags (v*) are allowed. input ref: $inputRef"
+          }
+
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -64,8 +80,8 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
-      - name: Install k6
-        run: choco install k6 -y
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
 
       - name: Build
         run: npm run build

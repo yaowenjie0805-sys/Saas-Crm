@@ -12,11 +12,9 @@ function collectPageErrors(page) {
       message.includes('websocket') ||
       message.includes('signal is aborted') ||
       message.includes('AbortError') ||
-      message.includes('请求头缺�?X-Tenant-Id') ||
+      message.includes('X-Tenant-Id') ||
       message.includes('Bearer Token') ||
-      message.includes('缺少Bearer Token') ||
-      message.includes('Token无效') ||
-      message.includes('Token') && message.includes('过期')
+      message.includes('Token') && message.includes('expired')
     ) {
       return
     }
@@ -32,7 +30,7 @@ test('login and shell navigation smoke', async ({ page }) => {
   await page.getByTestId('nav-dashboard').click()
   await expect(page.getByTestId('page-title')).toHaveText('Dashboard')
   await expect(page.getByTestId('topbar')).toBeVisible()
-  await expect(page.getByTestId('account-pill')).toContainText(/admin|系统管理员|System Admin/i)
+  await expect(page.getByTestId('account-pill')).toContainText(/admin|system admin/i)
   await expectHealthyPage(page, pageErrors)
 
   await page.getByTestId('nav-customers').click()

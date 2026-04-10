@@ -1,4 +1,4 @@
-﻿# Development Conventions
+# Development Conventions
 
 - Allowed direction: `runtime-kernel -> runtime`
 - Forbidden direction: `runtime -> runtime-kernel`

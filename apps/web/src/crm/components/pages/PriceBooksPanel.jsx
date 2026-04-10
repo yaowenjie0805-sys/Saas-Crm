@@ -43,7 +43,7 @@ function PriceBooksPanel({ activePage, t, canWrite, apiContext, refreshPage, com
       setError(err.requestId ? `${err.message} [${err.requestId}]` : err.message)
     }
   }, [token, lang, effectiveSelectedBookId, setError])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Sync: load items when book selection changes
   useEffect(() => { if (activePage === 'priceBooks' && effectiveSelectedBookId) loadItems(effectiveSelectedBookId) }, [activePage, effectiveSelectedBookId, loadItems])
   useEffect(() => () => { itemsAbortRef.current?.abort() }, [])
   const filteredBooks = useMemo(() => {

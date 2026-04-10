@@ -5,7 +5,6 @@ export function buildSetupDataLoadersResult(state) {
     handleError: state.authModel.handleError,
     performLogout: state.authModel.performLogout,
     validateLogin: state.validators.validateLogin,
-    validateRegister: state.validators.validateRegister,
     validateSso: state.validators.validateSso,
     validateContactForm: state.validators.validateContactForm,
     validateCustomerForm: state.validators.validateCustomerForm,

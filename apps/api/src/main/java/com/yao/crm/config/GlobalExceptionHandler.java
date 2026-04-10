@@ -329,6 +329,12 @@ public class GlobalExceptionHandler {
         
         if (isSecurityError(ex)) {
             log.warn("Security error {}: {}", requestContext, ex.getMessage());
+            if (isAuthenticationError(ex)) {
+                return buildErrorResponse(ex, request, HttpStatus.UNAUTHORIZED, "Unauthorized", "unauthorized", "SecurityError");
+            }
+            if (isAccessDeniedError(ex)) {
+                return buildErrorResponse(ex, request, HttpStatus.FORBIDDEN, "Forbidden", "forbidden", "SecurityError");
+            }
             return buildErrorResponse(ex, request, HttpStatus.INTERNAL_SERVER_ERROR, "SecurityError", "internal_error", "SecurityError");
         }
         
@@ -410,6 +416,18 @@ public class GlobalExceptionHandler {
         return className.startsWith("org.springframework.security.")
                 || className.contains("AccessDenied")
                 || className.contains("Authentication");
+    }
+
+    private boolean isAuthenticationError(Exception ex) {
+        String className = ex.getClass().getName();
+        return className.contains("Authentication")
+                || className.contains("BadCredentials")
+                || className.contains("InsufficientAuthentication");
+    }
+
+    private boolean isAccessDeniedError(Exception ex) {
+        String className = ex.getClass().getName();
+        return className.contains("AccessDenied");
     }
     
     /**

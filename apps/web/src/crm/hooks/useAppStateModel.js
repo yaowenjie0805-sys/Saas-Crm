@@ -7,6 +7,7 @@ export function useAppStateModel() {
   const setLang = useAppStore((state) => state.setLang)
   const setAuth = useAppStore((state) => state.setAuth)
   const readPageSize = useAppStore((state) => state.readPageSize)
+  const resetDomainSlices = useAppStore((state) => state.resetDomainSlices)
 
   return {
     lang,
@@ -15,5 +16,6 @@ export function useAppStateModel() {
     setAuth,
     persisted,
     readPageSize,
+    resetDomainSlices,
   }
 }

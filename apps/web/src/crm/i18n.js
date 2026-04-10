@@ -1,4 +1,4 @@
-﻿export const I18N = { en: {}, zh: {} }
+export const I18N = { en: {}, zh: {} }
 
 const BASE_LANG_LOADERS = {
   en: () => import('./i18n/common/en'),

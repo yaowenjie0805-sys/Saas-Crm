@@ -145,7 +145,7 @@ function ProductsPanel({ activePage, t, canWrite, apiContext, refreshPage, comme
         </div>
       </div>
 
-      <div className="filter-row" style={{ marginBottom: 8 }}>
+      <div className="filter-row workspace-filter-row">
         <input className="tool-input" placeholder={t('code')} value={queryCode} onChange={(e) => setQueryCode(e.target.value)} />
         <input className="tool-input" placeholder={t('title')} value={queryName} onChange={(e) => setQueryName(e.target.value)} />
         <input className="tool-input" placeholder={t('category')} value={queryCategory} onChange={(e) => setQueryCategory(e.target.value)} />
@@ -159,7 +159,7 @@ function ProductsPanel({ activePage, t, canWrite, apiContext, refreshPage, comme
         <button className="mini-btn" onClick={refreshSelf}>{t('query')}</button>
         <button className="mini-btn" onClick={resetFilters}>{t('clearFilters')}</button>
       </div>
-      <div className="filter-bar" style={{ marginBottom: 8 }}>
+      <div className="filter-bar workspace-batch-bar">
         <span className="muted-filter">{t('batchSelectedCount')}: {selectedCount}</span>
         <button className="mini-btn" onClick={selectPage}>{t('selectPage')}</button>
         <button className="mini-btn" onClick={clearSelection}>{t('clearSelection')}</button>
@@ -171,10 +171,10 @@ function ProductsPanel({ activePage, t, canWrite, apiContext, refreshPage, comme
         <button className="mini-btn" disabled={!canWrite} onClick={batchChangeStatus}>{t('batchSetStatus')}</button>
         {batchSummary?.failed > 0 && <button className="mini-btn" onClick={() => setBatchModalOpen(true)}>{t('batchResultTitle')}</button>}
       </div>
-      {batchMessage && <div className="info-banner" style={{ marginBottom: 8 }}>{batchMessage}</div>}
+      {batchMessage && <div className="info-banner workspace-inline-banner">{batchMessage}</div>}
 
-      {error && <div className="field-error" style={{ marginBottom: 8 }}>{error}</div>}
-      {!!lastLoadedAt && stale && <div className="info-banner" style={{ marginBottom: 8 }}>{t('loading')}</div>}
+      {error && <div className="field-error workspace-inline-banner">{error}</div>}
+      {!!lastLoadedAt && stale && <div className="info-banner workspace-inline-banner">{t('loading')}</div>}
       <div className="table-row table-head-row table-row-6"><span><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></span><span>{t('code')}</span><span>{t('title')}</span><span>{t('status')}</span><span>{t('amount')}</span><span>{t('action')}</span></div>
       <ListState loading={loading} empty={!loading && filteredItems.length === 0} emptyText={t('noData')} />
       {!loading && filteredItems.length > 0 && (
@@ -202,18 +202,36 @@ function ProductsPanel({ activePage, t, canWrite, apiContext, refreshPage, comme
               <h2>{form.id ? t('editProduct') : t('createProduct')}</h2>
               <button className="mini-btn" onClick={() => setOpenModal(false)}>{t('closeModal')}</button>
             </div>
-            <div className="forms-grid">
-              <input className="tool-input" placeholder={t('code')} value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} />
-              <input className="tool-input" placeholder={t('title')} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
-              <input className="tool-input" placeholder={t('category')} value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
-              <input className="tool-input" placeholder={t('standardPrice')} value={form.standardPrice} onChange={(e) => setForm((p) => ({ ...p, standardPrice: e.target.value }))} />
-              <input className="tool-input" placeholder={t('taxRateLabel')} value={form.taxRate} onChange={(e) => setForm((p) => ({ ...p, taxRate: e.target.value }))} />
-              <select className="tool-input" value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
-                <option value="ACTIVE">{translateStatus(t, 'ACTIVE')}</option>
-                <option value="INACTIVE">{translateStatus(t, 'INACTIVE')}</option>
-              </select>
+            <div className="forms-grid forms-grid-workspace">
+              <label className="field-stack">
+                <span className="field-label">{t('code')}</span>
+                <input className="tool-input" value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t('title')}</span>
+                <input className="tool-input" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t('category')}</span>
+                <input className="tool-input" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t('standardPrice')}</span>
+                <input className="tool-input" value={form.standardPrice} onChange={(e) => setForm((p) => ({ ...p, standardPrice: e.target.value }))} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t('taxRateLabel')}</span>
+                <input className="tool-input" value={form.taxRate} onChange={(e) => setForm((p) => ({ ...p, taxRate: e.target.value }))} />
+              </label>
+              <label className="field-stack">
+                <span className="field-label">{t('status')}</span>
+                <select className="tool-input" value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
+                  <option value="ACTIVE">{translateStatus(t, 'ACTIVE')}</option>
+                  <option value="INACTIVE">{translateStatus(t, 'INACTIVE')}</option>
+                </select>
+              </label>
             </div>
-            <div className="inline-tools" style={{ marginTop: 12 }}>
+            <div className="inline-tools workspace-modal-actions">
               <button className="primary-btn" disabled={!canWrite} onClick={save}>{t('save')}</button>
             </div>
           </div>

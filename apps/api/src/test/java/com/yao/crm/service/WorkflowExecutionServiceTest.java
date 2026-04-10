@@ -7,6 +7,7 @@ import com.yao.crm.entity.WorkflowConnection;
 import com.yao.crm.entity.WorkflowDefinition;
 import com.yao.crm.entity.WorkflowExecution;
 import com.yao.crm.entity.WorkflowNode;
+import com.yao.crm.entity.ApprovalNode;
 import com.yao.crm.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.lang.reflect.Method;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,7 +25,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * 鐎规悶鍎扮紞鏂棵规担鐟扳挃閻炴稑鑻槐鈺呭箼鎼粹€崇闁稿繐鍟粊瀵告嫚?
+ * WorkflowExecutionService unit tests.
  */
 @ExtendWith(MockitoExtension.class)
 class WorkflowExecutionServiceTest {
@@ -43,6 +46,9 @@ class WorkflowExecutionServiceTest {
     @Mock
     private ApprovalNodeRepository approvalNodeRepository;
 
+    @Mock
+    private ThreadPoolTaskExecutor taskExecutor;
+
     private WorkflowExecutionService executionService;
     private ObjectMapper objectMapper;
 
@@ -50,13 +56,20 @@ class WorkflowExecutionServiceTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         objectMapper.findAndRegisterModules();
+        WorkflowConditionEvaluator workflowConditionEvaluator = new WorkflowConditionEvaluator();
+        WorkflowActionExecutor workflowActionExecutor = new WorkflowActionExecutor();
+        WorkflowNotificationExecutor workflowNotificationExecutor = new WorkflowNotificationExecutor();
         executionService = spy(new WorkflowExecutionService(
                 workflowRepository,
                 nodeRepository,
                 connectionRepository,
                 executionRepository,
                 approvalNodeRepository,
-                objectMapper
+                objectMapper,
+                taskExecutor,
+                workflowConditionEvaluator,
+                workflowActionExecutor,
+                workflowNotificationExecutor
         ));
     }
 
@@ -74,7 +87,7 @@ class WorkflowExecutionServiceTest {
         when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(workflowRepository.save(any())).thenReturn(workflow);
         when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        doNothing().when(executionService).executeAsync(anyString(), anyString());
+        when(taskExecutor.submit(any(Runnable.class))).thenReturn(null);
 
         // When
         WorkflowExecution execution = executionService.startExecution(
@@ -87,6 +100,7 @@ class WorkflowExecutionServiceTest {
         assertEquals(workflowId, execution.getWorkflowId());
         assertEquals("RUNNING", execution.getStatus());
         verify(workflowRepository).save(any());
+        verify(taskExecutor).submit(any(Runnable.class));
     }
 
     @Test
@@ -219,7 +233,7 @@ class WorkflowExecutionServiceTest {
         when(workflowRepository.findByIdAndTenantId(workflowId, TENANT_ID)).thenReturn(Optional.of(workflow));
         when(workflowRepository.save(any())).thenReturn(workflow);
         when(executionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        doNothing().when(executionService).executeAsync(anyString(), anyString());
+        when(taskExecutor.submit(any(Runnable.class))).thenReturn(null);
 
         // When
         WorkflowExecution newExecution = executionService.retryExecution(TENANT_ID, oldExecutionId);
@@ -228,6 +242,102 @@ class WorkflowExecutionServiceTest {
         assertNotNull(newExecution);
         assertEquals(workflowId, newExecution.getWorkflowId());
         assertEquals("RUNNING", newExecution.getStatus());
+    }
+
+    @Test
+    void testEvaluateConditions_OrLogic() throws Exception {
+        Method method = WorkflowExecutionService.class.getDeclaredMethod(
+                "evaluateConditions", List.class, WorkflowExecutionService.WorkflowExecutionContext.class, String.class
+        );
+        method.setAccessible(true);
+
+        WorkflowExecutionService.WorkflowExecutionContext context = new WorkflowExecutionService.WorkflowExecutionContext();
+        Map<String, Object> variables = new HashMap<String, Object>();
+        variables.put("stage", "CLOSED");
+        context.setVariables(variables);
+
+        Map<String, Object> condA = new HashMap<String, Object>();
+        condA.put("field", "stage");
+        condA.put("operator", "EQUALS");
+        condA.put("value", "OPEN");
+        Map<String, Object> condB = new HashMap<String, Object>();
+        condB.put("field", "stage");
+        condB.put("operator", "EQUALS");
+        condB.put("value", "CLOSED");
+
+        @SuppressWarnings("unchecked")
+        boolean matched = (boolean) method.invoke(executionService, Arrays.asList(condA, condB), context, "OR");
+        assertTrue(matched);
+    }
+
+    @Test
+    void testEvaluateSingleCondition_ShouldNotThrowWhenCompareValueIsNull() throws Exception {
+        Method method = WorkflowExecutionService.class.getDeclaredMethod(
+                "evaluateSingleCondition", Object.class, String.class, Object.class
+        );
+        method.setAccessible(true);
+
+        boolean matched = (boolean) method.invoke(executionService, "abc", "EQUALS", null);
+
+        assertFalse(matched);
+    }
+
+    @Test
+    void testExecuteNextNodes_ShouldPersistContextBeforeWaitingNodeReturns() throws Exception {
+        String executionId = "exec_wait_1";
+        String workflowId = "wf_wait_1";
+        String triggerNodeId = "node_trigger";
+        String approvalNodeId = "node_approval";
+
+        WorkflowExecution execution = new WorkflowExecution();
+        execution.setId(executionId);
+        execution.setWorkflowId(workflowId);
+        execution.setStatus("RUNNING");
+        execution.setExecutionContext("{}");
+
+        WorkflowNode triggerNode = new WorkflowNode();
+        triggerNode.setId(triggerNodeId);
+        triggerNode.setWorkflowId(workflowId);
+        triggerNode.setNodeType("TRIGGER");
+        triggerNode.setNodeSubtype("MANUAL");
+        triggerNode.setConfigJson("{}");
+
+        WorkflowNode approvalNode = new WorkflowNode();
+        approvalNode.setId(approvalNodeId);
+        approvalNode.setWorkflowId(workflowId);
+        approvalNode.setNodeType("APPROVAL");
+        approvalNode.setNodeSubtype("SINGLE");
+        approvalNode.setConfigJson("{}");
+
+        ApprovalNode approvalConfig = new ApprovalNode();
+        approvalConfig.setId("apn_1");
+        approvalConfig.setWorkflowNodeId(approvalNodeId);
+        approvalConfig.setApproverIds("u1");
+
+        WorkflowConnection triggerToApproval = new WorkflowConnection();
+        triggerToApproval.setSourceNodeId(triggerNodeId);
+        triggerToApproval.setTargetNodeId(approvalNodeId);
+
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+        when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(nodeRepository.findByWorkflowIdAndNodeType(workflowId, "TRIGGER"))
+                .thenReturn(Collections.singletonList(triggerNode));
+        when(nodeRepository.findAllById(any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Iterable<String> ids = invocation.getArgument(0);
+            List<String> list = new ArrayList<>();
+            for (String id : ids) list.add(id);
+            if (list.contains(approvalNodeId)) return Collections.singletonList(approvalNode);
+            return Collections.singletonList(triggerNode);
+        });
+        when(connectionRepository.findBySourceNodeId(triggerNodeId))
+                .thenReturn(Collections.singletonList(triggerToApproval));
+        when(approvalNodeRepository.findByWorkflowNodeId(approvalNodeId))
+                .thenReturn(Optional.of(approvalConfig));
+
+        executionService.executeNextNodes(executionId);
+
+        verify(executionRepository, atLeastOnce()).save(any(WorkflowExecution.class));
     }
 
     @Test

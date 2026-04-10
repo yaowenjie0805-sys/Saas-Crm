@@ -141,8 +141,10 @@ public class DataImportExportService {
     /**
      * 获取导出任务状态
      */
-    public ExportJobResult getExportJobStatus(String jobId) {
-        DataExportService.ExportJobResult result = dataExportService.getExportJobStatus(jobId);
+    public ExportJobResult getExportJobStatus(String tenantId, String operator, String jobId, boolean canViewAll) {
+        DataExportService.ExportJobResult result = dataExportService.getExportJobStatus(
+                tenantId, operator, jobId, canViewAll
+        );
         return convertExportJobResult(result);
     }
 
@@ -165,8 +167,8 @@ public class DataImportExportService {
     /**
      * 获取导出文件
      */
-    public byte[] getExportFile(String jobId) throws IOException {
-        return dataExportService.getExportFile(jobId);
+    public byte[] getExportFile(String tenantId, String operator, String jobId, boolean canViewAll) throws IOException {
+        return dataExportService.getExportFile(tenantId, operator, jobId, canViewAll);
     }
 
     /**

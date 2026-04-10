@@ -4,19 +4,25 @@ import com.yao.crm.entity.WorkflowExecution;
 import com.yao.crm.service.WorkflowExecutionService;
 import com.yao.crm.service.WorkflowService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 import static com.yao.crm.support.TestTenant.TENANT_TEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -39,6 +45,12 @@ class WorkflowControllerTest {
     @BeforeEach
     void setUp() {
         controller = new WorkflowController(workflowService, executionService);
+        setAuthRole("ADMIN");
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -57,6 +69,32 @@ class WorkflowControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(workflowService).getWorkflows("tenant-1", null, null);
+        verifyNoInteractions(executionService);
+    }
+
+    @Test
+    void createWorkflowShouldReturnForbiddenForSalesRoleAndNotCallService() {
+        setAuthRole("SALES");
+        WorkflowController.CreateWorkflowRequest request = new WorkflowController.CreateWorkflowRequest();
+        request.name = "wf";
+
+        ResponseEntity<?> response = controller.createWorkflow(TENANT_TEST, request);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        Map<?, ?> body = assertInstanceOf(Map.class, response.getBody());
+        assertEquals("forbidden", body.get("error"));
+        verifyNoInteractions(workflowService, executionService);
+    }
+
+    @Test
+    void getWorkflowsShouldAllowSalesRole() {
+        setAuthRole("SALES");
+        when(workflowService.getWorkflows(TENANT_TEST, null, null)).thenReturn(List.of());
+
+        ResponseEntity<?> response = controller.getWorkflows(TENANT_TEST, null, null);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(workflowService).getWorkflows(TENANT_TEST, null, null);
         verifyNoInteractions(executionService);
     }
 
@@ -457,6 +495,75 @@ class WorkflowControllerTest {
     }
 
     @Test
+    void handleApprovalCallbackShouldReturnForbiddenForSalesWithoutCallbackToken() {
+        setAuthRole("SALES");
+        WorkflowController.ApprovalCallbackRequest request = new WorkflowController.ApprovalCallbackRequest();
+        request.nodeId = "node-1";
+        request.action = "APPROVE";
+        request.approverId = "user-1";
+        request.comments = "ok";
+
+        ResponseEntity<?> response = controller.handleApprovalCallback(TENANT_TEST, "exec-1", request);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        Map<?, ?> body = assertInstanceOf(Map.class, response.getBody());
+        assertEquals("forbidden", body.get("error"));
+        verifyNoInteractions(workflowService, executionService);
+    }
+
+    @Test
+    void handleApprovalCallbackShouldAllowValidCallbackTokenWithoutWriteRole() {
+        controller = new WorkflowController(workflowService, executionService, "test-callback-token");
+        setRequestContext("SALES", "test-callback-token");
+        WorkflowController.ApprovalCallbackRequest request = new WorkflowController.ApprovalCallbackRequest();
+        request.nodeId = "node-1";
+        request.action = "APPROVE";
+        request.approverId = "user-1";
+        request.comments = "ok";
+
+        ResponseEntity<?> response = controller.handleApprovalCallback(TENANT_TEST, "exec-1", request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(executionService).handleApprovalCallback(TENANT_TEST, "exec-1", "node-1", "APPROVE", "user-1", "ok");
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void handleApprovalCallbackShouldAllowSecondTokenWhenMultipleTokensConfigured() {
+        controller = new WorkflowController(workflowService, executionService, "fallback-token", "first-token,second-token");
+        setRequestContext("SALES", "second-token");
+        WorkflowController.ApprovalCallbackRequest request = new WorkflowController.ApprovalCallbackRequest();
+        request.nodeId = "node-1";
+        request.action = "APPROVE";
+        request.approverId = "user-1";
+        request.comments = "ok";
+
+        ResponseEntity<?> response = controller.handleApprovalCallback(TENANT_TEST, "exec-1", request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(executionService).handleApprovalCallback(TENANT_TEST, "exec-1", "node-1", "APPROVE", "user-1", "ok");
+        verifyNoInteractions(workflowService);
+    }
+
+    @Test
+    void handleApprovalCallbackShouldRejectInvalidTokenWhenMultipleTokensConfigured() {
+        controller = new WorkflowController(workflowService, executionService, "fallback-token", "first-token,second-token");
+        setRequestContext("SALES", "wrong-token");
+        WorkflowController.ApprovalCallbackRequest request = new WorkflowController.ApprovalCallbackRequest();
+        request.nodeId = "node-1";
+        request.action = "APPROVE";
+        request.approverId = "user-1";
+        request.comments = "ok";
+
+        ResponseEntity<?> response = controller.handleApprovalCallback(TENANT_TEST, "exec-1", request);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        Map<?, ?> body = assertInstanceOf(Map.class, response.getBody());
+        assertEquals("forbidden", body.get("error"));
+        verifyNoInteractions(workflowService, executionService);
+    }
+
+    @Test
     void deleteWorkflowShouldReturnInternalServerErrorWhenServiceThrowsUnexpectedException() {
         doThrow(new RuntimeException("db failure"))
                 .when(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
@@ -466,5 +573,18 @@ class WorkflowControllerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         verify(workflowService).deleteWorkflow(TENANT_TEST, "wf-1");
         verifyNoInteractions(executionService);
+    }
+
+    private void setAuthRole(String role) {
+        setRequestContext(role, null);
+    }
+
+    private void setRequestContext(String role, String callbackTokenHeader) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute("authRole", role);
+        if (callbackTokenHeader != null) {
+            request.addHeader("X-Workflow-Callback-Token", callbackTokenHeader);
+        }
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 }

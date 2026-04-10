@@ -2,8 +2,13 @@ package com.yao.crm.security;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigInteger;
@@ -13,6 +18,7 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -20,12 +26,24 @@ import java.util.Map;
 
 @Component
 public class OidcRsaJwkTokenVerifier implements OidcTokenVerifier {
+    private static final Logger log = LoggerFactory.getLogger(OidcRsaJwkTokenVerifier.class);
 
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
-    public OidcRsaJwkTokenVerifier(ObjectMapper objectMapper) {
+    public OidcRsaJwkTokenVerifier(
+            ObjectMapper objectMapper,
+            @Value("${security.sso.oidc.http-connect-timeout-ms:5000}") long connectTimeoutMs,
+            @Value("${security.sso.oidc.http-read-timeout-ms:8000}") long readTimeoutMs,
+            RestTemplateBuilder restTemplateBuilder
+    ) {
         this.objectMapper = objectMapper;
+        long safeConnectTimeout = Math.max(100L, connectTimeoutMs);
+        long safeReadTimeout = Math.max(100L, readTimeoutMs);
+        this.restTemplate = restTemplateBuilder
+            .setConnectTimeout(Duration.ofMillis(safeConnectTimeout))
+            .setReadTimeout(Duration.ofMillis(safeReadTimeout))
+            .build();
     }
 
     @Override
@@ -77,7 +95,11 @@ public class OidcRsaJwkTokenVerifier implements OidcTokenVerifier {
                 return Collections.emptyMap();
             }
             return claims;
+        } catch (ResourceAccessException ex) {
+            log.warn("OIDC JWKS fetch timeout/unreachable: {}", ex.getMessage());
+            return Collections.emptyMap();
         } catch (Exception ex) {
+            log.debug("OIDC JWT verification failed", ex);
             return Collections.emptyMap();
         }
     }

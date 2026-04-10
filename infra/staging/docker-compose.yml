@@ -10,7 +10,7 @@ services:
   # Backend Service | 后端服务
   # -------------------------------------------
   backend:
-    image: eclipse-temurin:8-jre
+    image: eclipse-temurin:17-jre
     container_name: ${COMPOSE_PROJECT_NAME:-crm-staging}-backend
     restart: unless-stopped
     env_file:

@@ -10,23 +10,17 @@ export function useAuthRuntimeState() {
     crudErrors: { lead: '', customer: '', opportunity: '', followUp: '', contact: '', contract: '', payment: '' },
     crudFieldErrors: { lead: {}, customer: {}, opportunity: {}, followUp: {}, contact: {}, contract: {}, payment: {} },
     loginForm: () => ({
-      tenantId: localStorage.getItem('crm_last_tenant') || defaultTenant || 'tenant_default',
+      tenantId: localStorage.getItem('crm_last_tenant') || defaultTenant || '',
       username: '',
       password: '',
       mfaCode: '',
     }),
-    registerForm: {
-      username: '',
-      password: '',
-      confirmPassword: '',
-      displayName: '',
-    },
     mfaChallengeId: '',
     ssoConfig: { enabled: false, providerName: '', mode: 'mock' },
     ssoForm: { username: 'sso_user', code: 'SSO-ACCESS', displayName: '' },
     oidcAuthorizing: false,
     sessionBootstrapping: true,
-    formErrors: { login: {}, register: {}, sso: {} },
+    formErrors: { login: {}, sso: {} },
     activePage: 'dashboard',
   }), [defaultTenant])
 

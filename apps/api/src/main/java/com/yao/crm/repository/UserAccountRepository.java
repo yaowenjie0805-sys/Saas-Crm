@@ -17,9 +17,9 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, String
     List<UserAccount> findAllByTenantId(String tenantId);
     List<UserAccount> findAllByTenantIdOrderByUsernameAsc(String tenantId);
 
-    @Query("select u.username, u.displayName from UserAccount u where u.tenantId = :tenantId and upper(coalesce(u.role, '')) = upper(:role)")
-    List<Object[]> findIdentityPairsByTenantIdAndRole(@Param("tenantId") String tenantId, @Param("role") String role);
+    @Query("select u.username, u.displayName from UserAccount u where u.tenantId = :tenantId and upper(u.role) = upper(:role)")
+    List<Object[]> findIdentityPairsByTenantIdAndRoleIgnoreCase(@Param("tenantId") String tenantId, @Param("role") String role);
 
-    @Query("select u.username, u.displayName from UserAccount u where u.tenantId = :tenantId and lower(coalesce(u.department, '')) = lower(:department)")
-    List<Object[]> findIdentityPairsByTenantIdAndDepartment(@Param("tenantId") String tenantId, @Param("department") String department);
+    @Query("select u.username, u.displayName from UserAccount u where u.tenantId = :tenantId and upper(u.department) = upper(:department)")
+    List<Object[]> findIdentityPairsByTenantIdAndDepartmentIgnoreCase(@Param("tenantId") String tenantId, @Param("department") String department);
 }

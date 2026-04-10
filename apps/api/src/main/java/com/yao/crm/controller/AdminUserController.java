@@ -38,13 +38,14 @@ public class AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        List<UserAccount> all = userAccountRepository.findAll();
-        all.sort(new Comparator<UserAccount>() {
-            @Override
-            public int compare(UserAccount a, UserAccount b) {
-                return String.valueOf(a.getUsername()).compareToIgnoreCase(String.valueOf(b.getUsername()));
-            }
-        });
+        String tenantId = currentTenant(request);
+        List<UserAccount> all;
+        if (tenantId != null && !tenantId.isEmpty()) {
+            all = userAccountRepository.findAllByTenantIdOrderByUsernameAsc(tenantId);
+        } else {
+            all = userAccountRepository.findAll();
+            all.sort(Comparator.comparing(UserAccount::getUsername, String.CASE_INSENSITIVE_ORDER));
+        }
 
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (UserAccount user : all) {

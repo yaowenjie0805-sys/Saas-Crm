@@ -1,4 +1,4 @@
-﻿# 接口分组清单（API Endpoint Catalog）
+# 接口分组清单（API Endpoint Catalog）
 
 本清单用于联调与二开定位，按后端 Controller 分组给出核心端点与最小请求示例。
 
@@ -17,7 +17,7 @@ Controller：`AuthController`、`V1AuthController`
 
 核心端点：
 - `POST /api/auth/login`
-- `POST /api/auth/register`
+- `POST /api/auth/register`（已下线：固定返回 `410 Gone`，`code=register_deprecated_invite_only`，请改用 `POST /api/v1/auth/invitations/accept` 邀请激活流程）
 - `POST /api/auth/logout`
 - `GET /api/auth/session`
 - `POST /api/v1/auth/login`

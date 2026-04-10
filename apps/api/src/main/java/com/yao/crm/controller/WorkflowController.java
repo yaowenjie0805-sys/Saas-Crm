@@ -3,10 +3,17 @@ package com.yao.crm.controller;
 import com.yao.crm.entity.*;
 import com.yao.crm.service.WorkflowService;
 import com.yao.crm.service.WorkflowExecutionService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 
 /**
@@ -17,12 +24,32 @@ import java.util.*;
 @RequestMapping("/api/v2/workflows")
 public class WorkflowController {
 
+    private static final String CALLBACK_TOKEN_HEADER = "X-Workflow-Callback-Token";
+    private static final Set<String> READ_ROLES = Set.of("ADMIN", "MANAGER", "ANALYST", "SALES");
+    private static final Set<String> WRITE_ROLES = Set.of("ADMIN", "MANAGER");
+
     private final WorkflowService workflowService;
     private final WorkflowExecutionService executionService;
+    private final List<String> approvalCallbackTokens;
 
     public WorkflowController(WorkflowService workflowService, WorkflowExecutionService executionService) {
+        this(workflowService, executionService, "", "");
+    }
+
+    public WorkflowController(WorkflowService workflowService,
+                              WorkflowExecutionService executionService,
+                              @Value("${workflow.approval-callback.token:}") String approvalCallbackToken) {
+        this(workflowService, executionService, approvalCallbackToken, "");
+    }
+
+    @Autowired
+    public WorkflowController(WorkflowService workflowService,
+                              WorkflowExecutionService executionService,
+                              @Value("${workflow.approval-callback.token:}") String approvalCallbackToken,
+                              @Value("${workflow.approval-callback.tokens:}") String approvalCallbackTokens) {
         this.workflowService = workflowService;
         this.executionService = executionService;
+        this.approvalCallbackTokens = resolveCallbackTokens(approvalCallbackToken, approvalCallbackTokens);
     }
 
     /**
@@ -33,6 +60,10 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String category) {
+        ResponseEntity<?> authFailure = ensureReadAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
 
         String normalizedTenantId = normalizeRequired(tenantId);
         if (normalizedTenantId == null) {
@@ -53,6 +84,11 @@ public class WorkflowController {
     public ResponseEntity<?> getWorkflowDetail(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        ResponseEntity<?> authFailure = ensureReadAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null) {
@@ -75,6 +111,11 @@ public class WorkflowController {
     public ResponseEntity<?> createWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestBody CreateWorkflowRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         if (normalizedTenantId == null) {
             return ResponseEntity.badRequest().build();
@@ -98,6 +139,11 @@ public class WorkflowController {
     public ResponseEntity<?> updateWorkflow(
             @PathVariable String id,
             @RequestBody UpdateWorkflowRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedId = normalizeRequired(id);
         if (normalizedId == null) {
             return ResponseEntity.badRequest().build();
@@ -117,6 +163,11 @@ public class WorkflowController {
     public ResponseEntity<?> deleteWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null || normalizedId == null) {
@@ -138,6 +189,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody ActivateRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null) {
@@ -162,6 +218,11 @@ public class WorkflowController {
     public ResponseEntity<?> deactivateWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null) {
@@ -185,6 +246,11 @@ public class WorkflowController {
     public ResponseEntity<?> validateWorkflow(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null) {
@@ -204,6 +270,11 @@ public class WorkflowController {
     public ResponseEntity<?> getWorkflowStats(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id) {
+        ResponseEntity<?> authFailure = ensureReadAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null) {
@@ -227,6 +298,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody AddNodeRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null || normalizedId == null) {
@@ -255,6 +331,11 @@ public class WorkflowController {
             @PathVariable String workflowId,
             @PathVariable String nodeId,
             @RequestBody UpdateNodeRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedWorkflowId = normalizeRequired(workflowId);
         String normalizedNodeId = normalizeRequired(nodeId);
         if (normalizedWorkflowId == null || normalizedNodeId == null) {
@@ -274,6 +355,11 @@ public class WorkflowController {
     public ResponseEntity<?> deleteNode(
             @PathVariable String workflowId,
             @PathVariable String nodeId) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedWorkflowId = normalizeRequired(workflowId);
         String normalizedNodeId = normalizeRequired(nodeId);
         if (normalizedWorkflowId == null || normalizedNodeId == null) {
@@ -290,6 +376,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody AddConnectionRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null || normalizedId == null) {
@@ -315,6 +406,11 @@ public class WorkflowController {
     public ResponseEntity<?> deleteConnection(
             @PathVariable String workflowId,
             @PathVariable String connectionId) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedWorkflowId = normalizeRequired(workflowId);
         String normalizedConnectionId = normalizeRequired(connectionId);
         if (normalizedWorkflowId == null || normalizedConnectionId == null) {
@@ -328,6 +424,11 @@ public class WorkflowController {
      */
     @GetMapping("/node-types")
     public ResponseEntity<?> getNodeTypes() {
+        ResponseEntity<?> authFailure = ensureReadAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         Map<String, List<Map<String, String>>> nodeTypes = workflowService.getNodeTypes();
         return ResponseEntity.ok(nodeTypes);
     }
@@ -340,6 +441,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody TestWorkflowRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null || normalizedId == null) {
@@ -410,6 +516,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String id,
             @RequestBody ExecuteWorkflowRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null || normalizedId == null) {
@@ -443,6 +554,11 @@ public class WorkflowController {
     public ResponseEntity<?> getExecutionDetail(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId) {
+        ResponseEntity<?> authFailure = ensureReadAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedExecutionId = normalizeRequired(executionId);
         if (normalizedTenantId == null || normalizedExecutionId == null) {
@@ -469,6 +585,11 @@ public class WorkflowController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        ResponseEntity<?> authFailure = ensureReadAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedId = normalizeRequired(id);
         if (normalizedTenantId == null || normalizedId == null) {
@@ -492,6 +613,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId,
             @RequestBody CancelExecutionRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedExecutionId = normalizeRequired(executionId);
         if (normalizedTenantId == null || normalizedExecutionId == null) {
@@ -516,6 +642,11 @@ public class WorkflowController {
     public ResponseEntity<?> retryExecution(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId) {
+        ResponseEntity<?> authFailure = ensureWriteAccess();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedExecutionId = normalizeRequired(executionId);
         if (normalizedTenantId == null || normalizedExecutionId == null) {
@@ -541,6 +672,11 @@ public class WorkflowController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String executionId,
             @RequestBody ApprovalCallbackRequest request) {
+        ResponseEntity<?> authFailure = ensureWriteAccessOrCallbackToken();
+        if (authFailure != null) {
+            return authFailure;
+        }
+
         String normalizedTenantId = normalizeRequired(tenantId);
         String normalizedExecutionId = normalizeRequired(executionId);
         if (normalizedTenantId == null || normalizedExecutionId == null) {
@@ -620,6 +756,80 @@ public class WorkflowController {
         return message.toLowerCase(Locale.ROOT).contains("not found");
     }
 
+    private ResponseEntity<?> ensureReadAccess() {
+        return ensureRole(READ_ROLES);
+    }
+
+    private ResponseEntity<?> ensureWriteAccess() {
+        return ensureRole(WRITE_ROLES);
+    }
+
+    private ResponseEntity<?> ensureWriteAccessOrCallbackToken() {
+        ResponseEntity<?> roleFailure = ensureWriteAccess();
+        if (roleFailure == null) {
+            return null;
+        }
+        if (hasValidCallbackToken()) {
+            return null;
+        }
+        return roleFailure;
+    }
+
+    private ResponseEntity<?> ensureRole(Set<String> allowedRoles) {
+        String role = resolveAuthRole();
+        if (role == null) {
+            return forbidden();
+        }
+        String normalizedRole = role.toUpperCase(Locale.ROOT);
+        if (!allowedRoles.contains(normalizedRole)) {
+            return forbidden();
+        }
+        return null;
+    }
+
+    private String resolveAuthRole() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        Object role = attributes.getAttribute("authRole", RequestAttributes.SCOPE_REQUEST);
+        if (!(role instanceof String)) {
+            return null;
+        }
+        return normalizeRequired((String) role);
+    }
+
+    private boolean hasValidCallbackToken() {
+        if (approvalCallbackTokens.isEmpty()) {
+            return false;
+        }
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes)) {
+            return false;
+        }
+        String headerValue = normalizeRequired(((ServletRequestAttributes) attributes).getRequest().getHeader(CALLBACK_TOKEN_HEADER));
+        if (headerValue == null) {
+            return false;
+        }
+        byte[] headerBytes = headerValue.getBytes(StandardCharsets.UTF_8);
+        for (String token : approvalCallbackTokens) {
+            if (MessageDigest.isEqual(headerBytes, token.getBytes(StandardCharsets.UTF_8))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ResponseEntity<Map<String, Object>> forbidden() {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "forbidden");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
     private String normalizeRequired(String value) {
         if (value == null) {
             return null;
@@ -631,5 +841,32 @@ public class WorkflowController {
     private String normalizeOptional(String value) {
         String normalized = normalizeRequired(value);
         return normalized == null ? null : normalized;
+    }
+
+    private List<String> resolveCallbackTokens(String singleTokenConfig, String multipleTokensConfig) {
+        List<String> tokens = parseCommaSeparatedTokens(multipleTokensConfig);
+        if (!tokens.isEmpty()) {
+            return tokens;
+        }
+        String singleToken = normalizeOptional(singleTokenConfig);
+        if (singleToken == null) {
+            return List.of();
+        }
+        return List.of(singleToken);
+    }
+
+    private List<String> parseCommaSeparatedTokens(String rawTokens) {
+        String normalized = normalizeOptional(rawTokens);
+        if (normalized == null) {
+            return List.of();
+        }
+        List<String> tokens = new ArrayList<>();
+        for (String token : normalized.split(",")) {
+            String normalizedToken = normalizeOptional(token);
+            if (normalizedToken != null) {
+                tokens.add(normalizedToken);
+            }
+        }
+        return tokens;
     }
 }

@@ -1,4 +1,4 @@
-﻿# 二开热点文件地图（Development Hotspots）
+# 二开热点文件地图（Development Hotspots）
 
 这份文档用于“快速找到该改哪里”，适合新同学接手或你后续排查功能时直接跳转。
 

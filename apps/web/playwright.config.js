@@ -15,7 +15,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
-  reporter: [['list']],
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['junit', { outputFile: 'test-results/playwright/junit.xml' }],
+  ],
   outputDir: 'test-results/playwright',
   use: {
     baseURL,

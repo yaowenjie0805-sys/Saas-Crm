@@ -43,15 +43,19 @@ export function useLoaderOrchestrator({
       mark.markDuplicateFetchBlocked(reason)
       return undefined
     }
-    run.markInFlight(pageKey, loader.signature)
-    handle.onLoaderLifecycle?.({
-      event: 'start',
-      pageKey,
-      reason,
-      signature: loader?.signature || '',
-    })
-
     const execute = async () => {
+      const becameSkippable = !force && run.canSkipFetch(pageKey, loader.signature, false)
+      if (becameSkippable) {
+        run.clearInFlight(pageKey, loader.signature)
+        mark.markDuplicateFetchBlocked(reason)
+        return
+      }
+      handle.onLoaderLifecycle?.({
+        event: 'start',
+        pageKey,
+        reason,
+        signature: loader?.signature || '',
+      })
       const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
       const controller = run.beginPageRequest(pageKey)
       try {
@@ -91,9 +95,14 @@ export function useLoaderOrchestrator({
     }
 
     if (delay > 0) {
+      run.markInFlight(pageKey, loader.signature)
       const timer = setTimeout(execute, delay)
-      return () => clearTimeout(timer)
+      return () => {
+        clearTimeout(timer)
+        run.clearInFlight(pageKey, loader.signature)
+      }
     }
+    run.markInFlight(pageKey, loader.signature)
     return execute().then(() => true).catch(() => false)
   }, [])
 

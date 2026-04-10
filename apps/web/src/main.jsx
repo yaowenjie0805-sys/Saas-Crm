@@ -14,8 +14,7 @@ const detectLang = () => {
   }
 }
 
-const bootstrap = async () => {
-  await ensureI18nBase(detectLang())
+const bootstrap = () => {
   createRoot(document.getElementById('root')).render(
     <StrictMode>
       <BrowserRouter>
@@ -23,14 +22,8 @@ const bootstrap = async () => {
       </BrowserRouter>
     </StrictMode>,
   )
+
+  void ensureI18nBase(detectLang()).catch(() => {})
 }
 
-bootstrap().catch(() => {
-  createRoot(document.getElementById('root')).render(
-    <StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </StrictMode>,
-  )
-})
+bootstrap()

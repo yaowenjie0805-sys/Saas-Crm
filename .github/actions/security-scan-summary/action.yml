@@ -1,0 +1,40 @@
+name: Security Scan Summary
+description: Write concise security scan metrics to workflow logs
+
+inputs:
+  report_path:
+    description: Path to security scan json report
+    required: false
+    default: logs/security/security-scan-latest.json
+
+runs:
+  using: composite
+  steps:
+    - name: Print Security Scan Summary
+      shell: pwsh
+      run: |
+        $reportPath = "${{ inputs.report_path }}"
+        if (Test-Path $reportPath) {
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          $secretFindings = 0
+          if ($null -ne $report.checks.secretScan.findings) {
+            $secretFindings = @($report.checks.secretScan.findings).Count
+          }
+          Write-Host ("SECURITY_REPORT pass={0} npmHigh={1} npmCritical={2} secretFindings={3} sbomPass={4} javaStatus={5}" -f $report.pass, $report.checks.npmAudit.high, $report.checks.npmAudit.critical, $secretFindings, $report.checks.sbom.pass, $report.checks.javaDependencyScan.status)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Security Scan"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- pass: {0}" -f $report.pass)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- npm high: {0}" -f $report.checks.npmAudit.high)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- npm critical: {0}" -f $report.checks.npmAudit.critical)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- secret findings: {0}" -f $secretFindings)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- sbom pass: {0}" -f $report.checks.sbom.pass)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- java dependency scan status: {0}" -f $report.checks.javaDependencyScan.status)
+          if ($null -ne $report.checks.javaDependencyScan.actionableHint -and $report.checks.javaDependencyScan.actionableHint) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- java hint: {0}" -f $report.checks.javaDependencyScan.actionableHint)
+          }
+        } else {
+          Write-Host "SECURITY_REPORT missing=$reportPath"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Security Scan"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- missing report: {0}" -f $reportPath)
+        }

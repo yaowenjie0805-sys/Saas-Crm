@@ -14,6 +14,7 @@ export function useAppAuthModel({
   setRecentWorkbenchJump,
   setDomainLoadSource,
   setLastRefreshReason,
+  resetDomainSlices,
   abortAll,
   loadReasonRef,
   workbenchJumpRef,
@@ -120,9 +121,10 @@ export function useAppAuthModel({
         workbench: { source: '', at: '' },
       })
       setLastRefreshReason('default')
+      resetDomainSlices()
       navigate('/login', { replace: true })
     }
-  }, [logoutGuardRef, suppressLoginErrorUntilRef, auth?.token, abortAll, loadReasonRef, workbenchJumpRef, saveAuth, setError, setLoginError, setCrudErrors, setCrudFieldErrors, setCurrentLoaderKey, setCurrentPageSignature, setCurrentSignatureHit, setRecentWorkbenchJump, setDomainLoadSource, setLastRefreshReason, navigate])
+  }, [logoutGuardRef, suppressLoginErrorUntilRef, auth?.token, abortAll, loadReasonRef, workbenchJumpRef, saveAuth, setError, setLoginError, setCrudErrors, setCrudFieldErrors, setCurrentLoaderKey, setCurrentPageSignature, setCurrentSignatureHit, setRecentWorkbenchJump, setDomainLoadSource, setLastRefreshReason, resetDomainSlices, navigate])
 
   return {
     saveAuth,

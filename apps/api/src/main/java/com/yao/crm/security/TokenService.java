@@ -6,17 +6,20 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class TokenService {
@@ -27,8 +30,10 @@ public class TokenService {
     private static final int MAX_TOKEN_LENGTH = 4096;
     private static final int MAX_JSON_LENGTH = 2048;
     private static final long MAX_EXPIRY_FUTURE_MILLIS = 30L * 24 * 60 * 60 * 1000; // 30 days
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final Set<String> WEAK_SECRETS = new HashSet<String>(Arrays.asList(
+            "secret", "changeme", "your_jwt_secret_here", "default", "test",
+            "crm-secret-change-me", "crm-secret", "jwt-secret", "jwt-secret-key"
+    ));
 
     /**
      * Internal DTO for token payload deserialization.
@@ -112,15 +117,26 @@ public class TokenService {
         }
     }
 
+    private final ObjectMapper objectMapper;
     private final String secret;
     private final long ttlMillis;
+    private final boolean allowUnsafeSecretFallback;
 
+    @Autowired
     public TokenService(
+            ObjectMapper objectMapper,
             @Value("${auth.token.secret:crm-secret-change-me}") String configuredSecret,
-            @Value("${auth.token.ttl-ms:86400000}") long ttlMillis
+            @Value("${auth.token.ttl-ms:86400000}") long ttlMillis,
+            @Value("${auth.token.allow-unsafe-fallback:false}") boolean allowUnsafeSecretFallback
     ) {
-        this.secret = resolveSecret(configuredSecret);
+        this.objectMapper = objectMapper.copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this.allowUnsafeSecretFallback = allowUnsafeSecretFallback;
+        this.secret = resolveSecret(configuredSecret, allowUnsafeSecretFallback);
         this.ttlMillis = ttlMillis;
+    }
+
+    TokenService(ObjectMapper objectMapper, String configuredSecret, long ttlMillis) {
+        this(objectMapper, configuredSecret, ttlMillis, false);
     }
 
     @PostConstruct
@@ -128,14 +144,6 @@ public class TokenService {
         // Check if secret key is too short
         if (secret == null || secret.length() < 32) {
             log.warn("JWT secret key is too short (< 32 chars). Please configure a stronger key for production.");
-        }
-        // Check for common default/weak values
-        Set<String> weakSecrets = new HashSet<String>(Arrays.asList(
-            "secret", "changeme", "your_jwt_secret_here", "default", "test",
-            "crm-secret-change-me", "crm-secret", "jwt-secret", "jwt-secret-key"
-        ));
-        if (secret != null && weakSecrets.contains(secret.toLowerCase())) {
-            log.warn("JWT secret key appears to be a default/weak value. Change it immediately for production use!");
         }
     }
 
@@ -174,7 +182,7 @@ public class TokenService {
         String payload = normalizedToken.substring(0, firstDot);
         String signature = normalizedToken.substring(firstDot + 1);
         try {
-            if (!sign(payload).equals(signature)) {
+            if (!constantTimeEquals(sign(payload), signature)) {
                 return null;
             }
             String decoded = new String(base64UrlDecode(payload), StandardCharsets.UTF_8);
@@ -197,7 +205,7 @@ public class TokenService {
         }
 
         try {
-            TokenPayload payload = MAPPER.readValue(json, TokenPayload.class);
+            TokenPayload payload = objectMapper.readValue(json, TokenPayload.class);
             String username = normalizeWhitespace(payload.getUsername());
             String role = normalizeWhitespace(payload.getRole());
             String ownerScope = normalizeWhitespace(payload.getOwnerId());
@@ -309,13 +317,39 @@ public class TokenService {
         return value.trim();
     }
 
-    private static String resolveSecret(String configuredSecret) {
+    private String resolveSecret(String configuredSecret, boolean allowUnsafeFallback) {
         if (configuredSecret == null || configuredSecret.trim().isEmpty()) {
+            if (allowUnsafeFallback) {
+                String fallback = "unsafe-fallback-" + UUID.randomUUID().toString().replace("-", "");
+                log.warn("auth.token.secret is empty; using UNSAFE fallback secret because auth.token.allow-unsafe-fallback=true");
+                return fallback;
+            }
             throw new IllegalStateException(
                     "Invalid auth.token.secret configuration: value is empty. "
                             + "Set AUTH_TOKEN_SECRET to a non-empty secret value."
             );
         }
-        return configuredSecret.trim();
+        String normalized = configuredSecret.trim();
+        if (WEAK_SECRETS.contains(normalized.toLowerCase())) {
+            if (allowUnsafeFallback) {
+                String fallback = "unsafe-fallback-" + UUID.randomUUID().toString().replace("-", "");
+                log.warn("auth.token.secret is weak; using UNSAFE fallback secret because auth.token.allow-unsafe-fallback=true");
+                return fallback;
+            }
+            throw new IllegalStateException(
+                    "Invalid auth.token.secret configuration: weak default secret is not allowed. "
+                            + "Set AUTH_TOKEN_SECRET to a strong secret value."
+            );
+        }
+        return normalized;
+    }
+
+    private boolean constantTimeEquals(String expected, String actual) {
+        if (expected == null || actual == null) {
+            return false;
+        }
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.US_ASCII);
+        byte[] actualBytes = actual.getBytes(StandardCharsets.US_ASCII);
+        return MessageDigest.isEqual(expectedBytes, actualBytes);
     }
 }

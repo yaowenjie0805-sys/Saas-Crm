@@ -1,0 +1,17 @@
+name: Mark Job Start
+description: Store current UTC ISO timestamp in a job-scoped environment variable
+
+inputs:
+  start_env_var:
+    description: Environment variable name to store UTC ISO start timestamp
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set Job Start Timestamp
+      shell: pwsh
+      run: |
+        $startEnvVar = "${{ inputs.start_env_var }}"
+        $startedAt = (Get-Date).ToUniversalTime().ToString("o")
+        "$startEnvVar=$startedAt" >> $env:GITHUB_ENV
