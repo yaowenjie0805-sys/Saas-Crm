@@ -102,7 +102,7 @@ public class ReportService {
     public Map<String, Object> overviewByTenant(String tenantId, LocalDate fromDate, LocalDate toDate, String role, String owner, String department) {
         String requiredTenantId = requireTenantId(tenantId);
         if (fromDate == null && toDate == null && isBlank(role) && isBlank(owner) && isBlank(department)) {
-            return overviewByTenantFastPath(requiredTenantId);
+            return ensureSummaryKpis(overviewByTenantFastPath(requiredTenantId));
         }
         LocalDate safeFromDate = normalizeFromDate(fromDate, toDate);
         LocalDate safeToDate = normalizeToDate(fromDate, toDate);
@@ -113,13 +113,13 @@ public class ReportService {
         final String ownerFilter = owner == null ? "" : owner.trim().toLowerCase();
         Set<String> scopedOwners = mergeOwnerScope(roleIdentities, departmentIdentities, ownerFilter);
         if (fromTime != null && toTime != null) {
-            return overviewByTenantDateFastPath(requiredTenantId, fromTime, toTime, scopedOwners);
+            return ensureSummaryKpis(overviewByTenantDateFastPath(requiredTenantId, fromTime, toTime, scopedOwners));
         }
         if (fromDate == null && toDate == null && scopedOwners != null) {
             if (scopedOwners.isEmpty()) {
-                return emptyOverviewBody();
+                return ensureSummaryKpis(emptyOverviewBody());
             }
-            return overviewByTenantScopedFastPath(requiredTenantId, scopedOwners);
+            return ensureSummaryKpis(overviewByTenantScopedFastPath(requiredTenantId, scopedOwners));
         }
 
         List<Customer> customers = loadCustomers(requiredTenantId, fromTime, toTime, scopedOwners);
@@ -217,7 +217,7 @@ public class ReportService {
         body.put("followUpByChannel", followUpByChannel);
         body.put("quoteByStatus", quoteSummary.byStatus);
         body.put("orderByStatus", orderSummary.byStatus);
-        return body;
+        return ensureSummaryKpis(body);
     }
 
     private Map<String, Object> overviewByTenantDateFastPath(String tenantId,
@@ -225,7 +225,7 @@ public class ReportService {
                                                               LocalDateTime to,
                                                               Set<String> owners) {
         if (owners != null && owners.isEmpty()) {
-            return reportAggregationService.emptyOverviewBody();
+            return ensureSummaryKpis(reportAggregationService.emptyOverviewBody());
         }
 
         final boolean scoped = owners != null;
@@ -366,20 +366,81 @@ public class ReportService {
         body.put("followUpByChannel", followUpByChannel);
         body.put("quoteByStatus", quoteByStatus);
         body.put("orderByStatus", orderByStatus);
-        return body;
+        return ensureSummaryKpis(body);
     }
 
     private Map<String, Object> overviewByTenantFastPath(String tenantId) {
-        return reportAggregationService.aggregateWithoutScope(tenantId);
+        return ensureSummaryKpis(reportAggregationService.aggregateWithoutScope(tenantId));
     }
 
     private Map<String, Object> overviewByTenantScopedFastPath(String tenantId, Set<String> owners) {
         Map<String, Object> body = reportAggregationService.aggregateWithScope(tenantId, owners);
-        return body == null ? reportAggregationService.emptyOverviewBody() : body;
+        return ensureSummaryKpis(body == null ? reportAggregationService.emptyOverviewBody() : body);
     }
 
     private Map<String, Object> emptyOverviewBody() {
-        return reportAggregationService.emptyOverviewBody();
+        return ensureSummaryKpis(reportAggregationService.emptyOverviewBody());
+    }
+
+    private Map<String, Object> ensureSummaryKpis(Map<String, Object> body) {
+        if (body == null) {
+            return null;
+        }
+        Object summaryRaw = body.get("summary");
+        if (!(summaryRaw instanceof Map)) {
+            return body;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) summaryRaw;
+        if (!summary.containsKey("winRate")) {
+            summary.put("winRate", 0.0);
+        }
+        double winRate = toDouble(summary.get("winRate"));
+        double forecastAccuracy = summary.containsKey("forecastAccuracy")
+                ? toDouble(summary.get("forecastAccuracy"))
+                : computeForecastAccuracy(summary);
+        if (!summary.containsKey("forecastAccuracy")) {
+            summary.put("forecastAccuracy", forecastAccuracy);
+        }
+        if (!summary.containsKey("pipelineHealth")) {
+            summary.put("pipelineHealth", computePipelineHealth(summary, winRate, forecastAccuracy));
+        }
+        return body;
+    }
+
+    private double computeForecastAccuracy(Map<String, Object> summary) {
+        double weightedAmount = toDouble(summary.get("weightedAmount"));
+        double revenue = toDouble(summary.get("revenue"));
+        if (weightedAmount <= 0.0 || revenue <= 0.0) {
+            return 0.0;
+        }
+        double gap = Math.abs(weightedAmount - revenue);
+        double baseline = Math.max(weightedAmount, revenue);
+        if (baseline <= 0.0) {
+            return 0.0;
+        }
+        return Math.round(Math.max(0.0, (1.0 - gap / baseline) * 1000.0)) / 10.0;
+    }
+
+    private double computePipelineHealth(Map<String, Object> summary, double winRate, double forecastAccuracy) {
+        double quoteToOrderRate = toDouble(summary.get("quoteToOrderRate"));
+        double orderCompleteRate = toDouble(summary.get("orderCompleteRate"));
+        double orderCollectionRate = toDouble(summary.get("orderCollectionRate"));
+        return Math.round((winRate + quoteToOrderRate + orderCompleteRate + orderCollectionRate + forecastAccuracy) * 10.0 / 5.0) / 10.0;
+    }
+
+    private double toDouble(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        if (value == null) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (NumberFormatException ignore) {
+            return 0.0;
+        }
     }
 
     public DashboardMetricsCacheService.CachedValue<Map<String, Object>> overviewByTenantCached(String tenantId,

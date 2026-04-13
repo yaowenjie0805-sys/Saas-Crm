@@ -107,6 +107,28 @@ class RateLimitInterceptorTest {
     }
 
     @Test
+    @DisplayName("shouldApplyWebhookSpecificRateLimitBucket")
+    void shouldApplyWebhookSpecificRateLimitBucket() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/integrations/webhooks/wx-connector");
+        request.setRemoteAddr("10.0.0.11");
+        request.addHeader("Authorization", "Bearer token-123");
+        request.setAttribute("authTenantId", TENANT_TEST);
+        request.setAttribute("authUsername", "alice");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(rateLimitService.allow(anyString(), anyInt())).thenReturn(true);
+
+        assertTrue(interceptor.preHandle(request, response, new Object()));
+
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Integer> limitCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(rateLimitService).allow(keyCaptor.capture(), limitCaptor.capture());
+        assertEquals(TENANT_TEST + "|alice|/api/v1/integrations/webhooks/wx-connector", keyCaptor.getValue());
+        assertEquals(Integer.valueOf(120), limitCaptor.getValue());
+        verify(tokenService, never()).verify(anyString());
+    }
+
+    @Test
     @DisplayName("shouldNormalizeUuidPathSegmentsInRouteKey")
     void shouldNormalizeUuidPathSegmentsInRouteKey() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/approval/requests/550e8400-e29b-41d4-a716-446655440000");

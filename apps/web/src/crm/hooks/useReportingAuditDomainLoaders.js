@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import { api } from '../shared'
 
 const REPORT_CACHE_TTL_MS = 20 * 1000
+const MAIN_KPI_FIELDS = new Set(['winRate', 'forecastAccuracy', 'pipelineHealth', 'taskDoneRate'])
 
 export function useReportingAuditDomainLoaders({
   canViewAudit,
@@ -91,11 +92,13 @@ export function useReportingAuditDomainLoaders({
       approvalMode: v2TenantConfig?.approvalMode || v2Commerce?.marketContext?.approvalMode || 'STRICT',
     }
     const localizedMetrics = v2Commerce?.localizedMetrics
-      ? {
-          ...v2Commerce.localizedMetrics,
-          pipelineHealth: Number(v2Commerce.localizedMetrics.pipelineHealth || 0),
-          arrLike: Number(v2Commerce.localizedMetrics.arrLike || 0),
-        }
+      ? Object.entries(v2Commerce.localizedMetrics).reduce((acc, [key, value]) => {
+          if (MAIN_KPI_FIELDS.has(key)) {
+            return acc
+          }
+          acc[key] = key === 'arrLike' ? Number(value || 0) : value
+          return acc
+        }, {})
       : null
     const nextReports = {
       ...(v1Overview || {}),

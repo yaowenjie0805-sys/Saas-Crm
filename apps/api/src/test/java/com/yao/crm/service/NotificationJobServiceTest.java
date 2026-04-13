@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -274,6 +275,42 @@ class NotificationJobServiceTest {
         assertEquals("RETRY", savedJobs.get(0).getStatus());
 
         verify(auditLogService).record(eq("system"), eq("SYSTEM"), eq("NOTIFY_BATCH_RETRY"), eq("NOTIFICATION_JOB"), eq(TENANT_TEST), anyString(), eq(TENANT_TEST));
+    }
+
+    @Test
+    @DisplayName("shouldRecordTraceableWebhookDispatchAuditDetails")
+    void shouldRecordTraceableWebhookDispatchAuditDetails() {
+        NotificationJob job = createJob("job-dispatch-audit");
+        job.setRetryCount(1);
+        job.setMaxRetries(5);
+        Page<NotificationJob> firstBatch = new PageImpl<NotificationJob>(Collections.singletonList(job));
+        Page<NotificationJob> emptyBatch = new PageImpl<NotificationJob>(Collections.<NotificationJob>emptyList());
+
+        when(jobRepository.findByStatusInAndNextRetryAtBefore(
+                eq(Arrays.asList("PENDING", "RETRY")),
+                any(LocalDateTime.class),
+                any(Pageable.class)
+        )).thenReturn(firstBatch, emptyBatch);
+        when(jobRepository.save(any(NotificationJob.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(integrationWebhookService.sendEvent(anyString(), anyString(), anyString(), anyString(), anyString())).thenReturn(true);
+
+        int processed = service.processQueue();
+
+        assertEquals(1, processed);
+        verify(auditLogService).record(
+                eq("system"),
+                eq("SYSTEM"),
+                eq("WEBHOOK_DISPATCH"),
+                eq("WECOM"),
+                eq("job-dispatch-audit"),
+                argThat(details -> details != null
+                        && details.contains("requestId=job-dispatch-audit")
+                        && details.contains("retryable=true")
+                        && details.contains("attempts=2")
+                        && details.contains("status=SUCCESS")
+                        && details.contains("dispatched=true")),
+                eq(TENANT_TEST)
+        );
     }
 
     private NotificationJob createJob(String id) {

@@ -290,8 +290,17 @@ public class NotificationJobService {
     private boolean dispatch(NotificationJob job) {
         String payload = job.getPayload() == null ? "{}" : job.getPayload();
         boolean sent = integrationWebhookService.sendEvent(job.getTarget(), job.getTenantId(), job.getEventType(), payload, job.getId());
-        auditLogService.record("system", "SYSTEM", "WEBHOOK_DISPATCH", job.getTarget(), job.getId(),
-                "sent=" + sent + ", payload=" + payload, job.getTenantId());
+        int attempts = (job.getRetryCount() == null ? 0 : job.getRetryCount()) + 1;
+        int effectiveMaxRetries = job.getMaxRetries() == null ? maxRetries : job.getMaxRetries();
+        boolean retryable = attempts < effectiveMaxRetries;
+        String status = sent ? "SUCCESS" : "FAILED";
+        String requestId = job.getId() == null ? "" : job.getId();
+        String auditDetails = "requestId=" + requestId
+                + ", retryable=" + retryable
+                + ", attempts=" + attempts
+                + ", status=" + status
+                + ", dispatched=" + sent;
+        auditLogService.record("system", "SYSTEM", "WEBHOOK_DISPATCH", job.getTarget(), job.getId(), auditDetails, job.getTenantId());
         return sent;
     }
 

@@ -257,6 +257,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     private int resolveLimit(String uri) {
         if (uri == null) return 0;
         if (uri.contains("/auth/login")) return loginMaxRequests;
+        if (uri.startsWith("/api/v1/integrations/webhooks/")) return approvalMaxRequests;
         if (uri.contains("/approval/")) return approvalMaxRequests;
         if (uri.contains("/batch-retry") || uri.contains("/retry-by-filter")) return batchRetryMaxRequests;
         if (uri.contains("/export-jobs")) return exportMaxRequests;
