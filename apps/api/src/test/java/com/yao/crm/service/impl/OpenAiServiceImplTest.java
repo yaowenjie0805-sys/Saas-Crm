@@ -137,6 +137,35 @@ class OpenAiServiceImplTest {
         verify(restTemplate).exchange(contains("http://localhost:11434/v1/chat/completions"), eq(HttpMethod.POST), any(), eq(String.class));
     }
 
+    @Test
+    @DisplayName("shouldNormalizeCustomBaseUrlWithTrailingSlash_whenProvidedInOptions")
+    void shouldNormalizeCustomBaseUrlWithTrailingSlash_whenProvidedInOptions() {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}"));
+
+        OpenAiServiceImpl service = new OpenAiServiceImpl(
+                createAiConfig(),
+                restTemplate,
+                new ObjectMapper(),
+                0,
+                0,
+                millis -> {
+                }
+        );
+
+        String result = service.generateText(
+                "hello",
+                Map.of(
+                        "base_url", "http://localhost:11434/v1/",
+                        "api_key", "sk-local"
+                )
+        );
+
+        assertEquals("ok", result);
+        verify(restTemplate).exchange(eq("http://localhost:11434/v1/chat/completions"), eq(HttpMethod.POST), any(), eq(String.class));
+    }
+
     private AiConfig createAiConfig() {
         AiConfig aiConfig = new AiConfig();
         AiConfig.OpenAi openAi = new AiConfig.OpenAi();

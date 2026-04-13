@@ -205,6 +205,8 @@ class ReportAggregationServiceTest {
         assertEquals(0.0, summary.get("taskDoneRate"));
         assertEquals(0.0, summary.get("quoteApproveRate"));
         assertEquals(0.0, summary.get("orderCompleteRate"));
+        assertEquals(0.0, summary.get("forecastAccuracy"));
+        assertEquals(0.0, summary.get("pipelineHealth"));
 
         // Verify empty maps for grouped data
         assertTrue(((Map<?, ?>) result.get("customerByOwner")).isEmpty());
@@ -261,6 +263,10 @@ class ReportAggregationServiceTest {
         assertEquals(70.0, summary.get("orderCompleteRate"));
         // collectionRate = 60000/80000 * 100 = 75.0
         assertEquals(75.0, summary.get("orderCollectionRate"));
+        // forecastAccuracy uses weightedAmount(500) vs revenue(100000) => 0.5
+        assertEquals(0.5, summary.get("forecastAccuracy"));
+        // pipelineHealth = avg(winRate, quoteToOrderRate, orderCompleteRate, orderCollectionRate, forecastAccuracy)
+        assertEquals(58.4, summary.get("pipelineHealth"));
     }
 
     @Test
@@ -281,6 +287,8 @@ class ReportAggregationServiceTest {
         assertEquals(0L, summary.get("opportunities"));
         assertEquals(0.0, summary.get("winRate"));
         assertEquals(0.0, summary.get("taskDoneRate"));
+        assertEquals(0.0, summary.get("forecastAccuracy"));
+        assertEquals(0.0, summary.get("pipelineHealth"));
         assertEquals(0L, summary.get("orderPaymentReceived"));
         assertEquals(0L, summary.get("orderPaymentOutstanding"));
 

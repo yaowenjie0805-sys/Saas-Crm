@@ -54,8 +54,8 @@ class V1IntegrationControllerTest {
         payload.setText("  Please handle now  ");
 
         when(tenantRepository.findById(TENANT_TEST)).thenReturn(Optional.of(mock(Tenant.class)));
-        when(integrationWebhookService.sendMessage("WECOM", TENANT_TEST, "Approval Escalation", "Please handle now", "boss"))
-                .thenReturn(true);
+        when(integrationWebhookService.sendMessageDetailed("WECOM", TENANT_TEST, "Approval Escalation", "Please handle now", "boss"))
+                .thenReturn(IntegrationWebhookService.DispatchResult.success(1, 202, false));
 
         ResponseEntity<?> response = controller.wecom(request, payload);
 
@@ -64,9 +64,10 @@ class V1IntegrationControllerTest {
         assertEquals("webhook_accepted", body.get("code"));
         assertTrue(Boolean.TRUE.equals(body.get("accepted")));
         assertTrue(Boolean.TRUE.equals(body.get("dispatched")));
+        assertFalse(Boolean.TRUE.equals(body.get("retryable")));
         assertEquals("WECOM", body.get("provider"));
         assertEquals(TENANT_TEST, body.get("tenantId"));
-        verify(integrationWebhookService).sendMessage("WECOM", TENANT_TEST, "Approval Escalation", "Please handle now", "boss");
+        verify(integrationWebhookService).sendMessageDetailed("WECOM", TENANT_TEST, "Approval Escalation", "Please handle now", "boss");
     }
 
     @Test
@@ -81,13 +82,13 @@ class V1IntegrationControllerTest {
         payload.setBody("{\"event\":\"approval_sla_escalated\"}");
 
         when(tenantRepository.findById("tenant_cn")).thenReturn(Optional.of(mock(Tenant.class)));
-        when(integrationWebhookService.sendMessage(
+        when(integrationWebhookService.sendMessageDetailed(
                 eq("DINGTALK"),
                 eq("tenant_cn"),
                 eq("Webhook DINGTALK"),
                 eq("{\"event\":\"approval_sla_escalated\"}"),
                 eq("ops")
-        )).thenReturn(false);
+        )).thenReturn(IntegrationWebhookService.DispatchResult.failure(3, 429, true));
 
         ResponseEntity<?> response = controller.dingtalk(request, payload);
 
@@ -95,7 +96,8 @@ class V1IntegrationControllerTest {
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertTrue(Boolean.TRUE.equals(body.get("accepted")));
         assertFalse(Boolean.TRUE.equals(body.get("dispatched")));
-        verify(integrationWebhookService).sendMessage("DINGTALK", "tenant_cn", "Webhook DINGTALK", "{\"event\":\"approval_sla_escalated\"}", "ops");
+        assertTrue(Boolean.TRUE.equals(body.get("retryable")));
+        verify(integrationWebhookService).sendMessageDetailed("DINGTALK", "tenant_cn", "Webhook DINGTALK", "{\"event\":\"approval_sla_escalated\"}", "ops");
     }
 
     @Test

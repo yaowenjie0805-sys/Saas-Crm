@@ -3,6 +3,11 @@ package com.yao.crm.service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import javax.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -33,9 +38,9 @@ public class NotificationDispatchService {
             payload.put("instanceId", instanceId);
             payload.put("taskId", taskId);
             payload.put("approverRole", approverRole);
-            boolean sent = integrationWebhookService.sendEvent(provider, tenantId, "approval_sla_escalated", String.valueOf(payload), taskId);
+            IntegrationWebhookService.DispatchResult result = integrationWebhookService.sendEventDetailed(provider, tenantId, "approval_sla_escalated", String.valueOf(payload), taskId);
             auditLogService.record("system", "SYSTEM", "WEBHOOK_DISPATCH", provider, taskId,
-                    "sent=" + sent + ", payload=" + String.valueOf(payload), tenantId);
+                    auditDetails(result, true, payload), tenantId);
         }
     }
 
@@ -47,9 +52,36 @@ public class NotificationDispatchService {
             Map<String, Object> fullPayload = new LinkedHashMap<String, Object>(payload);
             fullPayload.put("event", eventType);
             fullPayload.put("tenantId", tenantId);
-            boolean sent = integrationWebhookService.sendEvent(provider, tenantId, eventType, String.valueOf(fullPayload), eventType);
+            IntegrationWebhookService.DispatchResult result = integrationWebhookService.sendEventDetailed(provider, tenantId, eventType, String.valueOf(fullPayload), eventType);
             auditLogService.record("system", "SYSTEM", "NOTIFICATION_SEND", provider, eventType,
-                    "sent=" + sent + ", payload=" + String.valueOf(fullPayload), tenantId);
+                    auditDetails(result, false, fullPayload), tenantId);
         }
+    }
+
+    private String auditDetails(IntegrationWebhookService.DispatchResult result, boolean systemEvent, Map<String, Object> payload) {
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("requestId", currentRequestId());
+        details.put("retryable", result != null && result.isRetryable());
+        details.put("sent", result != null && result.isSuccess());
+        details.put("eventScope", systemEvent ? "workflow" : "notification");
+        details.put("payload", String.valueOf(payload));
+        return String.valueOf(details);
+    }
+
+    private String currentRequestId() {
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes instanceof ServletRequestAttributes) {
+            HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
+            if (request != null) {
+                Object trace = request.getAttribute(com.yao.crm.security.TraceIdInterceptor.TRACE_ID_ATTR);
+                if (trace != null) {
+                    String value = String.valueOf(trace).trim();
+                    if (!value.isEmpty()) {
+                        return value;
+                    }
+                }
+            }
+        }
+        return "system";
     }
 }

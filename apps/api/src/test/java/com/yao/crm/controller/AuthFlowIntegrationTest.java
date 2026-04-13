@@ -573,6 +573,16 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray());
 
+        boolean sourceDone = waitUntil(() -> {
+            String statusBody = mockMvc.perform(get("/api/reports/export-jobs/" + jobId)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String statusText = objectMapper.readTree(statusBody).get("status").asText();
+            return "DONE".equals(statusText);
+        });
+        org.junit.jupiter.api.Assertions.assertTrue(sourceDone, "report export source job should reach DONE before retry");
+
         String retried = mockMvc.perform(post("/api/reports/export-jobs/" + jobId + "/retry")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isAccepted())
@@ -1903,7 +1913,7 @@ class AuthFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .header("X-Tenant-Id", TENANT_TEST))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("order_stage_gate_requires_quote_accepted"))
+                .andExpect(jsonPath("$.code").value("order_stage_gate_quote_accepted_required"))
                 .andExpect(jsonPath("$.requestId").isString())
                 .andExpect(jsonPath("$.details.requiredStatus").value("ACCEPTED_QUOTE"))
                 .andExpect(jsonPath("$.details.currentStatus").value("NO_QUOTE"))

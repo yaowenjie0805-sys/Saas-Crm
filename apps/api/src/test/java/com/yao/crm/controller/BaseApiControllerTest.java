@@ -7,7 +7,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
@@ -97,6 +102,29 @@ class BaseApiControllerTest {
         assertEquals("tenant_header_required", exception.getMessage());
     }
 
+    @Test
+    void errorBodyShouldIncludeOperationAndDefaultRetriable() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/orders");
+        request.setAttribute("traceId", "trace-001");
+
+        Map<String, Object> body = controller.errorBodyForTest(request, "conflict", "Conflict", null);
+
+        assertEquals("POST /api/v1/orders", body.get("operation"));
+        assertEquals("trace-001", body.get("requestId"));
+        assertFalse((Boolean) body.get("retriable"));
+    }
+
+    @Test
+    void errorBodyShouldReadRetriableFromDetails() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/reports/export-jobs");
+        Map<String, Object> details = new LinkedHashMap<String, Object>();
+        details.put("retriable", true);
+
+        Map<String, Object> body = controller.errorBodyForTest(request, "bad_gateway", "upstream failed", details);
+
+        assertTrue((Boolean) body.get("retriable"));
+    }
+
     private static final class TestController extends BaseApiController {
 
         private TestController(I18nService i18nService) {
@@ -105,6 +133,13 @@ class BaseApiControllerTest {
 
         private String currentTenantForTest(MockHttpServletRequest request) {
             return currentTenant(request);
+        }
+
+        private Map<String, Object> errorBodyForTest(MockHttpServletRequest request,
+                                                     String code,
+                                                     String message,
+                                                     Map<String, Object> details) {
+            return errorBody(request, code, message, details);
         }
     }
 }
