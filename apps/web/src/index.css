@@ -14,29 +14,6 @@ body {
   min-height: 100vh;
 }
 
-::selection {
-  background: rgba(0, 212, 255, 0.3);
-  color: #fff;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
 /* Error Boundary Styles */
 .error-boundary {
   display: flex;
@@ -44,8 +21,8 @@ body {
   justify-content: center;
   min-height: 200px;
   padding: 2rem;
-  background: var(--surface-card, rgba(17, 24, 39, 0.6));
-  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border-default, #d8dce3);
   border-radius: 0.5rem;
   margin: 1rem;
 }
@@ -61,25 +38,25 @@ body {
 }
 
 .error-boundary h2 {
-  color: var(--text-primary, #f8fafc);
+  color: var(--text-primary, #1a1f36);
   margin: 0 0 0.5rem;
   font-size: 1.5rem;
 }
 
 .error-boundary p {
-  color: var(--text-secondary, #cbd5e1);
+  color: var(--text-secondary, #3c4257);
   margin: 0 0 1.5rem;
 }
 
 .error-details {
   margin-top: 1.5rem;
   text-align: left;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted, #697386);
   font-size: 0.875rem;
 }
 
 .error-details pre {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-primary, #f5f7fa);
   padding: 1rem;
   border-radius: 0.25rem;
   overflow-x: auto;
