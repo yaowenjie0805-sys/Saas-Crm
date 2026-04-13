@@ -443,67 +443,6 @@ public class ReportService {
         }
     }
 
-    private Map<String, Object> ensureSummaryKpis(Map<String, Object> body) {
-        if (body == null) {
-            return null;
-        }
-        Object summaryRaw = body.get("summary");
-        if (!(summaryRaw instanceof Map)) {
-            return body;
-        }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) summaryRaw;
-        if (!summary.containsKey("winRate")) {
-            summary.put("winRate", 0.0);
-        }
-        double winRate = toDouble(summary.get("winRate"));
-        double forecastAccuracy = summary.containsKey("forecastAccuracy")
-                ? toDouble(summary.get("forecastAccuracy"))
-                : computeForecastAccuracy(summary);
-        if (!summary.containsKey("forecastAccuracy")) {
-            summary.put("forecastAccuracy", forecastAccuracy);
-        }
-        if (!summary.containsKey("pipelineHealth")) {
-            summary.put("pipelineHealth", computePipelineHealth(summary, winRate, forecastAccuracy));
-        }
-        return body;
-    }
-
-    private double computeForecastAccuracy(Map<String, Object> summary) {
-        double weightedAmount = toDouble(summary.get("weightedAmount"));
-        double revenue = toDouble(summary.get("revenue"));
-        if (weightedAmount <= 0.0 || revenue <= 0.0) {
-            return 0.0;
-        }
-        double gap = Math.abs(weightedAmount - revenue);
-        double baseline = Math.max(weightedAmount, revenue);
-        if (baseline <= 0.0) {
-            return 0.0;
-        }
-        return Math.round(Math.max(0.0, (1.0 - gap / baseline) * 1000.0)) / 10.0;
-    }
-
-    private double computePipelineHealth(Map<String, Object> summary, double winRate, double forecastAccuracy) {
-        double quoteToOrderRate = toDouble(summary.get("quoteToOrderRate"));
-        double orderCompleteRate = toDouble(summary.get("orderCompleteRate"));
-        double orderCollectionRate = toDouble(summary.get("orderCollectionRate"));
-        return Math.round((winRate + quoteToOrderRate + orderCompleteRate + orderCollectionRate + forecastAccuracy) * 10.0 / 5.0) / 10.0;
-    }
-
-    private double toDouble(Object value) {
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
-        }
-        if (value == null) {
-            return 0.0;
-        }
-        try {
-            return Double.parseDouble(String.valueOf(value));
-        } catch (NumberFormatException ignore) {
-            return 0.0;
-        }
-    }
-
     public DashboardMetricsCacheService.CachedValue<Map<String, Object>> overviewByTenantCached(String tenantId,
                                                                                                  String actor,
                                                                                                  String actorRole,

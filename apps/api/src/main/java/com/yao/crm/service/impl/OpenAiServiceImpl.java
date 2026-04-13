@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yao.crm.config.AiConfig;
 import com.yao.crm.service.AiService;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -26,8 +27,8 @@ import java.util.Map;
  * OpenAI GPT implementation.
  */
 @Service
-@Slf4j
 public class OpenAiServiceImpl implements AiService {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiServiceImpl.class);
 
     private static final String OPENAI_FAILURE_MESSAGE = "AI service is temporarily unavailable. Please try again later.";
     private static final String OPENAI_NOT_CONFIGURED_MESSAGE = "AI service is not configured. Please contact administrator.";

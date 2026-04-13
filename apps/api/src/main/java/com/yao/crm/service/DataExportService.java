@@ -9,7 +9,8 @@ import com.yao.crm.repository.ContactRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.service.DataMappingService.EntityType;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
@@ -52,8 +53,8 @@ import java.util.concurrent.CompletableFuture;
  */
 @Service
 @EnableAsync
-@Slf4j
 public class DataExportService {
+    private static final Logger log = LoggerFactory.getLogger(DataExportService.class);
 
     private static final DateTimeFormatter FILE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
     private static final int EXPORT_QUERY_PAGE_SIZE = 500;

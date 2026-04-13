@@ -1,6 +1,7 @@
 package com.yao.crm.service;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -11,8 +12,8 @@ import java.util.Map;
  * AI 销售预测增强服务
  */
 @Service
-@Slf4j
 public class AiSalesForecastService {
+    private static final Logger log = LoggerFactory.getLogger(AiSalesForecastService.class);
 
     @Autowired
     private AiService aiService;

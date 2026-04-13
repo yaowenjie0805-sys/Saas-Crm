@@ -9,7 +9,8 @@ import com.yao.crm.repository.CustomerRepository;
 import com.yao.crm.repository.LeadRepository;
 import com.yao.crm.repository.ProductRepository;
 import com.yao.crm.service.DataMappingService.EntityType;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Service;
@@ -31,8 +32,8 @@ import java.util.concurrent.CompletableFuture;
  */
 @Service
 @EnableAsync
-@Slf4j
 public class DataImportService {
+    private static final Logger log = LoggerFactory.getLogger(DataImportService.class);
 
     // 导入任务状态
     public enum ImportJobStatus {
