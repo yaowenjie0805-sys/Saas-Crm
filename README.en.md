@@ -1,4 +1,4 @@
-﻿# Aster CRM
+# Aster CRM
 
 > A full-stack CRM monorepo for SMB teams, with built-in multi-tenancy, approval flows, reporting, and operational tooling.
 
@@ -91,8 +91,12 @@ npm run build:backend
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8080/api`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Default tenant: `tenant_default`
 - Default username: `admin`
 - Default password: `admin123`
+- MFA code: leave blank in local development
+
+During local integration, use one browser host consistently, for example all `localhost` or all `127.0.0.1`, so browser cookies and session restore stay on the same host.
 
 Before production deployment, replace defaults (especially `AUTH_TOKEN_SECRET` and bootstrap credentials).
 

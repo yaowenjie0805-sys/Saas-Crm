@@ -1,4 +1,4 @@
-﻿# Aster CRM
+# Aster CRM
 
 > 面向中小团队的全栈 CRM 单体仓库（Monorepo），内置多租户、审批流、报表与自动化能力。
 
@@ -91,8 +91,12 @@ npm run build:backend
 - 前端：`http://localhost:5173`
 - 后端 API：`http://localhost:8080/api`
 - Swagger：`http://localhost:8080/swagger-ui.html`
+- 默认租户：`tenant_default`
 - 默认账号：`admin`
 - 默认密码：`admin123`
+- MFA 验证码：本地开发默认留空
+
+本地联调时建议前后端使用同一个主机名访问，例如统一使用 `localhost` 或统一使用 `127.0.0.1`，避免浏览器 Cookie 因主机名不同导致会话不一致。
 
 生产环境请务必覆盖默认密码与 `AUTH_TOKEN_SECRET`。
 
