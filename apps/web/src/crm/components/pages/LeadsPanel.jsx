@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { translateStatus } from '../../shared'
 import { useSelectionSet } from '../../hooks/useSelectionSet'
 import {
@@ -60,8 +60,26 @@ function LeadsPanel({
 }) {
   const [bulkStatus, setBulkStatus] = useState('QUALIFIED')
   const [file, setFile] = useState(null)
-  const [leadQDraft, setLeadQDraft] = useState(leadQ || '')
-  const [leadStatusDraft, setLeadStatusDraft] = useState(leadStatus || '')
+  const [leadDraft, setLeadDraft] = useState(() => ({
+    sourceQ: leadQ || '',
+    sourceStatus: leadStatus || '',
+    q: leadQ || '',
+    status: leadStatus || '',
+  }))
+  const leadQDraft = leadDraft.sourceQ === (leadQ || '') ? leadDraft.q : (leadQ || '')
+  const leadStatusDraft = leadDraft.sourceStatus === (leadStatus || '') ? leadDraft.status : (leadStatus || '')
+  const updateLeadQDraft = (value) => setLeadDraft({
+    sourceQ: leadQ || '',
+    sourceStatus: leadStatus || '',
+    q: value,
+    status: leadStatusDraft,
+  })
+  const updateLeadStatusDraft = (value) => setLeadDraft({
+    sourceQ: leadQ || '',
+    sourceStatus: leadStatus || '',
+    q: leadQDraft,
+    status: value,
+  })
 
   const rows = useMemo(() => (leads || []).map((row) => ({
     ...row,
@@ -85,25 +103,25 @@ function LeadsPanel({
   const { selectedIds, selectedCount, allChecked, clearSelection, toggleAll, toggleOne } = selection
   const selectedIdList = useMemo(() => [...selectedIds], [selectedIds])
 
-  useEffect(() => {
-    // Sync prop to local draft state when parent value changes
-    setLeadQDraft(leadQ || '')
-  }, [leadQ])
-
-  useEffect(() => {
-    // Sync prop to local draft state when parent value changes
-    setLeadStatusDraft(leadStatus || '')
-  }, [leadStatus])
-
   const applyLeadFilters = () => {
+    setLeadDraft({
+      sourceQ: leadQDraft,
+      sourceStatus: leadStatusDraft,
+      q: leadQDraft,
+      status: leadStatusDraft,
+    })
     if (leadQ !== leadQDraft) setLeadQ(leadQDraft)
     if (leadStatus !== leadStatusDraft) setLeadStatus(leadStatusDraft)
     onPageChange(1)
   }
 
   const resetLeadFilters = () => {
-    setLeadQDraft('')
-    setLeadStatusDraft('')
+    setLeadDraft({
+      sourceQ: '',
+      sourceStatus: '',
+      q: '',
+      status: '',
+    })
     if (leadQ !== '') setLeadQ('')
     if (leadStatus !== '') setLeadStatus('')
     onPageChange(1)
@@ -123,8 +141,8 @@ function LeadsPanel({
       </div>
 
       <div className="inline-tools filter-row" data-testid="leads-filters">
-        <input data-testid="leads-search-input" className="tool-input" placeholder={t('keyword')} value={leadQDraft} onChange={(e) => setLeadQDraft(e.target.value)} />
-        <select data-testid="leads-status-filter" className="tool-input" value={leadStatusDraft} onChange={(e) => setLeadStatusDraft(e.target.value)}>
+        <input data-testid="leads-search-input" className="tool-input" placeholder={t('keyword')} value={leadQDraft} onChange={(e) => updateLeadQDraft(e.target.value)} />
+        <select data-testid="leads-status-filter" className="tool-input" value={leadStatusDraft} onChange={(e) => updateLeadStatusDraft(e.target.value)}>
           <option value="">{t('allStatuses')}</option>
           {LEAD_FILTER_STATUS_VALUES.map((status) => (
             <option key={status} value={status}>{translateStatus(t, status)}</option>

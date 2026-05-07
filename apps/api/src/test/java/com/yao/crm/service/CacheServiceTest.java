@@ -109,7 +109,7 @@ class CacheServiceTest {
                 deletedKeys.add(new String(key, StandardCharsets.UTF_8));
             }
             return (long) keys.length;
-        }).when(redisConnection).del(any(byte[][].class));
+        }).when(redisConnection).unlink(any(byte[][].class));
 
         cacheService.setLocal("dashboard:tenant:one", "v1", Duration.ofMinutes(5));
         putLegacyLocalEntry("crm:cache:crm:cache:dashboard:tenant:legacy");
@@ -144,7 +144,7 @@ class CacheServiceTest {
         lenient().doAnswer(invocation -> {
             byte[][] keys = invocation.getArgument(0);
             return (long) keys.length;
-        }).when(redisConnection).del(any(byte[][].class));
+        }).when(redisConnection).unlink(any(byte[][].class));
 
         cacheService.setLocal("user:1", "v1", Duration.ofMinutes(5));
 
@@ -152,7 +152,7 @@ class CacheServiceTest {
 
         verify(redisTemplate).execute(any(RedisCallback.class));
         verify(redisConnection).scan(any(ScanOptions.class));
-        verify(redisConnection).del(any(byte[].class), any(byte[].class));
+        verify(redisConnection).unlink(any(byte[].class), any(byte[].class));
         verify(redisTemplate, never()).keys(any());
         assertEquals(0L, localCache.estimatedSize());
     }
@@ -237,9 +237,9 @@ class CacheServiceTest {
     @SuppressWarnings("unchecked")
     private void putLegacyLocalEntry(String key) throws ReflectiveOperationException {
         Class<?> entryClass = Class.forName("com.yao.crm.service.CacheService$CacheEntry");
-        Constructor<?> constructor = entryClass.getDeclaredConstructor(String.class, long.class);
+        Constructor<?> constructor = entryClass.getDeclaredConstructor(String.class);
         constructor.setAccessible(true);
-        Object entry = constructor.newInstance("\"legacy\"", System.currentTimeMillis() + 60_000);
+        Object entry = constructor.newInstance("\"legacy\"");
         ((Cache<String, Object>) localCache).put(key, entry);
     }
 }

@@ -21,6 +21,7 @@ function PriceBooksPanel({ activePage, t, canWrite, apiContext, refreshPage, com
   const [items, setItems] = useState([])
   const [itemForm, setItemForm] = useState({ productId: '', price: '0', taxRate: '0', currency: 'CNY' })
   const itemsAbortRef = useRef(null)
+  const lastRequestedBookIdRef = useRef('')
 
   const token = apiContext?.token
   const lang = apiContext?.lang || 'en'
@@ -31,7 +32,7 @@ function PriceBooksPanel({ activePage, t, canWrite, apiContext, refreshPage, com
   }, [refreshPage])
 
   const loadItems = useCallback(async (bookId = effectiveSelectedBookId) => {
-    if (!token || !bookId) { setItems([]); return }
+    if (!token || !bookId) return
     itemsAbortRef.current?.abort()
     const controller = new AbortController()
     itemsAbortRef.current = controller
@@ -43,8 +44,15 @@ function PriceBooksPanel({ activePage, t, canWrite, apiContext, refreshPage, com
       setError(err.requestId ? `${err.message} [${err.requestId}]` : err.message)
     }
   }, [token, lang, effectiveSelectedBookId, setError])
-  // Sync: load items when book selection changes
-  useEffect(() => { if (activePage === 'priceBooks' && effectiveSelectedBookId) loadItems(effectiveSelectedBookId) }, [activePage, effectiveSelectedBookId, loadItems])
+  useEffect(() => {
+    if (activePage !== 'priceBooks' || !effectiveSelectedBookId) return
+    if (lastRequestedBookIdRef.current === effectiveSelectedBookId) return
+    lastRequestedBookIdRef.current = effectiveSelectedBookId
+    const timeoutId = window.setTimeout(() => {
+      void loadItems(effectiveSelectedBookId)
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [activePage, effectiveSelectedBookId, loadItems])
   useEffect(() => () => { itemsAbortRef.current?.abort() }, [])
   const filteredBooks = useMemo(() => {
     const name = nameFilter.trim().toLowerCase()

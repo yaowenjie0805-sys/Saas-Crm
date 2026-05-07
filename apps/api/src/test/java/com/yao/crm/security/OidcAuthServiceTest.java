@@ -40,7 +40,7 @@ class OidcAuthServiceTest {
                 "iss", "https://idp.example.com",
                 "aud", "crm-web"
         )));
-        assertTrue(service.isClaimsTrusted(Map.of(
+        assertFalse(service.isClaimsTrusted(Map.of(
                 "iss", "https://idp.example.com",
                 "aud", List.of("crm-api", "crm-web")
         )));

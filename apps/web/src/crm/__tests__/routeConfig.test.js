@@ -24,7 +24,7 @@ describe('routeConfig', () => {
     expect(typeof PAGE_CHUNK_PRELOADERS.dashboard).toBe('function')
     expect(typeof PAGE_CHUNK_PRELOADERS.approvals).toBe('function')
     expect(typeof PAGE_DOMAIN_PRELOADERS.dashboard).toBe('function')
-    expect(PAGE_DOMAIN_PRELOADERS.dashboard()).resolves.toBeUndefined()
+    await expect(PAGE_DOMAIN_PRELOADERS.dashboard()).resolves.toBeUndefined()
   })
 
   it('normalizes and parses tenant date formats', () => {
