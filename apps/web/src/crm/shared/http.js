@@ -5,7 +5,13 @@ const getApiBase = () => {
   if (env === 'production') {
     return '/api'
   }
-  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  const host = typeof window !== 'undefined' && window.location?.hostname
+    ? window.location.hostname
+    : '127.0.0.1'
+  return `http://${host}:8080/api`
 }
 
 export const API_BASE = getApiBase()

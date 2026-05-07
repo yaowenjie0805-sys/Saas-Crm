@@ -1,11 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildSessionAuthState,
   createOidcExchangeCodeCache,
   isValidOidcState,
   resolveOidcTenantId,
 } from '../hooks/orchestrators/runtime/useRuntimeAuthPersistenceUtils'
 
 describe('useRuntimeAuthPersistenceUtils', () => {
+  it('buildSessionAuthState keeps token only in runtime state', () => {
+    const result = buildSessionAuthState({
+      token: 'jwt-token',
+      username: 'admin',
+      role: 'ADMIN',
+      tenantId: ' tenant_default ',
+    })
+
+    expect(result.persisted).toMatchObject({
+      username: 'admin',
+      role: 'ADMIN',
+      tenantId: 'tenant_default',
+      sessionActive: true,
+    })
+    expect(result.persisted.token).toBeUndefined()
+    expect(result.runtime.token).toBe('jwt-token')
+  })
+
   it('resolveOidcTenantId prefers login form tenant then falls back to cached tenant', () => {
     expect(resolveOidcTenantId('  tenant_a  ', 'tenant_b')).toBe('tenant_a')
     expect(resolveOidcTenantId('   ', ' tenant_b ')).toBe('tenant_b')

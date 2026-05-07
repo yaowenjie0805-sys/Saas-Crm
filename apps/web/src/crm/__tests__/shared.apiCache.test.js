@@ -50,6 +50,21 @@ test('GET dedupe keys include tenant and language context', async () => {
   await Promise.all([requestA, requestB, requestC, requestD]);
 });
 
+test('development API base follows the current browser host', async () => {
+  const fetchMock = vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+  );
+  vi.stubGlobal('fetch', fetchMock);
+
+  await api('/v1/auth/session', { method: 'GET' }, '', 'en');
+
+  expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:8080/api/v1/auth/session');
+});
+
 test('GET dedupe keys include auth context', async () => {
   const fetchResolvers = [];
   const fetchMock = vi.fn(() => new Promise((resolve) => {

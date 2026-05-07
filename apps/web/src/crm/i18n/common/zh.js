@@ -8,6 +8,8 @@ export const ZH = {
   "displayName": "\u663e\u793a\u540d\u79f0",
   "tenantId": "\u79df\u6237ID",
   "tenantHint": "\u79df\u6237ID\u5fc5\u586b\uff08\u53ef\u4fee\u6539\uff09",
+  "devLoginHint": "\u5f00\u53d1\u73af\u5883\u5df2\u9884\u586b\uff1atenant_default / admin / admin123",
+  "devMfaHint": "\u5f00\u53d1\u73af\u5883\u9ed8\u8ba4\u672a\u5f00\u542f MFA\uff0cMFA Code \u7559\u7a7a\u5373\u53ef\u3002",
   "mfaCode": "MFA Code",
   "mfaPending": "\u9700\u8981MFA\u9a8c\u8bc1\uff0c\u8bf7\u8f93\u5165\u9a8c\u8bc1\u7801\u540e\u7ee7\u7eed",
   "ssoCode": "SSO Code",

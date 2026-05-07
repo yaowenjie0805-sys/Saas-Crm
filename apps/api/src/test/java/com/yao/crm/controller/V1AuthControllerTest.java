@@ -13,6 +13,7 @@ import com.yao.crm.security.MfaService;
 import com.yao.crm.security.SessionCookieService;
 import com.yao.crm.security.SsoAuthService;
 import com.yao.crm.security.SsoIdentity;
+import com.yao.crm.security.AuthPrincipal;
 import com.yao.crm.security.TokenService;
 import com.yao.crm.service.AuditLogService;
 import com.yao.crm.service.I18nService;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockCookie;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -44,6 +46,7 @@ class V1AuthControllerTest {
     private MfaService mfaService;
     private MfaChallengeService mfaChallengeService;
     private SsoAuthService ssoAuthService;
+    private TokenService tokenService;
     private V1AuthController controller;
 
     @BeforeEach
@@ -52,7 +55,7 @@ class V1AuthControllerTest {
         userInvitationRepository = mock(UserInvitationRepository.class);
         tenantRepository = mock(TenantRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-        TokenService tokenService = mock(TokenService.class);
+        tokenService = mock(TokenService.class);
         loginRiskService = mock(LoginRiskService.class);
         mfaService = mock(MfaService.class);
         mfaChallengeService = mock(MfaChallengeService.class);
@@ -61,6 +64,7 @@ class V1AuthControllerTest {
         SessionCookieService sessionCookieService = mock(SessionCookieService.class);
         I18nService i18nService = mock(I18nService.class);
         when(i18nService.msg(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
+        when(sessionCookieService.cookieName()).thenReturn("CRM_SESSION");
 
         controller = new V1AuthController(
                 userAccountRepository,
@@ -168,6 +172,37 @@ class V1AuthControllerTest {
         assertEquals("validation_error", body.get("code"));
         assertEquals("tenantId", ((Map<String, Object>) body.get("details")).get("field"));
         verifyNoInteractions(tenantRepository, userAccountRepository);
+    }
+
+    @Test
+    void sessionShouldReturnNoContentWhenNoTokenOrCookieExists() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("GET");
+        request.setRequestURI("/api/v1/auth/session");
+
+        ResponseEntity<?> response = controller.session(request);
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verifyNoInteractions(userAccountRepository);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void sessionShouldStillValidateExistingSessionCookieContext() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("GET");
+        request.setRequestURI("/api/v1/auth/session");
+        request.setCookies(new MockCookie("CRM_SESSION", "token"));
+        when(tokenService.verify("token")).thenReturn(new AuthPrincipal("missing", "ADMIN", "missing", TENANT_TEST, true));
+        when(userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue("missing", TENANT_TEST))
+                .thenReturn(Optional.empty());
+
+        ResponseEntity<?> response = controller.session(request);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("unauthorized", body.get("code"));
+        verify(userAccountRepository).findByUsernameAndTenantIdAndEnabledTrue("missing", TENANT_TEST);
     }
 
     private MockHttpServletRequest requestWithIp() {

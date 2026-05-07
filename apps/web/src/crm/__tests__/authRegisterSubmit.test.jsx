@@ -2,7 +2,7 @@ import React, { act, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import LoginView from '../components/LoginView'
-import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime'
+import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime/useRuntimeAuthActions.js'
 
 const mountedRoots = []
 globalThis.IS_REACT_ACT_ENVIRONMENT = true

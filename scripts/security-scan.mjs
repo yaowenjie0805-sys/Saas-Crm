@@ -34,10 +34,12 @@ function run(command, args = [], env = {}, options = {}) {
 
 function runNpm(args = [], env = {}) {
   const isWin = process.platform === 'win32'
+  const registry = String(process.env.SECURITY_SCAN_NPM_REGISTRY || 'https://registry.npmjs.org/').trim()
+  const npmEnv = registry ? { npm_config_registry: registry, ...env } : env
   if (isWin) {
-    return run('cmd.exe', ['/c', 'npm', ...args], env)
+    return run('cmd.exe', ['/c', 'npm', ...args], npmEnv)
   }
-  return run('npm', args, env)
+  return run('npm', args, npmEnv)
 }
 
 function runMaven(args = [], env = {}, options = {}) {
@@ -162,11 +164,15 @@ function gitTrackedFiles() {
 
 function scanSecrets() {
   const findings = []
+  const warnings = []
   const patterns = [
-    { id: 'private_key', regex: /BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY/ },
-    { id: 'aws_access_key', regex: /AKIA[0-9A-Z]{16}/ },
-    { id: 'github_pat', regex: /ghp_[A-Za-z0-9]{36,}/ },
-    { id: 'slack_token', regex: /xox[baprs]-[A-Za-z0-9-]{10,}/ },
+    { id: 'private_key', regex: /BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY/, blocking: true },
+    { id: 'aws_access_key', regex: /AKIA[0-9A-Z]{16}/, blocking: true },
+    { id: 'github_pat', regex: /ghp_[A-Za-z0-9]{36,}/, blocking: true },
+    { id: 'slack_token', regex: /xox[baprs]-[A-Za-z0-9-]{10,}/, blocking: true },
+    { id: 'placeholder_secret', regex: /(replace-with|change[-_]?me|change[-_]?this|example\.com)/i, blocking: false },
+    { id: 'weak_env_password', regex: /(?:PASSWORD|SECRET|TOKEN)=\s*(?:root|password|admin123|000000)\b/i, blocking: false },
+    { id: 'webhook_url', regex: /https:\/\/(?:open\.feishu\.cn|qyapi\.weixin\.qq\.com|oapi\.dingtalk\.com)\/[^\s'"]+/i, blocking: false },
   ]
   const files = gitTrackedFiles()
   for (const rel of files) {
@@ -182,11 +188,30 @@ function scanSecrets() {
     }
     for (const pattern of patterns) {
       if (pattern.regex.test(text)) {
-        findings.push({ file: rel, pattern: pattern.id })
+        const item = { file: rel, pattern: pattern.id }
+        if (pattern.blocking || shouldBlockWeakValue(rel)) {
+          findings.push(item)
+        } else {
+          warnings.push(item)
+        }
       }
     }
   }
-  return findings
+  return { findings, warnings }
+}
+
+function shouldBlockWeakValue(file) {
+  const normalized = file.replace(/\\/g, '/').toLowerCase()
+  if (normalized.includes('/src/test/') || normalized.includes('__tests__')) return false
+  if (normalized.endsWith('.example') || normalized.includes('.example.')) return false
+  if (normalized.endsWith('readme.md') || normalized.includes('/docs/')) return false
+  return (
+    normalized === '.env' ||
+    normalized.includes('.env.production') ||
+    normalized.includes('.env.staging') ||
+    normalized.includes('infra/production') ||
+    normalized.includes('infra/staging')
+  )
 }
 
 function parseAudit(auditRes) {
@@ -250,8 +275,8 @@ function main() {
   const critical = Number(audit?.metadata?.vulnerabilities?.critical ?? -1)
   const auditPass = auditRes.ok && auditParseOk && high === 0 && critical === 0
 
-  const secretFindings = scanSecrets()
-  const secretsPass = secretFindings.length === 0
+  const secretScan = scanSecrets()
+  const secretsPass = secretScan.findings.length === 0
 
   const sbom = runSbom()
   const sbomPass = sbom.ok
@@ -276,7 +301,8 @@ function main() {
       },
       secretScan: {
         pass: secretsPass,
-        findings: secretFindings,
+        findings: secretScan.findings,
+        warnings: secretScan.warnings,
       },
       sbom: {
         pass: sbomPass,
@@ -290,7 +316,7 @@ function main() {
   writeReport(report)
   const summary = [
     `npmAudit(ok=${auditRes.ok},parse=${auditParseOk},high=${high},critical=${critical})`,
-    `secrets(findings=${secretFindings.length})`,
+    `secrets(findings=${secretScan.findings.length},warnings=${secretScan.warnings.length})`,
     `sbom(${summarizeStatus(sbomPass, sbom.fallback)})`,
     `javaDependencyScan(${javaDependencyScan.status})`,
   ].join(' ')

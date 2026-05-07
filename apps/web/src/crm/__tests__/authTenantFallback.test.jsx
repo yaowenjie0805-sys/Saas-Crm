@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import InvitationAcceptView from '../components/InvitationAcceptView'
 import { useAuthRuntimeState } from '../hooks/orchestrators'
-import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime'
+import { useRuntimeAuthActions } from '../hooks/orchestrators/runtime/index.js'
 
 const useRuntimeSectionFieldsMock = vi.hoisted(() =>
   vi.fn((_domain, _section, defaults) => defaults),
@@ -51,7 +51,7 @@ afterEach(async () => {
 })
 
 describe('tenant fallback cleanup', () => {
-  it('useAuthRuntimeState loginForm keeps tenantId empty when cache is absent', async () => {
+  it('useAuthRuntimeState loginForm keeps tenantId empty when cache is absent outside dev mode', async () => {
     localStorage.removeItem('crm_last_tenant')
     const capturedStateRef = { current: null }
 

@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
@@ -71,6 +72,7 @@ public class V1AuthController extends BaseApiController {
     }
 
     @PostMapping("/invitations/accept")
+    @Transactional
     public ResponseEntity<?> acceptInvitation(HttpServletRequest request, @Valid @RequestBody V1AcceptInvitationRequest payload) {
         String invitationToken = normalizeRequiredValue(payload.getToken());
         if (invitationToken == null) {
@@ -259,8 +261,18 @@ public class V1AuthController extends BaseApiController {
 
     @GetMapping("/session")
     public ResponseEntity<?> session(HttpServletRequest request) {
-        String tenantId = currentTenant(request);
-        String username = currentUser(request);
+        String token = resolveSessionCredential(request);
+        if (isBlank(token)) {
+            return ResponseEntity.noContent().build();
+        }
+        AuthPrincipal principal;
+        try {
+            principal = tokenService.verify(token);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(401).body(errorBody(request, "unauthorized", msg(request, "invalid_or_expired"), null));
+        }
+        String tenantId = principal.getTenantId();
+        String username = principal.getUsername();
         Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantIdAndEnabledTrue(username, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(401).body(errorBody(request, "unauthorized", msg(request, "invalid_or_expired"), null));
@@ -305,6 +317,34 @@ public class V1AuthController extends BaseApiController {
         body.put("requestId", traceId(request));
         auditLogService.record(user.getUsername(), user.getRole(), "LOGIN_V1", "AUTH", null, "User logged in via v1 auth", user.getTenantId());
         return body;
+    }
+
+    private String resolveSessionCredential(HttpServletRequest request) {
+        String bearer = resolveBearerToken(request.getHeader("Authorization"));
+        if (!isBlank(bearer)) {
+            return bearer;
+        }
+        if (request.getCookies() == null) {
+            return "";
+        }
+        String cookieName = sessionCookieService.cookieName();
+        for (javax.servlet.http.Cookie cookie : request.getCookies()) {
+            if (cookie != null && cookieName.equals(cookie.getName()) && !isBlank(cookie.getValue())) {
+                return cookie.getValue().trim();
+            }
+        }
+        return "";
+    }
+
+    private String resolveBearerToken(String authHeader) {
+        if (isBlank(authHeader)) {
+            return "";
+        }
+        String candidate = authHeader.trim();
+        if (candidate.length() < 7 || !candidate.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return "";
+        }
+        return candidate.substring(7).trim();
     }
 
     private String safeOwner(UserAccount user) {

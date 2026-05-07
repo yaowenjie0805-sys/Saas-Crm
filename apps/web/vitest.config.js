@@ -6,8 +6,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost:5173',
+      },
+    },
     include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
     exclude: ['node_modules', 'dist', 'e2e'],
+    setupFiles: ['./src/testSetup.js'],
     reporters: ['default', 'junit'],
     outputFile: {
       junit: 'test-results/vitest/results.xml',

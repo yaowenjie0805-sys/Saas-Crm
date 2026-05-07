@@ -47,6 +47,46 @@ afterEach(async () => {
 })
 
 describe('useRuntimeSessionRestoreEffect', () => {
+  it('skips session restore on the login page', async () => {
+    const saveAuth = vi.fn()
+    const setSessionBootstrapping = vi.fn()
+
+    await renderProbe({
+      authToken: null,
+      locationPathname: '/login',
+      lang: 'en',
+      saveAuth,
+      setSessionBootstrapping,
+      sessionRestoreAbortRef: { current: null },
+    })
+    await flush()
+
+    expect(apiMock).not.toHaveBeenCalled()
+    expect(saveAuth).not.toHaveBeenCalled()
+    expect(setSessionBootstrapping).toHaveBeenLastCalledWith(false)
+  })
+
+  it('treats 204 session response as anonymous without falling back', async () => {
+    apiMock.mockResolvedValueOnce(null)
+    const saveAuth = vi.fn()
+    const setSessionBootstrapping = vi.fn()
+
+    await renderProbe({
+      authToken: null,
+      locationPathname: '/dashboard',
+      lang: 'en',
+      saveAuth,
+      setSessionBootstrapping,
+      sessionRestoreAbortRef: { current: null },
+    })
+    await flush()
+
+    expect(apiMock).toHaveBeenCalledTimes(1)
+    expect(apiMock.mock.calls[0][0]).toBe('/v1/auth/session')
+    expect(saveAuth).not.toHaveBeenCalled()
+    expect(setSessionBootstrapping).toHaveBeenLastCalledWith(false)
+  })
+
   it('does not fallback to /auth/session on 500 from /v1/auth/session', async () => {
     apiMock
       .mockRejectedValueOnce(Object.assign(new Error('server down'), { status: 500 }))

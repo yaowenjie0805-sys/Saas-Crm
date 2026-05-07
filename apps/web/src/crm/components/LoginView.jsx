@@ -1,5 +1,7 @@
 import { memo } from 'react'
 
+const isDevMode = import.meta.env.MODE === 'development'
+
 function LoginView({
   lang,
   setLang,
@@ -30,6 +32,11 @@ function LoginView({
           <form onSubmit={submitLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="login-form">
             <h1>{t('loginTitle')}</h1>
             <p>{t('loginHint')}</p>
+            {isDevMode && (
+              <div className="small-tip" data-testid="dev-login-hint">
+                {t('devLoginHint')}
+              </div>
+            )}
             <div>
               <input
                 data-testid="login-tenant-id"
@@ -98,6 +105,9 @@ function LoginView({
               onChange={(e) => setLoginForm((p) => ({ ...p, mfaCode: e.target.value }))}
               autoComplete="one-time-code"
             />
+            {isDevMode && (
+              <div className="small-tip" data-testid="dev-mfa-hint">{t('devMfaHint')}</div>
+            )}
             
             <button className="primary-btn" type="submit" data-testid="login-submit">{t('login')}</button>
             <button className="mini-btn" type="button" onClick={openActivate} data-testid="open-activate">

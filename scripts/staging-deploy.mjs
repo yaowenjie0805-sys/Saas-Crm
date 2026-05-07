@@ -49,6 +49,49 @@ function env(name, fallback = '') {
   return typeof val === 'string' && val.trim() ? val.trim() : fallback
 }
 
+function resolveRootPath(input) {
+  const value = String(input || '').trim()
+  if (!value) return ''
+  return path.isAbsolute(value) ? value : path.join(root, value)
+}
+
+function isPlaceholderValue(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return false
+  return (
+    normalized.includes('replace-with') ||
+    normalized.includes('change-me') ||
+    normalized.includes('change_this') ||
+    normalized.includes('change-this') ||
+    normalized.includes('example.com') ||
+    normalized === 'example' ||
+    normalized === 'password' ||
+    normalized === 'root'
+  )
+}
+
+function validateEnvFile(file) {
+  const findings = []
+  const text = fs.readFileSync(file, 'utf8')
+  const basename = path.basename(file).toLowerCase()
+  if (basename.endsWith('.example') || basename.includes('example')) {
+    findings.push('env file path looks like an example/template file')
+  }
+  for (const [index, line] of text.split(/\r?\n/).entries()) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue
+    const [rawKey, ...rawValueParts] = trimmed.split('=')
+    const key = rawKey.trim()
+    const value = rawValueParts.join('=').trim().replace(/^['"]|['"]$/g, '')
+    if (isPlaceholderValue(value)) {
+      findings.push(`${key} contains a placeholder or weak default at line ${index + 1}`)
+    }
+  }
+  if (findings.length) {
+    throw new Error(`invalid staging env file ${path.relative(root, file)}: ${findings.join('; ')}`)
+  }
+}
+
 function latestReleaseSnapshot() {
   if (!fs.existsSync(releaseDir)) return ''
   const files = fs.readdirSync(releaseDir)
@@ -101,13 +144,15 @@ function makeBundle(version) {
   const jarFile = path.join(root, 'apps', 'api', 'target', 'crm-backend-1.0.0.jar')
   const composeFile = path.join(root, 'infra', 'staging', 'docker-compose.yml')
   const nginxFile = path.join(root, 'infra', 'staging', 'nginx.conf')
-  const envTemplate = path.join(root, 'infra', 'staging', 'staging.env.example')
+  const envFile = resolveRootPath(env('STAGING_ENV_FILE', ''))
 
   if (!fs.existsSync(distDir)) throw new Error('missing dist directory; run npm run build first')
   if (!fs.existsSync(jarFile)) throw new Error('missing backend jar; run mvn package first')
   if (!fs.existsSync(composeFile)) throw new Error('missing infra/staging/docker-compose.yml')
   if (!fs.existsSync(nginxFile)) throw new Error('missing infra/staging/nginx.conf')
-  if (!fs.existsSync(envTemplate)) throw new Error('missing infra/staging/staging.env.example')
+  if (!envFile) throw new Error('missing STAGING_ENV_FILE; provide a real staging env file, not .env.example')
+  if (!fs.existsSync(envFile)) throw new Error(`missing STAGING_ENV_FILE: ${envFile}`)
+  validateEnvFile(envFile)
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-staging-'))
   const bundleDir = path.join(tempRoot, version)
@@ -119,7 +164,7 @@ function makeBundle(version) {
   fs.copyFileSync(jarFile, path.join(bundleDir, 'apps', 'api', 'crm-backend-1.0.0.jar'))
   fs.copyFileSync(composeFile, path.join(bundleDir, 'docker-compose.yml'))
   fs.copyFileSync(nginxFile, path.join(bundleDir, 'apps', 'web', 'nginx.conf'))
-  fs.copyFileSync(envTemplate, path.join(bundleDir, '.env'))
+  fs.copyFileSync(envFile, path.join(bundleDir, '.env'))
 
   const commit = runGit(['rev-parse', 'HEAD'])
   const branch = runGit(['rev-parse', '--abbrev-ref', 'HEAD'])

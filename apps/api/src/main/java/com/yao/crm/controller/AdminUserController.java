@@ -39,13 +39,10 @@ public class AdminUserController extends BaseApiController {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
         String tenantId = currentTenant(request);
-        List<UserAccount> all;
-        if (tenantId != null && !tenantId.isEmpty()) {
-            all = userAccountRepository.findAllByTenantIdOrderByUsernameAsc(tenantId);
-        } else {
-            all = userAccountRepository.findAll();
-            all.sort(Comparator.comparing(UserAccount::getUsername, String.CASE_INSENSITIVE_ORDER));
+        if (isBlank(tenantId)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "tenant_required", "TENANT_REQUIRED", null));
         }
+        List<UserAccount> all = userAccountRepository.findAllByTenantIdOrderByUsernameAsc(tenantId);
 
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (UserAccount user : all) {
@@ -61,7 +58,11 @@ public class AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<UserAccount> optional = userAccountRepository.findByUsername(username);
+        String tenantId = currentTenant(request);
+        if (isBlank(tenantId)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "tenant_required", "TENANT_REQUIRED", null));
+        }
+        Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantId(username, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "user_not_found", "NOT_FOUND", null));
         }
@@ -102,7 +103,11 @@ public class AdminUserController extends BaseApiController {
         if (!hasAnyRole(request, "ADMIN")) {
             return ResponseEntity.status(403).body(legacyErrorByKey(request, "forbidden", "FORBIDDEN", null));
         }
-        Optional<UserAccount> optional = userAccountRepository.findByUsername(username);
+        String tenantId = currentTenant(request);
+        if (isBlank(tenantId)) {
+            return ResponseEntity.badRequest().body(legacyErrorByKey(request, "tenant_required", "TENANT_REQUIRED", null));
+        }
+        Optional<UserAccount> optional = userAccountRepository.findByUsernameAndTenantId(username, tenantId);
         if (!optional.isPresent()) {
             return ResponseEntity.status(404).body(legacyErrorByKey(request, "user_not_found", "NOT_FOUND", null));
         }
@@ -126,5 +131,4 @@ public class AdminUserController extends BaseApiController {
         return out;
     }
 }
-
 

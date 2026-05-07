@@ -2,6 +2,25 @@ const REQUEST_CANCEL_ERRORS = new Set(['AbortError', 'CanceledError'])
 
 export const isRequestCanceled = (error) => REQUEST_CANCEL_ERRORS.has(error?.name)
 
+export const buildSessionAuthState = (next) => {
+  const tenantId = String(next?.tenantId || '').trim()
+  const safePersisted = {
+    username: next?.username || '',
+    displayName: next?.displayName || '',
+    role: next?.role || '',
+    ownerScope: next?.ownerScope || '',
+    tenantId,
+    department: next?.department || '',
+    dataScope: next?.dataScope || '',
+    dateFormat: next?.dateFormat || 'yyyy-MM-dd',
+    sessionActive: true,
+  }
+  return {
+    persisted: safePersisted,
+    runtime: { ...safePersisted, token: String(next?.token || '').trim() || 'COOKIE_SESSION' },
+  }
+}
+
 export const resolveOidcTenantId = (loginFormTenantId, cachedTenantId) => {
   const formTenant = typeof loginFormTenantId === 'string' ? loginFormTenantId.trim() : ''
   if (formTenant) return formTenant

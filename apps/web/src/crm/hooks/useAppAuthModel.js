@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { LANG_KEY, api } from '../shared'
+import { buildSessionAuthState } from './orchestrators/runtime/useRuntimeAuthPersistenceUtils'
 
 export function useAppAuthModel({
   auth,
@@ -41,22 +42,12 @@ export function useAppAuthModel({
         localStorage.setItem('crm_last_tenant', tenantId)
       }
     }
-    const safePersisted = {
-      username: next.username || '',
-      displayName: next.displayName || '',
-      role: next.role || '',
-      ownerScope: next.ownerScope || '',
-      tenantId,
-      department: next.department || '',
-      dataScope: next.dataScope || '',
-      dateFormat: next.dateFormat || 'yyyy-MM-dd',
-      sessionActive: true,
-    }
+    const { persisted: safePersisted, runtime } = buildSessionAuthState(next)
     const serializedAuth = JSON.stringify(safePersisted)
     if (localStorage.getItem('crm_auth') !== serializedAuth) {
       localStorage.setItem('crm_auth', serializedAuth)
     }
-    setAuth({ ...safePersisted, token: 'COOKIE_SESSION' })
+    setAuth(runtime)
   }, [setAuth])
 
   const handleLoginError = useCallback((err) => {

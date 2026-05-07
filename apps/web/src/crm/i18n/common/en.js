@@ -8,6 +8,8 @@ export const EN = {
   "displayName": "Display Name",
   "tenantId": "Tenant ID",
   "tenantHint": "Tenant ID is required (editable)",
+  "devLoginHint": "Development defaults are prefilled: tenant_default / admin / admin123",
+  "devMfaHint": "MFA is disabled by default in development, so leave MFA Code blank.",
   "mfaCode": "MFA Code",
   "mfaPending": "MFA required, please enter code to continue",
   "ssoCode": "SSO Code",

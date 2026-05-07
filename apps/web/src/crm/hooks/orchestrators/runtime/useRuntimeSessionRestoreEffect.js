@@ -3,6 +3,7 @@ import { api } from '../../../shared'
 import { isRequestCanceled } from './useRuntimeAuthPersistenceUtils'
 
 const LEGACY_SESSION_FALLBACK_STATUSES = new Set([404, 405, 501])
+const SESSION_SKIP_PATHS = new Set(['/activate', '/login'])
 
 const shouldTryLegacySessionFallback = (error) =>
   LEGACY_SESSION_FALLBACK_STATUSES.has(Number(error?.status))
@@ -25,13 +26,13 @@ export function useRuntimeSessionRestoreEffect({
         if (!disposed) setSessionBootstrapping(false)
         return
       }
-      if (locationPathname === '/activate') {
+      if (SESSION_SKIP_PATHS.has(locationPathname)) {
         if (!disposed) setSessionBootstrapping(false)
         return
       }
       try {
         const restored = await api('/v1/auth/session', { signal: controller.signal }, null, lang)
-        if (!disposed && !controller.signal.aborted) saveAuth(restored)
+        if (!disposed && !controller.signal.aborted && restored) saveAuth(restored)
       } catch (error) {
         if (disposed || controller.signal.aborted || isRequestCanceled(error)) return
         if (!shouldTryLegacySessionFallback(error)) {
