@@ -57,9 +57,8 @@ const inlineTagStyle = {
   borderRadius: 4,
   margin: '0 2px'
 };
-const inlineTagStyleString = Object.entries(inlineTagStyle)
-  .map(([key, value]) => `${key.replace(/[A-Z]/g, match => `-${match.toLowerCase()}`)}: ${value}`)
-  .join('; ');
+const mentionStyle = { color: '#1890ff', cursor: 'pointer' };
+const inlineTokenPattern = /(@[a-zA-Z0-9_]+|#[^#]+#)/g;
 
 const parseCommentTags = (tags) => {
   if (!tags) {
@@ -80,30 +79,19 @@ const parseCommentTags = (tags) => {
 
 const isRequestCanceled = (error) => REQUEST_CANCEL_ERRORS.has(error?.name);
 
-const escapeHtml = (text) => {
-  if (!text) return '';
-
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
 const renderInlineFormatting = (content) => {
   if (!content) return null;
 
-  const safe = escapeHtml(content);
-  const withMentions = safe.replace(/@([a-zA-Z0-9_]+)/g, (_, username) => {
-    return `<span style="color: #1890ff; cursor: pointer;">@${username}</span>`;
+  return String(content).split(inlineTokenPattern).map((part, index) => {
+    if (!part) return null;
+    if (/^@[a-zA-Z0-9_]+$/.test(part)) {
+      return <span key={`${part}-${index}`} style={mentionStyle}>{part}</span>;
+    }
+    if (/^#[^#]+#$/.test(part)) {
+      return <span key={`${part}-${index}`} style={inlineTagStyle}>{part}</span>;
+    }
+    return part;
   });
-
-  const withTags = withMentions.replace(/#([^#]+)#/g, (_, tag) => {
-    return `<span style="${inlineTagStyleString}">#${tag}#</span>`;
-  });
-
-  return <span dangerouslySetInnerHTML={{ __html: withTags }} />;
 };
 
 const makeAction = (icon, label, onClick, extraStyle = {}) => (

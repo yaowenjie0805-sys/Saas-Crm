@@ -70,10 +70,10 @@ const hashString = (value) => {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-const getCacheKey = (path, options = {}, context) => {
+const getCacheKey = (path, options = {}, context, authFingerprint = 'SESSION') => {
   const method = (options.method || 'GET').toUpperCase()
   const body = options.body ? JSON.stringify(options.body) : ''
-  return `${method}:${context.tenantId}:${context.lang}:${path}:${body}`
+  return `${method}:${context.tenantId}:${context.lang}:${authFingerprint}:${path}:${body}`
 }
 
 const cleanExpiredCache = () => {
@@ -199,7 +199,8 @@ const initCacheCleanup = () => {
 export async function apiCached(path, options = {}, token, lang = 'en', useCache = true, priority = 'medium') {
   const method = (options.method || 'GET').toUpperCase()
   const requestContext = getCacheContext(options, lang)
-  const cacheKey = getCacheKey(path, options, requestContext)
+  const authFingerprint = getAuthFingerprint(options, token)
+  const cacheKey = getCacheKey(path, options, requestContext, authFingerprint)
   const isCacheable = useCache && method === 'GET' && API_CACHE_CONFIG.enabled && API_CACHE_CONFIG.maxSize > 0
   const priorityTtl = API_CACHE_CONFIG.priorityLevels[priority] || API_CACHE_CONFIG.ttl
 

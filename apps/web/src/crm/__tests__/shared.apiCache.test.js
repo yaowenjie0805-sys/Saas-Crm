@@ -88,6 +88,27 @@ test('GET dedupe keys include auth context', async () => {
   await Promise.all([requestA, requestB, requestC]);
 });
 
+test('GET cache keys include auth context', async () => {
+  const fetchMock = vi.fn((url, options) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ auth: options.headers.Authorization || 'SESSION' }),
+    })
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  localStorage.setItem('crm_last_tenant', 'tenant-cache-auth');
+
+  const first = await apiCached('/cache-auth', { method: 'GET' }, 'token-a', 'en');
+  const second = await apiCached('/cache-auth', { method: 'GET' }, 'token-b', 'en');
+  const third = await apiCached('/cache-auth', { method: 'GET' }, 'token-a', 'en');
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(first.auth).toBe('Bearer token-a');
+  expect(second.auth).toBe('Bearer token-b');
+  expect(third.auth).toBe('Bearer token-a');
+});
+
 test('GET dedupe keys should not collide for same-prefix auth tokens', async () => {
   const fetchResolvers = [];
   const fetchMock = vi.fn(() => new Promise((resolve) => {
